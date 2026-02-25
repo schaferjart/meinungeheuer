@@ -1,0 +1,27 @@
+{
+  "name": "@meinungeheuer/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@meinungeheuer/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.49.1",
+    "hono": "^4.7.2",
+    "@hono/node-server": "^1.14.0",
+    "openai": "^4.82.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

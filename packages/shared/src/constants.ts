@@ -1,0 +1,24 @@
+export const APP_NAME = 'MeinUngeheuer';
+export const DEFAULT_TERM = 'BIRD';
+export const DEFAULT_MODE = 'term_only' as const;
+
+export const FACE_DETECTION = {
+  WAKE_THRESHOLD_MS: 3000,
+  SLEEP_THRESHOLD_MS: 30000,
+  DETECTION_INTERVAL_MS: 500,
+  MIN_CONFIDENCE: 0.5,
+} as const;
+
+export const TIMERS = {
+  WELCOME_DURATION_MS: 3000,
+  TERM_PROMPT_DURATION_MS: 2000,
+  DEFINITION_DISPLAY_MS: 10000,
+  FAREWELL_DURATION_MS: 15000,
+  PRINT_TIMEOUT_MS: 30000,
+} as const;
+
+export const PRINTER = {
+  HEARTBEAT_INTERVAL_MS: 30000,
+  RECONNECT_ATTEMPTS: 3,
+  RECONNECT_DELAY_MS: 5000,
+} as const;
