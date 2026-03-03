@@ -3,6 +3,16 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp?project_ref=zkgkyvvdeotqzxdgushn"
+    },
+    "ElevenLabs": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "elevenlabs-mcp"
+      ],
+      "env": {
+        "ELEVENLABS_API_KEY": "sk_c54097b3b907f84aadbade651b1d816e3bbafb97ddee2161"
+      }
     }
   }
 }

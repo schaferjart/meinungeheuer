@@ -78,6 +78,9 @@ importers:
       '@11labs/react':
         specifier: ^0.2.0
         version: 0.2.0(@types/dom-mediacapture-record@1.0.22)(react@18.3.1)
+      '@elevenlabs/client':
+        specifier: ^0.15.0
+        version: 0.15.0(@types/dom-mediacapture-record@1.0.22)
       '@mediapipe/tasks-vision':
         specifier: ^0.10.18
         version: 0.10.32
@@ -235,6 +238,12 @@ packages:
 
   '@bufbuild/protobuf@1.10.1':
     resolution: {integrity: sha512-wJ8ReQbHxsAfXhrf9ixl0aYbZorRuOWpBNzm8pL8ftmSxQx/wnJD5Eg861NwJU/czy2VXFIebCeZnZrI9rktIQ==}
+
+  '@elevenlabs/client@0.15.0':
+    resolution: {integrity: sha512-Fxoq+nZj6U9ykeQx07UGMFumw1hxE9Cr4O3IX3FfMjl3ZMRVMPfv8UOuqdoWMrLG6gZoIBeimfdc61St6z4JpQ==}
+
+  '@elevenlabs/types@0.6.0':
+    resolution: {integrity: sha512-2FihOiGf+KlTH1EYQoYsvnhSCMMaHZMDSXMYI25NUtv0NmWi86bB9Hp4BAHbNeEkCksPXKbPiX3b6KgP2JIg2g==}
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -1674,6 +1683,15 @@ snapshots:
       '@babel/helper-validator-identifier': 7.28.5
 
   '@bufbuild/protobuf@1.10.1': {}
+
+  '@elevenlabs/client@0.15.0(@types/dom-mediacapture-record@1.0.22)':
+    dependencies:
+      '@elevenlabs/types': 0.6.0
+      livekit-client: 2.17.2(@types/dom-mediacapture-record@1.0.22)
+    transitivePeerDependencies:
+      - '@types/dom-mediacapture-record'
+
+  '@elevenlabs/types@0.6.0': {}
 
   '@esbuild/aix-ppc64@0.25.12':
     optional: true

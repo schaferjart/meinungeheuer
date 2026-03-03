@@ -1,7 +1,29 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { DEFAULT_MODE, DEFAULT_TERM } from '@meinungeheuer/shared';
+import type { Definition } from '@meinungeheuer/shared';
+
+/** Build a partial Definition object from conversation results (client-side only). */
+function makeClientDefinition(d: {
+  term: string;
+  definition_text: string;
+  citations: string[];
+  language: string;
+}): Definition {
+  return {
+    id: crypto.randomUUID(),
+    session_id: null,
+    term: d.term,
+    definition_text: d.definition_text,
+    citations: d.citations,
+    language: d.language,
+    chain_depth: null,
+    created_at: new Date().toISOString(),
+    embedding: null,
+  };
+}
 
 import { useInstallationMachine } from './hooks/useInstallationMachine';
+import { useConversation } from './hooks/useConversation';
 import { fetchConfig } from './lib/api';
 import { ScreenTransition } from './components/ScreenTransition';
 import { CameraDetector } from './components/CameraDetector';
@@ -18,6 +40,7 @@ import { PrintingScreen } from './components/screens/PrintingScreen';
 import { FarewellScreen } from './components/screens/FarewellScreen';
 
 const BACKEND_URL = import.meta.env['VITE_BACKEND_URL'] ?? 'http://localhost:3001';
+const ELEVENLABS_AGENT_ID = import.meta.env['VITE_ELEVENLABS_AGENT_ID'] ?? '';
 
 // ---------------------------------------------------------------------------
 // Admin routing — check URL param once at module level (stable across renders)
@@ -53,12 +76,23 @@ function InstallationApp() {
 
     fetchConfig(BACKEND_URL)
       .then((config) => {
+        // Derive contextText from the backend's response shape:
+        // - Mode A (text_term): use the text content (prefer German)
+        // - Mode C (chain): use the previous visitor's definition
+        // - Mode B (term_only): null
+        let contextText: string | null = null;
+        if (config.text) {
+          contextText = config.text.content_de ?? config.text.content_en ?? null;
+        } else if (config.chain_context) {
+          contextText = config.chain_context.definition_text;
+        }
+
         dispatch({
           type: 'SET_CONFIG',
           mode: config.mode,
           term: config.term,
-          contextText: config.contextText,
-          parentSessionId: config.parentSessionId,
+          contextText,
+          parentSessionId: config.parentSessionId ?? null,
         });
       })
       .catch((err: unknown) => {
@@ -77,6 +111,91 @@ function InstallationApp() {
   }, [dispatch]);
 
   const { screen, mode, term, contextText, definition, language } = state;
+
+  // -----------------------------------------------------------------------
+  // ElevenLabs conversation hook
+  // -----------------------------------------------------------------------
+  const handleDefinitionReceived = useCallback(
+    (result: { term: string; definition_text: string; citations: string[]; language: string }) => {
+      dispatch({ type: 'DEFINITION_RECEIVED', definition: makeClientDefinition(result) });
+      // After a brief moment, show the definition screen
+      setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
+    },
+    [dispatch],
+  );
+
+  const handleConversationEnd = useCallback(
+    (reason: string) => {
+      console.log('[App] Conversation ended, reason:', reason);
+      // If the conversation ended without a definition (e.g. agent disconnected),
+      // and we're still on the conversation screen, synthesize gracefully
+      if (state.screen === 'conversation' && !state.definition) {
+        dispatch({
+          type: 'DEFINITION_RECEIVED',
+          definition: makeClientDefinition({
+            term,
+            definition_text: 'Die Unterhaltung wurde beendet.',
+            citations: [],
+            language,
+          }),
+        });
+        setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
+      }
+    },
+    [dispatch, state.screen, state.definition, term, language],
+  );
+
+  const {
+    status: conversationStatus,
+    isSpeaking,
+    transcript,
+    startConversation,
+    endConversation,
+  } = useConversation({
+    agentId: ELEVENLABS_AGENT_ID,
+    mode,
+    term,
+    contextText,
+    language,
+    onDefinitionReceived: handleDefinitionReceived,
+    onConversationEnd: handleConversationEnd,
+  });
+
+  // Start the ElevenLabs session when we enter the conversation screen
+  const conversationStartedRef = useRef(false);
+  useEffect(() => {
+    if (screen === 'conversation' && !conversationStartedRef.current) {
+      conversationStartedRef.current = true;
+      console.log('[App] Starting ElevenLabs conversation...');
+      startConversation().catch((err) => {
+        console.error('[App] Failed to start conversation:', err);
+      });
+    }
+    // Reset the flag when we leave the conversation screen
+    if (screen !== 'conversation') {
+      conversationStartedRef.current = false;
+    }
+  }, [screen, startConversation]);
+
+  // End the conversation when leaving the conversation/synthesizing screens
+  useEffect(() => {
+    if (screen === 'sleep' && conversationStatus === 'connected') {
+      endConversation().catch(() => {});
+    }
+  }, [screen, conversationStatus, endConversation]);
+
+  // Derive mic state for the UI
+  const micState: 'idle' | 'listening' | 'speaking' =
+    conversationStatus !== 'connected'
+      ? 'idle'
+      : isSpeaking
+        ? 'speaking'
+        : 'listening';
+
+  // Debug: log state changes to console during development
+  useEffect(() => {
+    console.log('[App] Screen:', screen, '| Mode:', mode, '| Term:', term, '| EL status:', conversationStatus);
+  }, [screen, mode, term, conversationStatus]);
 
   function renderScreen() {
     switch (screen) {
@@ -105,8 +224,8 @@ function InstallationApp() {
           <ConversationScreen
             dispatch={dispatch}
             term={term}
-            transcript={[]}
-            micState="idle"
+            transcript={transcript}
+            micState={micState}
           />
         );
 
@@ -134,10 +253,6 @@ function InstallationApp() {
       }
     }
   }
-
-  // Suppress unused variable warning for 'mode' while it's not yet wired to a
-  // runtime feature in this file (it drives state-machine transitions internally).
-  void mode;
 
   return (
     <div

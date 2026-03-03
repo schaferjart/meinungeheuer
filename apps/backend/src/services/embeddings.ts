@@ -1,20 +1,23 @@
 import OpenAI from 'openai';
 import { supabase } from './supabase.js';
 
-const EMBEDDING_MODEL = 'text-embedding-3-small';
+const EMBEDDING_MODEL = 'openai/text-embedding-3-small';
 const EMBEDDING_DIMENSIONS = 1536;
 
-let openaiClient: OpenAI | null = null;
+let openrouterClient: OpenAI | null = null;
 
-function getOpenAIClient(): OpenAI {
-  if (!openaiClient) {
-    const apiKey = process.env['OPENAI_API_KEY'];
+function getOpenRouterClient(): OpenAI {
+  if (!openrouterClient) {
+    const apiKey = process.env['OPENROUTER_API_KEY'];
     if (!apiKey) {
-      throw new Error('OPENAI_API_KEY environment variable is not set');
+      throw new Error('OPENROUTER_API_KEY environment variable is not set');
     }
-    openaiClient = new OpenAI({ apiKey });
+    openrouterClient = new OpenAI({
+      apiKey,
+      baseURL: 'https://openrouter.ai/api/v1',
+    });
   }
-  return openaiClient;
+  return openrouterClient;
 }
 
 /**
@@ -42,9 +45,9 @@ export async function generateEmbedding(definitionId: string): Promise<void> {
     // Build input text: combine term + definition for richer embedding
     const inputText = `${definition.term}: ${definition.definition_text}`;
 
-    const openai = getOpenAIClient();
+    const client = getOpenRouterClient();
 
-    const response = await openai.embeddings.create({
+    const response = await client.embeddings.create({
       model: EMBEDDING_MODEL,
       input: inputText,
       dimensions: EMBEDDING_DIMENSIONS,
@@ -52,7 +55,7 @@ export async function generateEmbedding(definitionId: string): Promise<void> {
 
     const embeddingData = response.data[0];
     if (!embeddingData) {
-      console.error('[embeddings] No embedding data returned from OpenAI for:', definitionId);
+      console.error('[embeddings] No embedding data returned from OpenRouter for:', definitionId);
       return;
     }
 

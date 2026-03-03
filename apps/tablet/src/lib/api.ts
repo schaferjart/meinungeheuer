@@ -9,8 +9,21 @@ import type { Mode } from '@meinungeheuer/shared';
 export const ConfigResponseSchema = z.object({
   mode: ModeSchema,
   term: z.string(),
-  contextText: z.string().nullable(),
-  parentSessionId: z.string().uuid().nullable(),
+  contextText: z.string().nullable().optional(),
+  parentSessionId: z.string().uuid().nullable().optional(),
+  text: z.object({
+    id: z.string(),
+    title: z.string(),
+    content_de: z.string().nullable(),
+    content_en: z.string().nullable(),
+    terms: z.array(z.string()),
+  }).optional(),
+  chain_context: z.object({
+    term: z.string(),
+    definition_text: z.string(),
+    chain_depth: z.number(),
+    language: z.string(),
+  }).nullable().optional(),
 });
 export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
 
