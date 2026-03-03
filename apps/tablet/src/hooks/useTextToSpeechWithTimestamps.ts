@@ -27,6 +27,8 @@ export interface UseTextToSpeechWithTimestampsReturn {
   play: () => void;
   pause: () => void;
   error: string | null;
+  volume: number;
+  setVolume: (v: number) => void;
 }
 
 // ============================================================
@@ -259,6 +261,8 @@ export function useTextToSpeechWithTimestamps(
   const [words, setWords] = useState<WordTimestamp[]>([]);
   const [activeWordIndex, setActiveWordIndex] = useState<number>(-1);
   const [error, setError] = useState<string | null>(null);
+  const [volume, setVolumeState] = useState(1);
+  const volumeRef = useRef(1);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -273,33 +277,37 @@ export function useTextToSpeechWithTimestamps(
   // -----------------------------------------------------------------------
   const updateActiveWord = useCallback(() => {
     const audio = audioRef.current;
-    const currentWords = wordsRef.current;
+    const cues = wordsRef.current;
 
-    if (!audio || currentWords.length === 0) {
+    if (!audio || cues.length === 0) {
       animationFrameRef.current = requestAnimationFrame(updateActiveWord);
       return;
     }
 
-    const currentTime = audio.currentTime;
+    const t = audio.currentTime;
 
-    // Binary-ish search: words are sorted by startTime, so we can find the
-    // active word efficiently. For simplicity with typical text lengths
-    // (< 500 words), a linear scan is fine and more readable.
+    // Binary search: cues are sorted by startTime
+    let lo = 0;
+    let hi = cues.length - 1;
     let foundIndex = -1;
-    for (let i = 0; i < currentWords.length; i++) {
-      const w = currentWords[i];
-      if (w && currentTime >= w.startTime && currentTime < w.endTime) {
-        foundIndex = i;
+
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const w = cues[mid];
+      if (!w) break;
+      if (w.endTime <= t) {
+        lo = mid + 1;
+      } else if (w.startTime > t) {
+        hi = mid - 1;
+      } else {
+        foundIndex = mid;
         break;
       }
-      // If we're past this word's end but before the next word's start,
-      // keep the last word highlighted
-      if (w && currentTime >= w.endTime) {
-        const nextWord = currentWords[i + 1];
-        if (!nextWord || currentTime < nextWord.startTime) {
-          foundIndex = i;
-        }
-      }
+    }
+
+    // Gap between words: keep highlighting the last word we passed
+    if (foundIndex === -1 && lo > 0) {
+      foundIndex = lo - 1;
     }
 
     setActiveWordIndex(foundIndex);
@@ -315,6 +323,18 @@ export function useTextToSpeechWithTimestamps(
     if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
+    }
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Volume control
+  // -----------------------------------------------------------------------
+  const setVolume = useCallback((v: number) => {
+    const clamped = Math.max(0, Math.min(1, v));
+    volumeRef.current = clamped;
+    setVolumeState(clamped);
+    if (audioRef.current) {
+      audioRef.current.volume = clamped;
     }
   }, []);
 
@@ -417,6 +437,7 @@ export function useTextToSpeechWithTimestamps(
         audioUrlRef.current = audioUrl;
 
         const audio = new Audio(audioUrl);
+        audio.volume = volumeRef.current;
         audioRef.current = audio;
 
         // Audio event handlers
@@ -493,5 +514,7 @@ export function useTextToSpeechWithTimestamps(
     play,
     pause,
     error,
+    volume,
+    setVolume,
   };
 }

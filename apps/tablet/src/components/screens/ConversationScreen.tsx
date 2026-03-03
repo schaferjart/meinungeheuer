@@ -93,17 +93,13 @@ export function ConversationScreen({
               style={{
                 display: 'inline-block',
                 maxWidth: '80%',
-                fontFamily:
-                  entry.role === 'agent'
-                    ? "Georgia, 'Times New Roman', serif"
-                    : 'system-ui, sans-serif',
-                fontSize:
-                  entry.role === 'agent'
-                    ? 'clamp(1.1rem, 2.4vw, 1.5rem)'
-                    : 'clamp(0.9rem, 1.8vw, 1.1rem)',
-                fontWeight: entry.role === 'agent' ? 400 : 300,
-                color: entry.role === 'agent' ? '#ffffff' : '#666666',
-                lineHeight: '1.6',
+                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontSize: 'clamp(1.1rem, 2.8vw, 1.6rem)',
+                fontWeight: 400,
+                fontStyle: entry.role === 'visitor' ? 'italic' : 'normal',
+                color: entry.role === 'agent' ? '#ffffff' : 'rgba(255,255,255,0.55)',
+                lineHeight: '1.8',
+                letterSpacing: '0.02em',
                 margin: 0,
                 textAlign: entry.role === 'visitor' ? 'right' : 'left',
               }}

@@ -20,17 +20,17 @@ export interface TextReaderProps {
 // CSS class names for word states (Tailwind)
 // ============================================================
 
-const WORD_CLASS_BASE = 'inline transition-all duration-150 ease-out';
-const WORD_CLASS_ACTIVE = 'text-amber-300 scale-105';
-const WORD_CLASS_SPOKEN = 'opacity-60';
-const WORD_CLASS_UPCOMING = 'opacity-100';
+const WORD_CLASS_BASE = 'inline';
+const WORD_CLASS_ACTIVE = 'text-amber-300';
+const WORD_CLASS_SPOKEN = 'opacity-40';
+const WORD_CLASS_UPCOMING = 'opacity-90';
 
 // ============================================================
 // Component
 // ============================================================
 
 export function TextReader({ text, voiceId, apiKey, language, onComplete }: TextReaderProps) {
-  const { status, words, activeWordIndex, play, pause, error } = useTextToSpeechWithTimestamps({
+  const { status, words, activeWordIndex, play, pause, error, volume, setVolume } = useTextToSpeechWithTimestamps({
     text,
     voiceId,
     apiKey,
@@ -40,6 +40,8 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
   const wordSpansRef = useRef<Map<number, HTMLSpanElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
   const prevActiveRef = useRef<number>(-1);
+  const lastScrollTimeRef = useRef(0);
+  const scrollResetTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   // -----------------------------------------------------------------------
   // Direct DOM manipulation for word highlighting (perf: no re-renders)
@@ -79,13 +81,46 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
         activeSpan.classList.remove(...WORD_CLASS_UPCOMING.split(' '));
         activeSpan.classList.add(...WORD_CLASS_ACTIVE.split(' '));
 
-        // Auto-scroll to keep active word visible
-        activeSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Comfort-zone auto-scroll: only scroll when word leaves middle band
+        const container = containerRef.current;
+        if (container) {
+          const now = Date.now();
+          if (now - lastScrollTimeRef.current >= 2000 || lastScrollTimeRef.current === 0) {
+            const rect = activeSpan.getBoundingClientRect();
+            const cRect = container.getBoundingClientRect();
+            const rel = (rect.top - cRect.top) / cRect.height;
+            // Comfort zone: 20%–65% of viewport
+            if (rel < 0.2 || rel > 0.65) {
+              const target = cRect.height * 0.35;
+              container.scrollBy({
+                top: rect.top - cRect.top - target,
+                behavior: 'smooth',
+              });
+            }
+          }
+        }
       }
     }
 
     prevActiveRef.current = activeWordIndex;
   }, [activeWordIndex]);
+
+  // -----------------------------------------------------------------------
+  // Manual scroll tracking — cooldown prevents scroll-fighting
+  // -----------------------------------------------------------------------
+  const handleContainerScroll = useCallback(() => {
+    lastScrollTimeRef.current = Date.now();
+    clearTimeout(scrollResetTimerRef.current);
+    scrollResetTimerRef.current = setTimeout(() => {
+      lastScrollTimeRef.current = 0;
+    }, 4000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(scrollResetTimerRef.current);
+    };
+  }, []);
 
   // -----------------------------------------------------------------------
   // Ref callback for word spans
@@ -148,6 +183,7 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
           msOverflowStyle: 'none',
         }}
         onClick={handleTextTap}
+        onScroll={handleContainerScroll}
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
@@ -185,6 +221,7 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
                 data-index={currentWordIdx}
                 ref={(el) => setWordRef(currentWordIdx, el)}
                 className={`${WORD_CLASS_BASE} ${WORD_CLASS_UPCOMING}`}
+                style={{ transition: 'color 0.2s ease, opacity 0.4s ease' }}
               >
                 {token}
               </span>
@@ -241,6 +278,11 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
         </div>
       )}
 
+      {/* Volume slider — subtle, visible during playback */}
+      {(isPlaying || isPaused) && (
+        <VolumeSlider volume={volume} onVolumeChange={setVolume} />
+      )}
+
       {/* Playing — no visible controls, tap text to pause */}
       {isPlaying && (
         <div className="flex justify-center pb-4">
@@ -257,7 +299,7 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
         </div>
       )}
 
-      {/* Hide scrollbar in webkit */}
+      {/* Hide scrollbar + volume slider styling */}
       <style>{`
         ::-webkit-scrollbar { display: none; }
         @keyframes fade-in {
@@ -266,6 +308,39 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
         }
         .animate-fade-in {
           animation: fade-in 0.4s ease-out forwards;
+        }
+        .volume-control {
+          opacity: 0.15;
+          transition: opacity 0.3s ease;
+        }
+        .volume-control:hover,
+        .volume-control:active {
+          opacity: 0.5;
+        }
+        .volume-slider {
+          -webkit-appearance: none;
+          appearance: none;
+          height: 3px;
+          border-radius: 2px;
+          background: rgba(255, 255, 255, 0.2);
+          outline: none;
+          cursor: pointer;
+        }
+        .volume-slider::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.4);
+          cursor: pointer;
+        }
+        .volume-slider::-moz-range-thumb {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.4);
+          cursor: pointer;
+          border: none;
         }
       `}</style>
     </div>
@@ -288,6 +363,25 @@ function LoadingDots() {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+function VolumeSlider({ volume, onVolumeChange }: { volume: number; onVolumeChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center justify-center py-2 volume-control">
+      <input
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        value={volume}
+        onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+        className="volume-slider"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+        style={{ width: '100px' }}
+      />
     </div>
   );
 }
