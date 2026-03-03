@@ -6,7 +6,7 @@
     "dev:tablet": "pnpm --filter @meinungeheuer/tablet dev",
     "dev:backend": "pnpm --filter @meinungeheuer/backend dev",
     "dev:printer": "pnpm --filter @meinungeheuer/printer-bridge dev",
-    "build": "pnpm --filter @meinungeheuer/shared build && pnpm -r --filter '!@meinungeheuer/shared' build",
+    "build": "pnpm --filter @meinungeheuer/shared build && pnpm --filter @meinungeheuer/core build && pnpm -r --filter '!@meinungeheuer/shared' --filter '!@meinungeheuer/core' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"

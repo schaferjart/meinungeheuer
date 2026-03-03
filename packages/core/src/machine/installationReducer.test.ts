@@ -2,96 +2,15 @@
  * Unit tests for the installation state machine reducer.
  *
  * We test the reducer function directly — no React rendering needed.
- * Import the hook module and reach into its reducer via a thin re-export
- * (see bottom of this file for the test-only re-export trick).
  */
 import { describe, it, expect } from 'vitest';
-import type { InstallationState, InstallationAction } from './useInstallationMachine';
-
-// ---------------------------------------------------------------------------
-// Inline the reducer logic so we can unit-test it without calling hooks.
-// This mirrors the exact logic in useInstallationMachine.ts.
-// ---------------------------------------------------------------------------
-
+import {
+  installationReducer,
+  INITIAL_STATE,
+  type InstallationState,
+  type InstallationAction,
+} from './installationReducer';
 import type { Mode, Definition } from '@meinungeheuer/shared';
-
-const initialState: InstallationState = {
-  screen: 'sleep',
-  mode: 'term_only',
-  term: 'BIRD',
-  contextText: null,
-  parentSessionId: null,
-  sessionId: null,
-  definition: null,
-  conversationId: null,
-  language: 'de',
-};
-
-function reducer(state: InstallationState, action: InstallationAction): InstallationState {
-  switch (action.type) {
-    case 'SET_CONFIG':
-      return {
-        ...state,
-        mode: action.mode,
-        term: action.term,
-        contextText: action.contextText,
-        parentSessionId: action.parentSessionId,
-      };
-    case 'SET_SESSION_ID':
-      return { ...state, sessionId: action.id };
-    case 'SET_LANGUAGE':
-      return { ...state, language: action.lang };
-    case 'RESET':
-      return { ...initialState };
-
-    case 'WAKE':
-      if (state.screen !== 'sleep') return state;
-      return { ...state, screen: 'welcome' };
-
-    case 'TIMER_3S': {
-      if (state.screen !== 'welcome') return state;
-      if (state.mode === 'text_term' || state.mode === 'chain') {
-        return { ...state, screen: 'text_display' };
-      }
-      return { ...state, screen: 'term_prompt' };
-    }
-
-    case 'READY':
-      if (state.screen !== 'text_display') return state;
-      return { ...state, screen: 'term_prompt' };
-
-    case 'TIMER_2S':
-      if (state.screen !== 'term_prompt') return state;
-      return { ...state, screen: 'conversation' };
-
-    case 'DEFINITION_RECEIVED':
-      if (state.screen !== 'conversation') return state;
-      return { ...state, screen: 'synthesizing', definition: action.definition };
-
-    case 'DEFINITION_READY':
-      if (state.screen !== 'synthesizing') return state;
-      return { ...state, screen: 'definition' };
-
-    case 'TIMER_10S':
-      if (state.screen !== 'definition') return state;
-      return { ...state, screen: 'printing' };
-
-    case 'PRINT_DONE':
-      if (state.screen !== 'printing') return state;
-      return { ...state, screen: 'farewell' };
-
-    case 'TIMER_15S':
-      if (state.screen !== 'farewell') return state;
-      return { ...initialState };
-
-    case 'FACE_LOST':
-      if (state.screen !== 'farewell') return state;
-      return { ...initialState };
-
-    default:
-      return state;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -113,22 +32,22 @@ function makeDefinition(overrides: Partial<Definition> = {}): Definition {
 }
 
 function advance(state: InstallationState, ...actions: InstallationAction[]): InstallationState {
-  return actions.reduce((s, a) => reducer(s, a), state);
+  return actions.reduce((s, a) => installationReducer(s, a), state);
 }
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('useInstallationMachine reducer', () => {
+describe('installationReducer', () => {
   // --- SLEEP ---
   describe('SLEEP state', () => {
     it('starts in sleep state', () => {
-      expect(initialState.screen).toBe('sleep');
+      expect(INITIAL_STATE.screen).toBe('sleep');
     });
 
     it('WAKE transitions sleep → welcome', () => {
-      const next = reducer(initialState, { type: 'WAKE' });
+      const next = installationReducer(INITIAL_STATE, { type: 'WAKE' });
       expect(next.screen).toBe('welcome');
     });
 
@@ -142,7 +61,7 @@ describe('useInstallationMachine reducer', () => {
         { type: 'FACE_LOST' },
       ];
       for (const action of actions) {
-        const next = reducer(initialState, action);
+        const next = installationReducer(INITIAL_STATE, action);
         expect(next.screen).toBe('sleep');
       }
     });
@@ -150,120 +69,120 @@ describe('useInstallationMachine reducer', () => {
 
   // --- WELCOME ---
   describe('WELCOME state', () => {
-    const welcome: InstallationState = { ...initialState, screen: 'welcome' };
+    const welcome: InstallationState = { ...INITIAL_STATE, screen: 'welcome' };
 
     it('TIMER_3S with term_only → term_prompt', () => {
-      const next = reducer(welcome, { type: 'TIMER_3S' });
+      const next = installationReducer(welcome, { type: 'TIMER_3S' });
       expect(next.screen).toBe('term_prompt');
     });
 
     it('TIMER_3S with text_term → text_display', () => {
       const s: InstallationState = { ...welcome, mode: 'text_term' as Mode };
-      const next = reducer(s, { type: 'TIMER_3S' });
+      const next = installationReducer(s, { type: 'TIMER_3S' });
       expect(next.screen).toBe('text_display');
     });
 
     it('TIMER_3S with chain → text_display', () => {
       const s: InstallationState = { ...welcome, mode: 'chain' as Mode };
-      const next = reducer(s, { type: 'TIMER_3S' });
+      const next = installationReducer(s, { type: 'TIMER_3S' });
       expect(next.screen).toBe('text_display');
     });
 
     it('WAKE is a no-op in welcome', () => {
-      const next = reducer(welcome, { type: 'WAKE' });
+      const next = installationReducer(welcome, { type: 'WAKE' });
       expect(next.screen).toBe('welcome');
     });
   });
 
   // --- TEXT_DISPLAY ---
   describe('TEXT_DISPLAY state', () => {
-    const textDisplay: InstallationState = { ...initialState, screen: 'text_display', mode: 'text_term' };
+    const textDisplay: InstallationState = { ...INITIAL_STATE, screen: 'text_display', mode: 'text_term' };
 
     it('READY transitions text_display → term_prompt', () => {
-      const next = reducer(textDisplay, { type: 'READY' });
+      const next = installationReducer(textDisplay, { type: 'READY' });
       expect(next.screen).toBe('term_prompt');
     });
 
     it('TIMER_3S is a no-op in text_display', () => {
-      const next = reducer(textDisplay, { type: 'TIMER_3S' });
+      const next = installationReducer(textDisplay, { type: 'TIMER_3S' });
       expect(next.screen).toBe('text_display');
     });
   });
 
   // --- TERM_PROMPT ---
   describe('TERM_PROMPT state', () => {
-    const termPrompt: InstallationState = { ...initialState, screen: 'term_prompt' };
+    const termPrompt: InstallationState = { ...INITIAL_STATE, screen: 'term_prompt' };
 
     it('TIMER_2S transitions term_prompt → conversation', () => {
-      const next = reducer(termPrompt, { type: 'TIMER_2S' });
+      const next = installationReducer(termPrompt, { type: 'TIMER_2S' });
       expect(next.screen).toBe('conversation');
     });
   });
 
   // --- CONVERSATION ---
   describe('CONVERSATION state', () => {
-    const conversation: InstallationState = { ...initialState, screen: 'conversation' };
+    const conversation: InstallationState = { ...INITIAL_STATE, screen: 'conversation' };
 
     it('DEFINITION_RECEIVED transitions conversation → synthesizing and stores definition', () => {
       const def = makeDefinition();
-      const next = reducer(conversation, { type: 'DEFINITION_RECEIVED', definition: def });
+      const next = installationReducer(conversation, { type: 'DEFINITION_RECEIVED', definition: def });
       expect(next.screen).toBe('synthesizing');
       expect(next.definition).toEqual(def);
     });
 
     it('TIMER_2S is a no-op in conversation', () => {
-      const next = reducer(conversation, { type: 'TIMER_2S' });
+      const next = installationReducer(conversation, { type: 'TIMER_2S' });
       expect(next.screen).toBe('conversation');
     });
   });
 
   // --- SYNTHESIZING ---
   describe('SYNTHESIZING state', () => {
-    const synthesizing: InstallationState = { ...initialState, screen: 'synthesizing', definition: makeDefinition() };
+    const synthesizing: InstallationState = { ...INITIAL_STATE, screen: 'synthesizing', definition: makeDefinition() };
 
     it('DEFINITION_READY transitions synthesizing → definition', () => {
-      const next = reducer(synthesizing, { type: 'DEFINITION_READY' });
+      const next = installationReducer(synthesizing, { type: 'DEFINITION_READY' });
       expect(next.screen).toBe('definition');
     });
   });
 
   // --- DEFINITION ---
   describe('DEFINITION state', () => {
-    const definition: InstallationState = { ...initialState, screen: 'definition', definition: makeDefinition() };
+    const definition: InstallationState = { ...INITIAL_STATE, screen: 'definition', definition: makeDefinition() };
 
     it('TIMER_10S transitions definition → printing', () => {
-      const next = reducer(definition, { type: 'TIMER_10S' });
+      const next = installationReducer(definition, { type: 'TIMER_10S' });
       expect(next.screen).toBe('printing');
     });
   });
 
   // --- PRINTING ---
   describe('PRINTING state', () => {
-    const printing: InstallationState = { ...initialState, screen: 'printing' };
+    const printing: InstallationState = { ...INITIAL_STATE, screen: 'printing' };
 
     it('PRINT_DONE transitions printing → farewell', () => {
-      const next = reducer(printing, { type: 'PRINT_DONE' });
+      const next = installationReducer(printing, { type: 'PRINT_DONE' });
       expect(next.screen).toBe('farewell');
     });
   });
 
   // --- FAREWELL ---
   describe('FAREWELL state', () => {
-    const farewell: InstallationState = { ...initialState, screen: 'farewell' };
+    const farewell: InstallationState = { ...INITIAL_STATE, screen: 'farewell' };
 
     it('TIMER_15S transitions farewell → sleep (reset)', () => {
-      const next = reducer(farewell, { type: 'TIMER_15S' });
+      const next = installationReducer(farewell, { type: 'TIMER_15S' });
       expect(next.screen).toBe('sleep');
     });
 
     it('FACE_LOST transitions farewell → sleep (reset)', () => {
-      const next = reducer(farewell, { type: 'FACE_LOST' });
+      const next = installationReducer(farewell, { type: 'FACE_LOST' });
       expect(next.screen).toBe('sleep');
     });
 
     it('RESET returns to initial state from farewell', () => {
-      const next = reducer(farewell, { type: 'RESET' });
-      expect(next).toEqual(initialState);
+      const next = installationReducer(farewell, { type: 'RESET' });
+      expect(next).toEqual(INITIAL_STATE);
     });
   });
 
@@ -272,16 +191,16 @@ describe('useInstallationMachine reducer', () => {
     it('traverses all 9 states', () => {
       const def = makeDefinition();
       const final = advance(
-        { ...initialState, mode: 'text_term', contextText: 'Some text' },
-        { type: 'WAKE' },                                                      // → welcome
-        { type: 'TIMER_3S' },                                                  // → text_display
-        { type: 'READY' },                                                     // → term_prompt
-        { type: 'TIMER_2S' },                                                  // → conversation
-        { type: 'DEFINITION_RECEIVED', definition: def },                     // → synthesizing
-        { type: 'DEFINITION_READY' },                                          // → definition
-        { type: 'TIMER_10S' },                                                 // → printing
-        { type: 'PRINT_DONE' },                                                // → farewell
-        { type: 'TIMER_15S' },                                                 // → sleep
+        { ...INITIAL_STATE, mode: 'text_term', contextText: 'Some text' },
+        { type: 'WAKE' },
+        { type: 'TIMER_3S' },
+        { type: 'READY' },
+        { type: 'TIMER_2S' },
+        { type: 'DEFINITION_RECEIVED', definition: def },
+        { type: 'DEFINITION_READY' },
+        { type: 'TIMER_10S' },
+        { type: 'PRINT_DONE' },
+        { type: 'TIMER_15S' },
       );
       expect(final.screen).toBe('sleep');
       // After TIMER_15S full reset, definition is cleared
@@ -293,14 +212,14 @@ describe('useInstallationMachine reducer', () => {
   describe('Full Mode B (term_only) flow', () => {
     it('skips text_display', () => {
       const screens: string[] = [];
-      let s = initialState;
+      let s: InstallationState = INITIAL_STATE;
       const actions: InstallationAction[] = [
         { type: 'WAKE' },
         { type: 'TIMER_3S' },   // should go to term_prompt, not text_display
         { type: 'TIMER_2S' },
       ];
       for (const action of actions) {
-        s = reducer(s, action);
+        s = installationReducer(s, action);
         screens.push(s.screen);
       }
       expect(screens).toEqual(['welcome', 'term_prompt', 'conversation']);
@@ -310,7 +229,7 @@ describe('useInstallationMachine reducer', () => {
   // --- Config actions ---
   describe('Configuration actions', () => {
     it('SET_CONFIG updates mode, term, contextText, parentSessionId', () => {
-      const next = reducer(initialState, {
+      const next = installationReducer(INITIAL_STATE, {
         type: 'SET_CONFIG',
         mode: 'chain',
         term: 'SPRECHEN',
@@ -326,16 +245,16 @@ describe('useInstallationMachine reducer', () => {
 
     it('SET_SESSION_ID updates sessionId', () => {
       const id = '00000000-0000-0000-0000-000000000042';
-      const next = reducer(initialState, { type: 'SET_SESSION_ID', id });
+      const next = installationReducer(INITIAL_STATE, { type: 'SET_SESSION_ID', id });
       expect(next.sessionId).toBe(id);
     });
 
     it('SET_LANGUAGE updates language', () => {
-      const next = reducer(initialState, { type: 'SET_LANGUAGE', lang: 'en' });
+      const next = installationReducer(INITIAL_STATE, { type: 'SET_LANGUAGE', lang: 'en' });
       expect(next.language).toBe('en');
     });
 
-    it('RESET returns to initialState regardless of current state', () => {
+    it('RESET returns to INITIAL_STATE regardless of current state', () => {
       const dirty: InstallationState = {
         screen: 'printing',
         mode: 'chain',
@@ -347,8 +266,8 @@ describe('useInstallationMachine reducer', () => {
         conversationId: 'conv-123',
         language: 'en',
       };
-      const next = reducer(dirty, { type: 'RESET' });
-      expect(next).toEqual(initialState);
+      const next = installationReducer(dirty, { type: 'RESET' });
+      expect(next).toEqual(INITIAL_STATE);
     });
   });
 
@@ -356,20 +275,20 @@ describe('useInstallationMachine reducer', () => {
   describe('State guards prevent invalid transitions', () => {
     it('DEFINITION_RECEIVED is ignored outside conversation', () => {
       const def = makeDefinition();
-      const inSleep = reducer(initialState, { type: 'DEFINITION_RECEIVED', definition: def });
+      const inSleep = installationReducer(INITIAL_STATE, { type: 'DEFINITION_RECEIVED', definition: def });
       expect(inSleep.screen).toBe('sleep');
       expect(inSleep.definition).toBeNull();
     });
 
     it('PRINT_DONE is ignored outside printing', () => {
-      const inWelcome: InstallationState = { ...initialState, screen: 'welcome' };
-      const next = reducer(inWelcome, { type: 'PRINT_DONE' });
+      const inWelcome: InstallationState = { ...INITIAL_STATE, screen: 'welcome' };
+      const next = installationReducer(inWelcome, { type: 'PRINT_DONE' });
       expect(next.screen).toBe('welcome');
     });
 
     it('FACE_LOST is ignored outside farewell', () => {
-      const inConversation: InstallationState = { ...initialState, screen: 'conversation' };
-      const next = reducer(inConversation, { type: 'FACE_LOST' });
+      const inConversation: InstallationState = { ...INITIAL_STATE, screen: 'conversation' };
+      const next = installationReducer(inConversation, { type: 'FACE_LOST' });
       expect(next.screen).toBe('conversation');
     });
   });

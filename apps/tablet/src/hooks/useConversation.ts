@@ -6,26 +6,12 @@ import {
   type Role as ElevenLabsRole,
 } from '@11labs/react';
 import type { Mode } from '@meinungeheuer/shared';
-import { buildSystemPrompt } from '../lib/systemPrompt';
-import { buildFirstMessage } from '../lib/firstMessage';
+import { buildSystemPrompt, buildFirstMessage } from '@meinungeheuer/core';
+import type { TranscriptEntry, SaveDefinitionResult } from '@meinungeheuer/core';
+export type { TranscriptEntry, SaveDefinitionResult };
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
-export interface TranscriptEntry {
-  /** "visitor" matches our shared Role type; ElevenLabs uses "user" / "ai" */
-  role: 'visitor' | 'agent';
-  content: string;
-  timestamp: number;
-}
 
-export interface SaveDefinitionResult {
-  term: string;
-  definition_text: string;
-  citations: string[];
-  language: string;
-}
 
 export interface UseConversationParams {
   /** ElevenLabs agent ID (from env) */
@@ -59,17 +45,13 @@ export interface UseConversationReturn {
   endConversation: () => Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
 // Role mapping
-// ---------------------------------------------------------------------------
 
 function mapRole(elevenLabsRole: ElevenLabsRole): TranscriptEntry['role'] {
   return elevenLabsRole === 'user' ? 'visitor' : 'agent';
 }
 
-// ---------------------------------------------------------------------------
 // Hook
-// ---------------------------------------------------------------------------
 
 export function useConversation(
   params: UseConversationParams,

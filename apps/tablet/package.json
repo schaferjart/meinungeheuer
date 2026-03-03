@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --passWithNoTests",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -15,6 +15,7 @@
     "@11labs/react": "^0.2.0",
     "@elevenlabs/client": "^0.15.0",
     "@mediapipe/tasks-vision": "^0.10.18",
+    "@meinungeheuer/core": "workspace:*",
     "@meinungeheuer/shared": "workspace:*",
     "@supabase/supabase-js": "^2.49.1",
     "react": "^18.3.1",

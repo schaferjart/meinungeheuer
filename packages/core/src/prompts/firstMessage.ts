@@ -39,7 +39,7 @@ export function buildFirstMessage(
  * Extract a short preview from the context text for the chain mode opening.
  * Takes roughly the first sentence or first 80 characters, whichever is shorter.
  */
-function extractPreview(text?: string | null): string {
+export function extractPreview(text?: string | null): string {
   if (!text) return '...';
 
   const trimmed = text.trim();

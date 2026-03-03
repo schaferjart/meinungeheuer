@@ -24,7 +24,7 @@ function makeClientDefinition(d: {
 
 import { useInstallationMachine } from './hooks/useInstallationMachine';
 import { useConversation } from './hooks/useConversation';
-import { fetchConfig } from './lib/api';
+import { fetchConfig } from '@meinungeheuer/core';
 import { ScreenTransition } from './components/ScreenTransition';
 import { CameraDetector } from './components/CameraDetector';
 import { Admin } from './pages/Admin';

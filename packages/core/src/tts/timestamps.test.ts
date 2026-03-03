@@ -1,15 +1,11 @@
 /**
- * Tests for the pure utility functions in useTextToSpeechWithTimestamps.
- *
- * We test buildWordTimestamps and splitTextIntoChunks — the pure functions
- * that don't require React or browser APIs.
+ * Tests for the pure utility functions: buildWordTimestamps and splitTextIntoChunks.
  */
 import { describe, it, expect } from 'vitest';
 import {
   buildWordTimestamps,
   splitTextIntoChunks,
-  type WordTimestamp,
-} from './useTextToSpeechWithTimestamps';
+} from './timestamps';
 
 // ---------------------------------------------------------------------------
 // Helpers

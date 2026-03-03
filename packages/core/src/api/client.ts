@@ -36,7 +36,7 @@ export type SessionStartResponse = z.infer<typeof SessionStartResponseSchema>;
 // Helpers
 // ============================================================
 
-async function apiFetch<T>(
+export async function apiFetch<T>(
   url: string,
   options: RequestInit,
   schema: z.ZodType<T>,
