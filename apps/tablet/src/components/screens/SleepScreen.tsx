@@ -1,18 +1,24 @@
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
+import { requestFullscreen } from '../../lib/fullscreen';
 
 interface SleepScreenProps {
   dispatch: React.Dispatch<InstallationAction>;
 }
 
 export function SleepScreen({ dispatch }: SleepScreenProps) {
+  const handleInteraction = () => {
+    requestFullscreen();
+    dispatch({ type: 'WAKE' });
+  };
+
   return (
     <div
       className="flex items-center justify-center w-full h-full bg-black cursor-none select-none"
-      onClick={() => dispatch({ type: 'WAKE' })}
+      onClick={handleInteraction}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') dispatch({ type: 'WAKE' });
+        if (e.key === 'Enter' || e.key === ' ') handleInteraction();
       }}
       aria-label="Tap to begin"
     >
