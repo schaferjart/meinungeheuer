@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+import { requestFullscreen } from '../../lib/fullscreen';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface SleepScreenProps {
@@ -5,14 +7,19 @@ interface SleepScreenProps {
 }
 
 export function SleepScreen({ dispatch }: SleepScreenProps) {
+  const handleInteraction = useCallback(() => {
+    requestFullscreen();
+    dispatch({ type: 'WAKE' });
+  }, [dispatch]);
+
   return (
     <div
       className="flex items-center justify-center w-full h-full bg-black cursor-none select-none"
-      onClick={() => dispatch({ type: 'WAKE' })}
+      onClick={handleInteraction}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') dispatch({ type: 'WAKE' });
+        if (e.key === 'Enter' || e.key === ' ') handleInteraction();
       }}
       aria-label="Tap to begin"
     >
