@@ -22,26 +22,17 @@ export {
   type StartSessionParams,
 } from './api/client.js';
 
-// TTS timestamps
+// TTS
 export {
   buildWordTimestamps,
   splitTextIntoChunks,
   type WordTimestamp,
   type AlignmentData,
 } from './tts/timestamps.js';
+export { type TtsStatus } from './audio/types.js';
 
-// Conversation adapter types
+// Conversation
 export {
   type TranscriptEntry,
   type SaveDefinitionResult,
-  type ConversationStatus,
-  type ConversationSessionParams,
-  type ConversationAdapter,
 } from './conversation/types.js';
-
-// Audio adapter types
-export {
-  type TtsStatus,
-  type TtsFetchResult,
-  type TtsPlaybackAdapter,
-} from './audio/types.js';

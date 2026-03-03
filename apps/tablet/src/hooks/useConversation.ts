@@ -9,10 +9,6 @@ import type { Mode } from '@meinungeheuer/shared';
 import { buildSystemPrompt, buildFirstMessage } from '@meinungeheuer/core';
 import type { TranscriptEntry, SaveDefinitionResult } from '@meinungeheuer/core';
 export type { TranscriptEntry, SaveDefinitionResult };
-
-
-
-
 export interface UseConversationParams {
   /** ElevenLabs agent ID (from env) */
   agentId: string;

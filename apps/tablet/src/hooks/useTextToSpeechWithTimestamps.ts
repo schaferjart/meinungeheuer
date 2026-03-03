@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { buildWordTimestamps, splitTextIntoChunks } from '@meinungeheuer/core';
-import type { WordTimestamp, AlignmentData } from '@meinungeheuer/core';
-export type { WordTimestamp };
+import type { WordTimestamp, AlignmentData, TtsStatus } from '@meinungeheuer/core';
+export type { WordTimestamp, TtsStatus };
 
 // ============================================================
 // Types
 // ============================================================
 
-export type TtsStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'done' | 'error';
 
 export interface UseTextToSpeechWithTimestampsParams {
   text: string;
