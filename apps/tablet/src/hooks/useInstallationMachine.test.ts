@@ -14,11 +14,12 @@ import type { InstallationState, InstallationAction } from './useInstallationMac
 // ---------------------------------------------------------------------------
 
 import type { Mode, Definition } from '@meinungeheuer/shared';
+import { DEFAULT_MODE, DEFAULT_TERM } from '@meinungeheuer/shared';
 
 const initialState: InstallationState = {
   screen: 'sleep',
-  mode: 'term_only',
-  term: 'BIRD',
+  mode: DEFAULT_MODE,
+  term: DEFAULT_TERM,
   contextText: null,
   parentSessionId: null,
   sessionId: null,
@@ -153,7 +154,8 @@ describe('useInstallationMachine reducer', () => {
     const welcome: InstallationState = { ...initialState, screen: 'welcome' };
 
     it('TIMER_3S with term_only → term_prompt', () => {
-      const next = reducer(welcome, { type: 'TIMER_3S' });
+      const s: InstallationState = { ...welcome, mode: 'term_only' as Mode };
+      const next = reducer(s, { type: 'TIMER_3S' });
       expect(next.screen).toBe('term_prompt');
     });
 
@@ -293,7 +295,7 @@ describe('useInstallationMachine reducer', () => {
   describe('Full Mode B (term_only) flow', () => {
     it('skips text_display', () => {
       const screens: string[] = [];
-      let s = initialState;
+      let s: InstallationState = { ...initialState, mode: 'term_only' as Mode };
       const actions: InstallationAction[] = [
         { type: 'WAKE' },
         { type: 'TIMER_3S' },   // should go to term_prompt, not text_display

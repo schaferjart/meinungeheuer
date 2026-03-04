@@ -1,5 +1,6 @@
 import { useReducer, useCallback } from 'react';
 import type { Mode, StateName, Definition } from '@meinungeheuer/shared';
+import { DEFAULT_MODE, DEFAULT_TERM } from '@meinungeheuer/shared';
 
 // ============================================================
 // State
@@ -19,8 +20,8 @@ export interface InstallationState {
 
 const initialState: InstallationState = {
   screen: 'sleep',
-  mode: 'term_only',
-  term: 'BIRD',
+  mode: DEFAULT_MODE,
+  term: DEFAULT_TERM,
   contextText: null,
   parentSessionId: null,
   sessionId: null,

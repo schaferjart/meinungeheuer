@@ -13,4 +13,4 @@ INSERT INTO texts (id, title, content_de, content_en, terms) VALUES (
 -- Seed: Default installation config
 -- ============================================================
 INSERT INTO installation_config (mode, active_term, active_text_id) VALUES
-  ('term_only', 'BIRD', NULL);
+  ('text_term', NULL, 'kleist_verfertigung');
