@@ -38,3 +38,17 @@ export interface ParsedLine {
 export interface ParsedParagraph {
   lines: ParsedLine[];
 }
+
+// ============================================================
+// Cache adapter types
+// ============================================================
+
+export interface TTSCacheValue {
+  audioBase64Parts: string[];
+  wordTimestamps: WordTimestamp[];
+}
+
+export interface CacheAdapter {
+  get(key: string): Promise<TTSCacheValue | null>;
+  set(key: string, value: TTSCacheValue): Promise<void>;
+}
