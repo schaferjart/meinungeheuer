@@ -2,35 +2,35 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 1
-current_plan: 02 (complete)
-status: planning
-last_updated: "2026-03-07T15:20:17.254Z"
+current_phase: 2
+current_plan: 01 (complete)
+status: executing
+last_updated: "2026-03-07T16:56:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 3
+  completed_plans: 3
 ---
 
 # Project State
 
-**Current phase:** 1
-**Current plan:** 02 (complete)
-**Status:** Ready to plan
+**Current phase:** 2
+**Current plan:** 01 (complete)
+**Status:** Executing
 
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-03-07)
 **Core value:** Buttery-smooth word highlighting synced to audio
-**Current focus:** Phase 1 -- Package Foundation
+**Current focus:** Phase 2 -- Core Component and Hooks
 
 ## Phase Progress
 
 | Phase | Name | Status |
 |-------|------|--------|
-| 1 | Package Foundation | In progress (Plan 01 complete, Plan 02 complete) |
-| 2 | Core Component and Hooks | Not started |
+| 1 | Package Foundation | Complete (Plan 01 complete, Plan 02 complete) |
+| 2 | Core Component and Hooks | In progress (Plan 01 complete) |
 | 3 | Adapters and Styling | Not started |
 | 4 | Validation and Publication | Not started |
 
@@ -42,6 +42,7 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 | 2026-03-07 | attw: exclude CSS entrypoint, ignore node10 no-resolution | CSS files cannot have type declarations; node10 does not support subpath exports |
 | 2026-03-07 | tsup onSuccess hook for CSS copy | tsup does not natively copy standalone CSS files to dist/ |
 | 2026-03-07 | Remove unused type imports in markdown.ts | ParsedWord and LineType used structurally through ParsedLine/ParsedParagraph, not directly as annotations |
+| 2026-03-07 | happy-dom + MockAudio for React tests | happy-dom's Audio implementation is incomplete; custom MockAudio extends EventTarget |
 
 ## Blockers
 
@@ -49,4 +50,4 @@ None.
 
 ---
 *State initialized: 2026-03-07*
-*Last updated: 2026-03-07 (Plan 02 complete)*
+*Last updated: 2026-03-07 (Phase 2, Plan 01 complete)*
