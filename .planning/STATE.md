@@ -3,21 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 3
-current_plan: 02
-status: "In Progress (Plan 01 complete, Plan 02 next: ElevenLabs adapter)"
-last_updated: "2026-03-07T18:25:16.161Z"
+current_plan: 03
+status: "Complete (Plan 01 complete, Plan 02 complete, Plan 03 complete)"
+last_updated: "2026-03-07T18:32:14Z"
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 10
 ---
 
 # Project State
 
 **Current phase:** 3
-**Current plan:** 02
-**Status:** In Progress (Plan 01 complete, Plan 02 next: ElevenLabs adapter)
+**Current plan:** 03
+**Status:** Complete (Plan 01 complete, Plan 02 complete, Plan 03 complete)
 
 ## Project Reference
 
@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 |-------|------|--------|
 | 1 | Package Foundation | Complete (Plan 01 complete, Plan 02 complete) |
 | 2 | Core Component and Hooks | Complete (Plan 01 complete, Plan 02 complete, Plan 03 complete, Plan 04 complete, Plan 05 complete) |
-| 3 | Adapters and Styling | In Progress (Plan 01 complete, Plan 02: ElevenLabs adapter, Plan 03: CSS styling) |
+| 3 | Adapters and Styling | Complete (Plan 01 complete, Plan 02 complete, Plan 03 complete) |
 | 4 | Validation and Publication | Not started |
 
 ## Decisions Log
@@ -48,6 +48,10 @@ See: .planning/PROJECT.md (updated 2026-03-07)
 | 2026-03-07 | Loading/error states return early with no word spans | Keeps component simple, avoids rendering unnecessary DOM during non-interactive states |
 | 2026-03-07 | rAF word sync tested via vi.advanceTimersByTime(16) | Matches useAudioSync test convention for consistent test approach across codebase |
 | 2026-03-07 | Both cache adapters in single cache.ts file | Shared interface, small implementations -- simpler than separate files |
+| 2026-03-07 | All visual properties as --kr-* CSS custom properties | Zero-config theming: set on parent element to override defaults |
+| 2026-03-07 | Pure CSS with vendor prefixes, no Tailwind dependency | Self-contained stylesheet works in any project without CSS framework |
+| 2026-03-07 | cache.set fire-and-forget uses .catch() not void+try/catch | Properly handles async promise rejections from cache write failures |
+| 2026-03-07 | useEffect dependency uses JSON.stringify(options) | Stabilizes object identity across renders for hook re-execution |
 
 ## Blockers
 
@@ -55,4 +59,4 @@ None.
 
 ---
 *State initialized: 2026-03-07*
-*Last updated: 2026-03-07 (Phase 3, Plan 01 complete)*
+*Last updated: 2026-03-07 (Phase 3 complete)*

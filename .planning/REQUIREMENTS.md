@@ -34,15 +34,15 @@
 
 ### Styling
 
-- [ ] **CSS-01**: Self-contained CSS with no Tailwind dependency — all styles via plain CSS with `--kr-*` custom properties
-- [ ] **CSS-02**: Styled default ships looking good (Georgia serif, dark background, amber highlight, smooth transitions)
-- [ ] **CSS-03**: All visual properties overridable via CSS custom properties (colors, fonts, sizes, transitions)
+- [x] **CSS-01**: Self-contained CSS with no Tailwind dependency — all styles via plain CSS with `--kr-*` custom properties
+- [x] **CSS-02**: Styled default ships looking good (Georgia serif, dark background, amber highlight, smooth transitions)
+- [x] **CSS-03**: All visual properties overridable via CSS custom properties (colors, fonts, sizes, transitions)
 
 ### ElevenLabs Adapter
 
-- [ ] **ELEV-01**: Optional ElevenLabs adapter as separate subpath export (`karaoke-reader/elevenlabs`)
-- [ ] **ELEV-02**: Fetches TTS audio with character-level timestamps, converts to WordTimestamp[] via buildWordTimestamps
-- [ ] **ELEV-03**: Text chunking for long inputs (stays within ElevenLabs API limits)
+- [x] **ELEV-01**: Optional ElevenLabs adapter as separate subpath export (`karaoke-reader/elevenlabs`)
+- [x] **ELEV-02**: Fetches TTS audio with character-level timestamps, converts to WordTimestamp[] via buildWordTimestamps
+- [x] **ELEV-03**: Text chunking for long inputs (stays within ElevenLabs API limits)
 
 ### Cache Layer
 
@@ -117,12 +117,12 @@
 | COMP-06 | Phase 2 | Complete |
 | COMP-07 | Phase 2 | Complete |
 | COMP-08 | Phase 2 | Complete |
-| CSS-01 | Phase 3 | Pending |
-| CSS-02 | Phase 3 | Pending |
-| CSS-03 | Phase 3 | Pending |
-| ELEV-01 | Phase 3 | Pending |
-| ELEV-02 | Phase 3 | Pending |
-| ELEV-03 | Phase 3 | Pending |
+| CSS-01 | Phase 3 | Complete |
+| CSS-02 | Phase 3 | Complete |
+| CSS-03 | Phase 3 | Complete |
+| ELEV-01 | Phase 3 | Complete |
+| ELEV-02 | Phase 3 | Complete |
+| ELEV-03 | Phase 3 | Complete |
 | CACHE-01 | Phase 3 | Complete |
 | CACHE-02 | Phase 3 | Complete |
 | CACHE-03 | Phase 3 | Complete |
