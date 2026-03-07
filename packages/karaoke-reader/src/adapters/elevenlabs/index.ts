@@ -203,14 +203,12 @@ export async function fetchElevenLabsTTS(
 
   // 6. Fire-and-forget cache store
   if (cache) {
-    try {
-      void cache.set(cacheKey, {
-        audioBase64Parts: allBase64Parts,
-        wordTimestamps: allTimestamps,
-      });
-    } catch {
-      // Cache errors never throw
-    }
+    cache.set(cacheKey, {
+      audioBase64Parts: allBase64Parts,
+      wordTimestamps: allTimestamps,
+    }).catch(() => {
+      // Cache errors never throw — swallow rejections
+    });
   }
 
   // 7. Return result
