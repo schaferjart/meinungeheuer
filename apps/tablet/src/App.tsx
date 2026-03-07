@@ -25,6 +25,7 @@ function makeClientDefinition(d: {
 import { useInstallationMachine } from './hooks/useInstallationMachine';
 import { useConversation } from './hooks/useConversation';
 import { fetchConfig } from './lib/api';
+import { persistDefinition, persistTranscript } from './lib/persist';
 import { ScreenTransition } from './components/ScreenTransition';
 import { CameraDetector } from './components/CameraDetector';
 import { Admin } from './pages/Admin';
@@ -124,8 +125,9 @@ function InstallationApp() {
   // -----------------------------------------------------------------------
   const handleDefinitionReceived = useCallback(
     (result: { term: string; definition_text: string; citations: string[]; language: string }) => {
-      dispatch({ type: 'DEFINITION_RECEIVED', definition: makeClientDefinition(result) });
-      // After a brief moment, show the definition screen
+      const def = makeClientDefinition(result);
+      dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
+      void persistDefinition(def);
       setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
     },
     [dispatch],
@@ -134,6 +136,8 @@ function InstallationApp() {
   const handleConversationEnd = useCallback(
     (reason: string) => {
       console.log('[App] Conversation ended, reason:', reason);
+      // Persist transcript to Supabase
+      void persistTranscript(conversationIdRef.current, transcriptRef.current);
       // If the conversation ended without a definition (e.g. agent disconnected),
       // and we're still on the conversation screen, synthesize gracefully
       if (state.screen === 'conversation' && !state.definition) {
@@ -156,6 +160,7 @@ function InstallationApp() {
     status: conversationStatus,
     isSpeaking,
     transcript,
+    conversationId,
     startConversation,
     endConversation,
   } = useConversation({
@@ -167,6 +172,12 @@ function InstallationApp() {
     onDefinitionReceived: handleDefinitionReceived,
     onConversationEnd: handleConversationEnd,
   });
+
+  // Refs for persist callbacks (defined after useConversation, used in handleConversationEnd)
+  const conversationIdRef = useRef(conversationId);
+  conversationIdRef.current = conversationId;
+  const transcriptRef = useRef(transcript);
+  transcriptRef.current = transcript;
 
   // Start the ElevenLabs session when we enter the conversation screen
   const conversationStartedRef = useRef(false);
