@@ -7,6 +7,8 @@ export type {
   ParsedWord,
   ParsedLine,
   ParsedParagraph,
+  CacheAdapter,
+  TTSCacheValue,
 } from './types.js';
 
 // Utilities
@@ -14,6 +16,9 @@ export { buildWordTimestamps } from './utils/buildWordTimestamps.js';
 export { splitTextIntoChunks } from './utils/splitTextIntoChunks.js';
 export { computeCacheKey } from './utils/computeCacheKey.js';
 export { stripMarkdownForTTS, parseContentToWords, parseMarkdownText } from './utils/markdown.js';
+
+// Cache
+export { createMemoryCache, createLocalStorageCache } from './cache.js';
 
 // Hooks
 export {
