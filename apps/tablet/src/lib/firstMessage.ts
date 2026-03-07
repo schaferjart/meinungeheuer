@@ -23,8 +23,8 @@ export function buildFirstMessage(
 
     case 'text_term':
       return isGerman
-        ? `Du hast gerade einen Text gelesen. Was denkst du uber ${term}?`
-        : `You just read a text. What do you think about ${term}?`;
+        ? `Du hast gerade einen Text gelesen. Was ist dir hängengeblieben?`
+        : `You just read a text. What stayed with you?`;
 
     case 'chain': {
       const preview = extractPreview(contextText);

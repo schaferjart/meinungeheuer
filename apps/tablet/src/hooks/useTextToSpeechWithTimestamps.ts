@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { computeCacheKey, getCachedTts, storeTtsCache } from '../lib/ttsCache';
 
 // ============================================================
 // Types
@@ -32,7 +33,7 @@ export interface UseTextToSpeechWithTimestampsReturn {
 }
 
 // ============================================================
-// ElevenLabs NDJSON response chunk shape
+// ElevenLabs TTS with-timestamps response shape
 // ============================================================
 
 interface AlignmentData {
@@ -41,9 +42,10 @@ interface AlignmentData {
   character_end_times_seconds: number[];
 }
 
-interface TtsChunk {
+interface TtsResponse {
   audio_base64: string;
   alignment: AlignmentData | null;
+  normalized_alignment: AlignmentData | null;
 }
 
 // ============================================================
@@ -171,7 +173,7 @@ async function fetchTtsWithTimestamps(
   text: string,
   voiceId: string,
   apiKey: string,
-): Promise<{ audioBase64Chunks: string[]; alignment: AlignmentData }> {
+): Promise<{ audioBase64: string; alignment: AlignmentData }> {
   const url = `${TTS_BASE_URL}/${voiceId}/with-timestamps`;
 
   const response = await fetch(url, {
@@ -184,6 +186,12 @@ async function fetchTtsWithTimestamps(
       text,
       model_id: 'eleven_multilingual_v2',
       output_format: 'mp3_44100_128',
+      voice_settings: {
+        stability: 0.35,
+        similarity_boost: 0.65,
+        style: 0.6,
+        use_speaker_boost: true,
+      },
     }),
   });
 
@@ -192,56 +200,42 @@ async function fetchTtsWithTimestamps(
     throw new Error(`ElevenLabs TTS API error ${response.status}: ${errorText}`);
   }
 
-  const body = await response.text();
+  // Response is a single JSON object (not NDJSON)
+  const data = (await response.json()) as TtsResponse;
 
-  // Parse NDJSON: each line is a JSON object
-  const lines = body.split('\n').filter((line) => line.trim().length > 0);
-
-  const audioBase64Chunks: string[] = [];
-  let mergedAlignment: AlignmentData = {
-    characters: [],
-    character_start_times_seconds: [],
-    character_end_times_seconds: [],
-  };
-
-  for (const line of lines) {
-    const chunk = JSON.parse(line) as TtsChunk;
-
-    if (chunk.audio_base64 && chunk.audio_base64.length > 0) {
-      audioBase64Chunks.push(chunk.audio_base64);
-    }
-
-    if (chunk.alignment) {
-      mergedAlignment = {
-        characters: [...mergedAlignment.characters, ...chunk.alignment.characters],
-        character_start_times_seconds: [
-          ...mergedAlignment.character_start_times_seconds,
-          ...chunk.alignment.character_start_times_seconds,
-        ],
-        character_end_times_seconds: [
-          ...mergedAlignment.character_end_times_seconds,
-          ...chunk.alignment.character_end_times_seconds,
-        ],
-      };
-    }
+  if (!data.audio_base64) {
+    throw new Error('ElevenLabs TTS returned no audio data');
   }
 
-  return { audioBase64Chunks, alignment: mergedAlignment };
+  // Prefer alignment over normalized_alignment — alignment maps to the original text characters
+  const alignment = data.alignment ?? data.normalized_alignment;
+  if (!alignment) {
+    throw new Error('ElevenLabs TTS returned no alignment data');
+  }
+
+  console.log('[TTS] API response:', {
+    audioBase64Length: data.audio_base64.length,
+    alignmentChars: alignment.characters.length,
+    textLength: text.length,
+  });
+
+  return { audioBase64: data.audio_base64, alignment };
 }
 
 /**
- * Decode multiple base64 audio chunks into a single Blob URL.
+ * Decode one or more base64 audio strings into a single Blob URL.
+ * Each string is decoded independently and concatenated as raw bytes.
  */
-function base64ChunksToAudioUrl(chunks: string[]): string {
-  const binaryParts: BlobPart[] = [];
+function base64PartsToAudioUrl(parts: string[]): string {
+  const binaryParts: Uint8Array[] = [];
 
-  for (const chunk of chunks) {
-    const binary = atob(chunk);
+  for (const part of parts) {
+    const binary = atob(part);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i);
     }
-    binaryParts.push(bytes as unknown as BlobPart);
+    binaryParts.push(bytes);
   }
 
   const blob = new Blob(binaryParts, { type: 'audio/mpeg' });
@@ -372,7 +366,12 @@ export function useTextToSpeechWithTimestamps(
   // Fetch TTS data when text/voiceId/apiKey change
   // -----------------------------------------------------------------------
   useEffect(() => {
-    if (!text || !voiceId || !apiKey) return;
+    if (!text || !voiceId || !apiKey) {
+      console.warn('[TTS] Missing params:', { text: !!text, voiceId: !!voiceId, apiKey: !!apiKey });
+      return;
+    }
+
+    console.log('[TTS] Starting TTS fetch for text length:', text.length);
 
     // Reset state
     setStatus('loading');
@@ -395,45 +394,73 @@ export function useTextToSpeechWithTimestamps(
 
     async function loadTts() {
       try {
-        const chunks = splitTextIntoChunks(text);
-        const allAudioChunks: string[] = [];
-        let allWords: WordTimestamp[] = [];
-        let timeOffset = 0;
+        let allAudioBase64Parts: string[];
+        let allWords: WordTimestamp[];
 
-        for (const chunk of chunks) {
-          if (cancelled) return;
+        // --- Cache lookup ---
+        const cacheKey = await computeCacheKey(text, voiceId);
 
-          const { audioBase64Chunks, alignment } = await fetchTtsWithTimestamps(
-            chunk,
-            voiceId,
-            apiKey,
-          );
+        if (cancelled) return;
 
-          allAudioChunks.push(...audioBase64Chunks);
+        const cached = await getCachedTts(cacheKey);
 
-          const chunkWords = buildWordTimestamps(chunk, alignment, timeOffset);
-          // Reindex words to be globally sequential
-          const baseIndex = allWords.length;
-          const reindexed = chunkWords.map((w, i) => ({
-            ...w,
-            index: baseIndex + i,
-          }));
-          allWords = [...allWords, ...reindexed];
+        if (cached) {
+          console.log('[TTS] Cache hit');
+          allAudioBase64Parts = cached.audioBase64Parts;
+          allWords = cached.wordTimestamps;
+        } else {
+          console.log('[TTS] Cache miss — fetching from API');
 
-          // Calculate time offset for next chunk: use the last character's end time
-          const lastEndTime =
-            alignment.character_end_times_seconds[
-              alignment.character_end_times_seconds.length - 1
-            ];
-          if (lastEndTime !== undefined) {
-            timeOffset += lastEndTime;
+          // For long texts, split into chunks and fetch each separately
+          const textChunks = splitTextIntoChunks(text);
+          allAudioBase64Parts = [];
+          allWords = [];
+          let timeOffset = 0;
+
+          for (const textChunk of textChunks) {
+            if (cancelled) return;
+
+            const { audioBase64, alignment } = await fetchTtsWithTimestamps(
+              textChunk,
+              voiceId,
+              apiKey,
+            );
+
+            allAudioBase64Parts.push(audioBase64);
+
+            const chunkWords = buildWordTimestamps(textChunk, alignment, timeOffset);
+            // Reindex words to be globally sequential
+            const baseIndex = allWords.length;
+            const reindexed = chunkWords.map((w, i) => ({
+              ...w,
+              index: baseIndex + i,
+            }));
+            allWords = [...allWords, ...reindexed];
+
+            // Calculate time offset for next chunk: use the last character's end time
+            const lastEndTime =
+              alignment.character_end_times_seconds[
+                alignment.character_end_times_seconds.length - 1
+              ];
+            if (lastEndTime !== undefined) {
+              timeOffset += lastEndTime;
+            }
           }
+
+          // Fire-and-forget: store in cache
+          void storeTtsCache(cacheKey, allAudioBase64Parts, allWords, text.length, voiceId);
         }
 
         if (cancelled) return;
 
+        console.log('[TTS] Ready:', {
+          chunks: allAudioBase64Parts.length,
+          totalWords: allWords.length,
+          fromCache: !!cached,
+        });
+
         // Build audio element
-        const audioUrl = base64ChunksToAudioUrl(allAudioChunks);
+        const audioUrl = base64PartsToAudioUrl(allAudioBase64Parts);
         audioUrlRef.current = audioUrl;
 
         const audio = new Audio(audioUrl);
@@ -442,6 +469,7 @@ export function useTextToSpeechWithTimestamps(
 
         // Audio event handlers
         audio.addEventListener('ended', () => {
+          console.log('[TTS] Audio ended');
           setStatus('done');
           setActiveWordIndex(allWords.length > 0 ? allWords.length - 1 : -1);
           if (animationFrameRef.current !== null) {
@@ -450,13 +478,19 @@ export function useTextToSpeechWithTimestamps(
           }
         });
 
-        audio.addEventListener('error', () => {
+        audio.addEventListener('error', (e) => {
+          console.error('[TTS] Audio element error:', e);
           setError('Audio playback error');
           setStatus('error');
         });
 
+        audio.addEventListener('canplaythrough', () => {
+          console.log('[TTS] Audio canplaythrough, duration:', audio.duration);
+        });
+
         setWords(allWords);
         setStatus('ready');
+        console.log('[TTS] Status → ready, autoPlay:', autoPlay);
 
         if (autoPlay) {
           audio.play().catch((err: unknown) => {
