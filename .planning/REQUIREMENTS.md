@@ -23,10 +23,10 @@
 
 ### Core Component
 
-- [ ] **COMP-01**: `<KaraokeReader>` component accepts text + WordTimestamp[] + audio source and renders word-by-word highlighting
-- [ ] **COMP-02**: 60fps sync loop via requestAnimationFrame with binary search for active word — direct DOM class toggling, no React re-renders
+- [x] **COMP-01**: `<KaraokeReader>` component accepts text + WordTimestamp[] + audio source and renders word-by-word highlighting
+- [x] **COMP-02**: 60fps sync loop via requestAnimationFrame with binary search for active word — direct DOM class toggling, no React re-renders
 - [x] **COMP-03**: Status state machine: idle → loading → ready → playing → paused → done | error
-- [ ] **COMP-04**: Auto-scroll keeps active word in comfort zone (20%-65% viewport band) with manual-scroll cooldown
+- [x] **COMP-04**: Auto-scroll keeps active word in comfort zone (20%-65% viewport band) with manual-scroll cooldown
 - [x] **COMP-05**: Play/pause via tap/click on text area, Space/Enter keyboard support
 - [x] **COMP-06**: Volume slider control
 - [x] **COMP-07**: onComplete callback fires when audio finishes
@@ -109,10 +109,10 @@
 | UTIL-03 | Phase 1 | Complete |
 | UTIL-04 | Phase 1 | Complete |
 | UTIL-05 | Phase 1 | Complete |
-| COMP-01 | Phase 2 | Pending |
-| COMP-02 | Phase 2 | Pending |
+| COMP-01 | Phase 2 | Complete |
+| COMP-02 | Phase 2 | Complete |
 | COMP-03 | Phase 2 | Complete |
-| COMP-04 | Phase 2 | Pending |
+| COMP-04 | Phase 2 | Complete |
 | COMP-05 | Phase 2 | Complete |
 | COMP-06 | Phase 2 | Complete |
 | COMP-07 | Phase 2 | Complete |
