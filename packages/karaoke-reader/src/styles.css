@@ -205,3 +205,41 @@
   background: var(--kr-slider-thumb-color);
   border: none;
 }
+
+/* ------------------------------------------------------------
+ * Loading and error states
+ * ------------------------------------------------------------ */
+
+.kr-root[data-kr-status="loading"],
+.kr-root[data-kr-status="error"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kr-loading-indicator {
+  color: var(--kr-color);
+  opacity: 0.5;
+  font-size: 0.9rem;
+  letter-spacing: 0.1em;
+  animation: kr-pulse 2s ease-in-out infinite;
+}
+
+.kr-error-fallback {
+  color: var(--kr-error-color);
+  font-size: 0.9rem;
+  text-align: center;
+  max-width: 400px;
+  padding: 1rem;
+  line-height: 1.5;
+}
+
+@keyframes kr-pulse {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
