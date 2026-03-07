@@ -25,12 +25,12 @@
 
 - [ ] **COMP-01**: `<KaraokeReader>` component accepts text + WordTimestamp[] + audio source and renders word-by-word highlighting
 - [ ] **COMP-02**: 60fps sync loop via requestAnimationFrame with binary search for active word — direct DOM class toggling, no React re-renders
-- [ ] **COMP-03**: Status state machine: idle → loading → ready → playing → paused → done | error
+- [x] **COMP-03**: Status state machine: idle → loading → ready → playing → paused → done | error
 - [ ] **COMP-04**: Auto-scroll keeps active word in comfort zone (20%-65% viewport band) with manual-scroll cooldown
-- [ ] **COMP-05**: Play/pause via tap/click on text area, Space/Enter keyboard support
-- [ ] **COMP-06**: Volume slider control
-- [ ] **COMP-07**: onComplete callback fires when audio finishes
-- [ ] **COMP-08**: Graceful error handling — loading state, error state with fallback UI, autoplay-blocked detection
+- [x] **COMP-05**: Play/pause via tap/click on text area, Space/Enter keyboard support
+- [x] **COMP-06**: Volume slider control
+- [x] **COMP-07**: onComplete callback fires when audio finishes
+- [x] **COMP-08**: Graceful error handling — loading state, error state with fallback UI, autoplay-blocked detection
 
 ### Styling
 
@@ -111,12 +111,12 @@
 | UTIL-05 | Phase 1 | Complete |
 | COMP-01 | Phase 2 | Pending |
 | COMP-02 | Phase 2 | Pending |
-| COMP-03 | Phase 2 | Pending |
+| COMP-03 | Phase 2 | Complete |
 | COMP-04 | Phase 2 | Pending |
-| COMP-05 | Phase 2 | Pending |
-| COMP-06 | Phase 2 | Pending |
-| COMP-07 | Phase 2 | Pending |
-| COMP-08 | Phase 2 | Pending |
+| COMP-05 | Phase 2 | Complete |
+| COMP-06 | Phase 2 | Complete |
+| COMP-07 | Phase 2 | Complete |
+| COMP-08 | Phase 2 | Complete |
 | CSS-01 | Phase 3 | Pending |
 | CSS-02 | Phase 3 | Pending |
 | CSS-03 | Phase 3 | Pending |
