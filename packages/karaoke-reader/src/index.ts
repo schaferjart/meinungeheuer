@@ -28,3 +28,7 @@ export type {
   UseKaraokeReaderParams,
   UseKaraokeReaderReturn,
 } from './hooks/index.js';
+
+// Components
+export { KaraokeReader } from './components/KaraokeReader.js';
+export type { KaraokeReaderProps } from './components/KaraokeReader.js';
