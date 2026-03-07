@@ -1,3 +1,4 @@
+import { copyFileSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
@@ -14,4 +15,7 @@ export default defineConfig({
   external: ['react', 'react-dom'],
   splitting: true,
   treeshake: true,
+  onSuccess: async () => {
+    copyFileSync('src/styles.css', 'dist/styles.css');
+  },
 });

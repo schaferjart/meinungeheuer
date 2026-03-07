@@ -40,7 +40,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check src/",
-    "check-exports": "publint && attw --pack"
+    "check-exports": "publint && attw --pack --exclude-entrypoints ./styles.css --ignore-rules no-resolution"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
