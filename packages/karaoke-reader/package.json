@@ -8,32 +8,64 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-      "require": { "types": "./dist/index.d.cts", "default": "./dist/index.cjs" }
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     },
     "./utils": {
-      "import": { "types": "./dist/utils/index.d.ts", "default": "./dist/utils/index.js" },
-      "require": { "types": "./dist/utils/index.d.cts", "default": "./dist/utils/index.cjs" }
+      "import": {
+        "types": "./dist/utils/index.d.ts",
+        "default": "./dist/utils/index.js"
+      },
+      "require": {
+        "types": "./dist/utils/index.d.cts",
+        "default": "./dist/utils/index.cjs"
+      }
     },
     "./hooks": {
-      "import": { "types": "./dist/hooks/index.d.ts", "default": "./dist/hooks/index.js" },
-      "require": { "types": "./dist/hooks/index.d.cts", "default": "./dist/hooks/index.cjs" }
+      "import": {
+        "types": "./dist/hooks/index.d.ts",
+        "default": "./dist/hooks/index.js"
+      },
+      "require": {
+        "types": "./dist/hooks/index.d.cts",
+        "default": "./dist/hooks/index.cjs"
+      }
     },
     "./elevenlabs": {
-      "import": { "types": "./dist/adapters/elevenlabs/index.d.ts", "default": "./dist/adapters/elevenlabs/index.js" },
-      "require": { "types": "./dist/adapters/elevenlabs/index.d.cts", "default": "./dist/adapters/elevenlabs/index.cjs" }
+      "import": {
+        "types": "./dist/adapters/elevenlabs/index.d.ts",
+        "default": "./dist/adapters/elevenlabs/index.js"
+      },
+      "require": {
+        "types": "./dist/adapters/elevenlabs/index.d.cts",
+        "default": "./dist/adapters/elevenlabs/index.cjs"
+      }
     },
     "./styles.css": "./dist/styles.css"
   },
-  "files": ["dist"],
-  "sideEffects": ["*.css"],
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "scripts": {
     "build": "tsup",
@@ -43,11 +75,19 @@
     "check-exports": "publint && attw --pack --exclude-entrypoints ./styles.css --ignore-rules no-resolution"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.17.0",
+    "@biomejs/biome": "^2.0.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "happy-dom": "^20.8.3",
+    "publint": "^0.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "tsup": "^8.5.0",
     "typescript": "^5.8.0",
-    "vitest": "^3.0.5",
-    "@biomejs/biome": "^2.0.0",
-    "publint": "^0.3.0",
-    "@arethetypeswrong/cli": "^0.17.0"
+    "vitest": "^3.0.5"
   }
 }
