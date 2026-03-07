@@ -31,4 +31,20 @@
   --kr-slider-track-color: rgba(255, 255, 255, 0.2);
   --kr-slider-thumb-color: rgba(255, 255, 255, 0.4);
   --kr-error-color: #ef4444;
+
+  /* Base styles */
+  background: var(--kr-bg);
+  color: var(--kr-color);
+  font-family: var(--kr-font-family);
+  font-size: var(--kr-font-size);
+  line-height: var(--kr-line-height);
+  letter-spacing: var(--kr-letter-spacing);
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: none;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
