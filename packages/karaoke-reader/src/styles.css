@@ -48,3 +48,25 @@
   margin: 0;
   padding: 0;
 }
+
+/* ------------------------------------------------------------
+ * Scroll container and content
+ * ------------------------------------------------------------ */
+
+.kr-scroll-container {
+  overflow-y: auto;
+  height: 100%;
+  padding: var(--kr-padding);
+  cursor: pointer;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.kr-scroll-container::-webkit-scrollbar {
+  display: none;
+}
+
+.kr-content {
+  max-width: var(--kr-max-width);
+  margin: 0 auto;
+}
