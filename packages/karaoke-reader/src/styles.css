@@ -1,1 +1,34 @@
-/* karaoke-reader styles -- populated in Phase 3 */
+/* ============================================================
+ * karaoke-reader — self-contained CSS stylesheet
+ *
+ * All visual properties are overridable via --kr-* custom
+ * properties set on a parent element. No Tailwind dependency.
+ * ============================================================ */
+
+/* ------------------------------------------------------------
+ * Custom property defaults
+ * ------------------------------------------------------------ */
+
+.kr-root {
+  --kr-bg: #000000;
+  --kr-color: #ffffff;
+  --kr-font-family: Georgia, 'Times New Roman', serif;
+  --kr-font-size: clamp(1.2rem, 3vw, 1.8rem);
+  --kr-line-height: 1.8;
+  --kr-letter-spacing: 0.02em;
+  --kr-padding: clamp(2rem, 6vw, 4rem) clamp(2rem, 8vw, 6rem);
+  --kr-max-width: 700px;
+  --kr-highlight-color: #fcd34d;
+  --kr-spoken-opacity: 0.4;
+  --kr-upcoming-opacity: 0.9;
+  --kr-active-opacity: 1;
+  --kr-transition-color: color 0.2s ease;
+  --kr-transition-opacity: opacity 0.4s ease;
+  --kr-header-font-size: clamp(0.9rem, 2vw, 1.1rem);
+  --kr-header-opacity: 0.5;
+  --kr-controls-opacity: 0.15;
+  --kr-controls-hover-opacity: 0.5;
+  --kr-slider-track-color: rgba(255, 255, 255, 0.2);
+  --kr-slider-thumb-color: rgba(255, 255, 255, 0.4);
+  --kr-error-color: #ef4444;
+}
