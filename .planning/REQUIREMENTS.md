@@ -46,9 +46,9 @@
 
 ### Cache Layer
 
-- [ ] **CACHE-01**: Generic `CacheAdapter` interface (get/set) exported
-- [ ] **CACHE-02**: Built-in in-memory and localStorage cache adapters
-- [ ] **CACHE-03**: Fire-and-forget semantics — cache errors never throw or block playback
+- [x] **CACHE-01**: Generic `CacheAdapter` interface (get/set) exported
+- [x] **CACHE-02**: Built-in in-memory and localStorage cache adapters
+- [x] **CACHE-03**: Fire-and-forget semantics — cache errors never throw or block playback
 
 ### Documentation
 
@@ -123,9 +123,9 @@
 | ELEV-01 | Phase 3 | Pending |
 | ELEV-02 | Phase 3 | Pending |
 | ELEV-03 | Phase 3 | Pending |
-| CACHE-01 | Phase 3 | Pending |
-| CACHE-02 | Phase 3 | Pending |
-| CACHE-03 | Phase 3 | Pending |
+| CACHE-01 | Phase 3 | Complete |
+| CACHE-02 | Phase 3 | Complete |
+| CACHE-03 | Phase 3 | Complete |
 | DOC-01 | Phase 4 | Pending |
 | DOC-02 | Phase 4 | Pending |
 | VAL-01 | Phase 4 | Pending |
