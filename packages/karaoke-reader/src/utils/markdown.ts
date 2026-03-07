@@ -1,4 +1,4 @@
-import type { ParsedParagraph, ParsedLine, ParsedWord, LineType } from '../types.js';
+import type { ParsedParagraph, ParsedLine } from '../types.js';
 
 /**
  * Strip markdown syntax for TTS. Produces the same word sequence
