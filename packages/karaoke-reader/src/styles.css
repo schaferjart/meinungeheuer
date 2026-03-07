@@ -70,3 +70,36 @@
   max-width: var(--kr-max-width);
   margin: 0 auto;
 }
+
+/* ------------------------------------------------------------
+ * Paragraphs and lines
+ * ------------------------------------------------------------ */
+
+.kr-paragraph {
+  margin-bottom: 1.5em;
+}
+
+.kr-line {
+  margin: 0;
+  padding: 0;
+}
+
+.kr-line--header {
+  font-size: var(--kr-header-font-size);
+  opacity: var(--kr-header-opacity);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-bottom: 0.5em;
+}
+
+.kr-line--list-item {
+  padding-left: 1.2em;
+  border-left: 2px solid var(--kr-color);
+  border-left-color: inherit;
+  opacity: 0.7;
+  margin-bottom: 0.3em;
+}
+
+.kr-line--text {
+  /* Inherits base styles -- no overrides needed */
+}
