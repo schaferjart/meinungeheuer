@@ -1,2 +1,10 @@
-// Root barrel -- populated in task 01-03
-export {};
+// Types
+export type {
+  WordTimestamp,
+  AlignmentData,
+  TtsStatus,
+  LineType,
+  ParsedWord,
+  ParsedLine,
+  ParsedParagraph,
+} from './types.js';
