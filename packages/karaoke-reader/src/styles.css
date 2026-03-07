@@ -103,3 +103,32 @@
 .kr-line--text {
   /* Inherits base styles -- no overrides needed */
 }
+
+/* ------------------------------------------------------------
+ * Word states (data-kr-state driven)
+ * ------------------------------------------------------------ */
+
+.kr-word {
+  transition: var(--kr-transition-color), var(--kr-transition-opacity);
+  display: inline;
+  cursor: pointer;
+}
+
+.kr-word[data-kr-state="upcoming"] {
+  opacity: var(--kr-upcoming-opacity);
+  color: var(--kr-color);
+}
+
+.kr-word[data-kr-state="active"] {
+  color: var(--kr-highlight-color);
+  opacity: var(--kr-active-opacity);
+}
+
+.kr-word[data-kr-state="spoken"] {
+  opacity: var(--kr-spoken-opacity);
+  color: var(--kr-color);
+}
+
+.kr-word--strikethrough {
+  text-decoration: line-through;
+}
