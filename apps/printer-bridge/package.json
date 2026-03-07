@@ -15,7 +15,6 @@
   "dependencies": {
     "@meinungeheuer/shared": "workspace:*",
     "@supabase/supabase-js": "^2.49.1",
-    "node-thermal-printer": "^4.4.3",
     "zod": "^3.24.2"
   },
   "devDependencies": {

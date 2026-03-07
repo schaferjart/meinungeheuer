@@ -3,43 +3,22 @@
  *
  * Lifecycle:
  *  1. Load config
- *  2. Connect to printer (or enter console mode)
- *  3. Subscribe to Supabase Realtime INSERT on print_queue where status='pending'
- *  4. On each new job: claim → format → print → mark done/error
- *  5. Heartbeat every 30 s: check printer, reconnect if needed
- *  6. Graceful shutdown on SIGINT / SIGTERM
+ *  2. Subscribe to Supabase Realtime INSERT on print_queue where status='pending'
+ *  3. On each new job: claim → POST to POS server → mark done/error
+ *  4. Graceful shutdown on SIGINT / SIGTERM
  */
 
 import { createSupabaseClient } from '@meinungeheuer/shared';
 import { PrintPayloadSchema } from '@meinungeheuer/shared';
-import { PRINTER } from '@meinungeheuer/shared';
 import { loadConfig } from './config.js';
-import { createPrinter, printCard, getStatus, reconnect } from './printer.js';
-import type { PrinterHandle } from './printer.js';
+import { printCard } from './printer.js';
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
 const config = loadConfig();
 
 console.log('[bridge] MeinUngeheuer Printer Bridge starting…');
-console.log(`[bridge] Printer connection: ${config.connection}`);
-console.log(`[bridge] Paper width: ${config.maxWidthChars} chars / ${config.maxWidthMm} mm`);
-
-// ─── Printer init ─────────────────────────────────────────────────────────────
-
-let printerHandle: PrinterHandle = createPrinter(config);
-
-async function ensurePrinterConnected(): Promise<void> {
-  const { connected } = await getStatus(printerHandle);
-  if (!connected) {
-    console.warn('[bridge] Printer not connected — attempting reconnect…');
-    printerHandle = await reconnect(
-      printerHandle,
-      PRINTER.RECONNECT_ATTEMPTS,
-      PRINTER.RECONNECT_DELAY_MS,
-    );
-  }
-}
+console.log(`[bridge] POS server: ${config.posServerUrl || '(console mode)'}`);
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 
@@ -60,7 +39,7 @@ const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
  *
  * - Claims the job by setting status → 'printing'
  * - Validates the payload via Zod
- * - Sends to printer
+ * - POSTs to POS server
  * - Marks done or error
  *
  * Never throws; all errors are caught, logged, and reflected in the DB row.
@@ -68,20 +47,17 @@ const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 async function processJob(rowId: string, rawPayload: Record<string, unknown>): Promise<void> {
   console.log(`[bridge] Claiming job ${rowId}`);
 
-  // Claim: set status to 'printing' — prevents double-processing if multiple
-  // bridge instances are running (advisory lock via Supabase update).
   const { error: claimError } = await supabase
     .from('print_queue')
     .update({ status: 'printing' })
     .eq('id', rowId)
-    .eq('status', 'pending'); // only claim if still pending
+    .eq('status', 'pending');
 
   if (claimError) {
     console.error(`[bridge] Failed to claim job ${rowId}:`, claimError.message);
     return;
   }
 
-  // Validate payload shape
   const parseResult = PrintPayloadSchema.safeParse(rawPayload);
   if (!parseResult.success) {
     console.error(`[bridge] Invalid payload for job ${rowId}:`, parseResult.error.flatten());
@@ -95,8 +71,7 @@ async function processJob(rowId: string, rawPayload: Record<string, unknown>): P
   const payload = parseResult.data;
 
   try {
-    await ensurePrinterConnected();
-    await printCard(printerHandle, payload);
+    await printCard(config.posServerUrl, payload);
 
     await supabase
       .from('print_queue')
@@ -120,10 +95,6 @@ async function processJob(rowId: string, rawPayload: Record<string, unknown>): P
 
 // ─── Realtime subscription ────────────────────────────────────────────────────
 
-/**
- * Also checks for any pending jobs that were created before the bridge started
- * (e.g. during downtime) so we don't miss them.
- */
 async function drainPendingJobs(): Promise<void> {
   console.log('[bridge] Draining pre-existing pending jobs…');
 
@@ -166,13 +137,10 @@ function startRealtimeSubscription(): void {
         const row = payload.new as { id: string; payload: Record<string, unknown>; status: string };
 
         if (row.status !== 'pending') {
-          // Filter is server-side but double-check client-side for safety
           return;
         }
 
         console.log(`[bridge] Realtime: new pending job ${row.id}`);
-        // Process asynchronously; do not await here so we don't block the
-        // Realtime event loop.
         processJob(row.id, row.payload).catch((err: unknown) => {
           console.error('[bridge] Unhandled error in processJob:', err);
         });
@@ -189,44 +157,10 @@ function startRealtimeSubscription(): void {
     });
 }
 
-// ─── Heartbeat ────────────────────────────────────────────────────────────────
-
-let heartbeatTimer: NodeJS.Timeout | null = null;
-
-function startHeartbeat(): void {
-  heartbeatTimer = setInterval(async () => {
-    try {
-      const { connected } = await getStatus(printerHandle);
-      if (!connected && printerHandle.mode !== 'console') {
-        console.warn('[bridge] Heartbeat: printer disconnected, reconnecting…');
-        printerHandle = await reconnect(
-          printerHandle,
-          PRINTER.RECONNECT_ATTEMPTS,
-          PRINTER.RECONNECT_DELAY_MS,
-        );
-        const { connected: nowConnected } = await getStatus(printerHandle);
-        if (nowConnected) {
-          console.log('[bridge] Heartbeat: reconnected successfully.');
-        } else {
-          console.error('[bridge] Heartbeat: reconnect failed.');
-        }
-      } else {
-        console.log(`[bridge] Heartbeat: printer ${connected ? 'OK' : 'N/A (console mode)'}`);
-      }
-    } catch (err) {
-      console.error('[bridge] Heartbeat error:', err);
-    }
-  }, PRINTER.HEARTBEAT_INTERVAL_MS);
-}
-
 // ─── Graceful shutdown ────────────────────────────────────────────────────────
 
 function shutdown(signal: string): void {
   console.log(`\n[bridge] Received ${signal}. Shutting down…`);
-
-  if (heartbeatTimer !== null) {
-    clearInterval(heartbeatTimer);
-  }
 
   supabase.removeAllChannels().catch((err: unknown) => {
     console.error('[bridge] Error removing Supabase channels:', err);
@@ -242,28 +176,8 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  // Initial printer connectivity check (non-fatal in console mode)
-  try {
-    await ensurePrinterConnected();
-    const { connected } = await getStatus(printerHandle);
-    if (connected) {
-      console.log('[bridge] Printer ready.');
-    } else {
-      console.warn('[bridge] Printer not reachable at startup — continuing anyway.');
-    }
-  } catch (err) {
-    console.error('[bridge] Printer startup error:', err);
-  }
-
-  // Process any jobs that accumulated while the bridge was offline
   await drainPendingJobs();
-
-  // Listen for new jobs
   startRealtimeSubscription();
-
-  // Monitor printer health
-  startHeartbeat();
-
   console.log('[bridge] Ready. Listening for print jobs.');
 }
 

@@ -1,20 +1,15 @@
 /**
- * test-print.ts — CLI script for printing a sample card without Supabase.
+ * test-print.ts — CLI script for printing a sample card via POS server.
  *
  * Usage:
  *   pnpm run test-print
  *   pnpm run test-print --text "custom definition text"
  *   pnpm run test-print --term "BEISPIEL"
- *
- * Reads the same env vars as the main service so the output respects the
- * configured paper width, connection type, etc.
  */
 
 import { loadConfig } from './config.js';
-import { createPrinter, testPrint, buildTestPayload, printCard } from './printer.js';
+import { printCard, buildTestPayload } from './printer.js';
 import type { PrintPayload } from '@meinungeheuer/shared';
-
-// ─── CLI argument parsing ─────────────────────────────────────────────────────
 
 function parseArgs(argv: string[]): { text?: string; term?: string } {
   const result: { text?: string; term?: string } = {};
@@ -33,38 +28,23 @@ function parseArgs(argv: string[]): { text?: string; term?: string } {
   return result;
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
 async function main(): Promise<void> {
   const args = parseArgs(process.argv);
   const config = loadConfig();
 
   console.log('[test-print] Configuration:');
-  console.log(`  connection    : ${config.connection}`);
-  console.log(`  maxWidthChars : ${config.maxWidthChars}`);
-  console.log(`  maxWidthMm    : ${config.maxWidthMm}`);
-  console.log(`  charset       : ${config.charset}`);
-  console.log(`  autoCut       : ${config.autoCut}`);
-  if (config.connection === 'network') {
-    console.log(`  host          : ${config.host}:${config.port}`);
-  }
+  console.log(`  POS server: ${config.posServerUrl || '(console mode)'}`);
   console.log('');
 
-  const handle = createPrinter(config);
+  const base = buildTestPayload();
+  const payload: PrintPayload = {
+    ...base,
+    term: args.term ?? base.term,
+    definition_text: args.text ?? base.definition_text,
+  };
 
-  if (args.text !== undefined || args.term !== undefined) {
-    // Custom payload from CLI args
-    const base = buildTestPayload();
-    const payload: PrintPayload = {
-      ...base,
-      term: args.term ?? base.term,
-      definition_text: args.text ?? base.definition_text,
-    };
-    await printCard(handle, payload);
-  } else {
-    // Default sample card
-    await testPrint(handle);
-  }
+  await printCard(config.posServerUrl, payload);
+  console.log('[test-print] Done.');
 }
 
 main().catch((err: unknown) => {
