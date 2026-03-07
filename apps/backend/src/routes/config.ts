@@ -90,6 +90,14 @@ configRoutes.get('/', async (c) => {
       console.error('[config/GET] Text fetch error:', { active_text_id: config.active_text_id, error: textError });
     } else if (text) {
       response['text'] = text;
+
+      // If no active_term is set, or active_term doesn't belong to this text,
+      // pick a random term from the text's terms array
+      const terms = (text as { terms?: string[] }).terms ?? [];
+      if (terms.length > 0 && (!config.active_term || !terms.includes(config.active_term))) {
+        const randomTerm = terms[Math.floor(Math.random() * terms.length)];
+        response['term'] = randomTerm;
+      }
     }
   }
 

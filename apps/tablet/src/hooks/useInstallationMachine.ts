@@ -95,6 +95,10 @@ function installationReducer(
 
     case 'READY': {
       if (state.screen !== 'text_display') return state;
+      // In text_term mode, skip term_prompt — the concept emerges from conversation
+      if (state.mode === 'text_term') {
+        return { ...state, screen: 'conversation' };
+      }
       return { ...state, screen: 'term_prompt' };
     }
 
