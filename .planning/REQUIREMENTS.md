@@ -7,19 +7,19 @@
 
 ### Package Structure
 
-- [ ] **PKG-01**: Package scaffolded with tsup, TypeScript strict mode, ESM+CJS dual output
-- [ ] **PKG-02**: Correct package.json exports map with subpath exports (root, /hooks, /utils, /elevenlabs, /styles.css) validated by publint + attw
-- [ ] **PKG-03**: React 18/19 declared as peerDependency, never bundled
-- [ ] **PKG-04**: Zero runtime dependencies beyond React peer dep
-- [ ] **PKG-05**: TypeScript declarations generated and correctly resolved for all exports
+- [x] **PKG-01**: Package scaffolded with tsup, TypeScript strict mode, ESM+CJS dual output
+- [x] **PKG-02**: Correct package.json exports map with subpath exports (root, /hooks, /utils, /elevenlabs, /styles.css) validated by publint + attw
+- [x] **PKG-03**: React 18/19 declared as peerDependency, never bundled
+- [x] **PKG-04**: Zero runtime dependencies beyond React peer dep
+- [x] **PKG-05**: TypeScript declarations generated and correctly resolved for all exports
 
 ### Core Types & Utilities
 
-- [ ] **UTIL-01**: `WordTimestamp` interface exported (word, startTime, endTime, index)
-- [ ] **UTIL-02**: `buildWordTimestamps(text, alignment, timeOffset)` pure function converts character-level to word-level timestamps
-- [ ] **UTIL-03**: `splitTextIntoChunks(text, maxWords)` splits long text at sentence boundaries
-- [ ] **UTIL-04**: `computeCacheKey(text, voiceId)` SHA-256 cache key generation
-- [ ] **UTIL-05**: Markdown strip/parse utilities (strip for TTS, parse for rendering with strikethrough support)
+- [x] **UTIL-01**: `WordTimestamp` interface exported (word, startTime, endTime, index)
+- [x] **UTIL-02**: `buildWordTimestamps(text, alignment, timeOffset)` pure function converts character-level to word-level timestamps
+- [x] **UTIL-03**: `splitTextIntoChunks(text, maxWords)` splits long text at sentence boundaries
+- [x] **UTIL-04**: `computeCacheKey(text, voiceId)` SHA-256 cache key generation
+- [x] **UTIL-05**: Markdown strip/parse utilities (strip for TTS, parse for rendering with strikethrough support)
 
 ### Core Component
 
@@ -99,16 +99,16 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 | Phase 1 | Pending |
-| PKG-02 | Phase 1 | Pending |
-| PKG-03 | Phase 1 | Pending |
-| PKG-04 | Phase 1 | Pending |
-| PKG-05 | Phase 1 | Pending |
-| UTIL-01 | Phase 1 | Pending |
-| UTIL-02 | Phase 1 | Pending |
-| UTIL-03 | Phase 1 | Pending |
-| UTIL-04 | Phase 1 | Pending |
-| UTIL-05 | Phase 1 | Pending |
+| PKG-01 | Phase 1 | Complete |
+| PKG-02 | Phase 1 | Complete |
+| PKG-03 | Phase 1 | Complete |
+| PKG-04 | Phase 1 | Complete |
+| PKG-05 | Phase 1 | Complete |
+| UTIL-01 | Phase 1 | Complete |
+| UTIL-02 | Phase 1 | Complete |
+| UTIL-03 | Phase 1 | Complete |
+| UTIL-04 | Phase 1 | Complete |
+| UTIL-05 | Phase 1 | Complete |
 | COMP-01 | Phase 2 | Pending |
 | COMP-02 | Phase 2 | Pending |
 | COMP-03 | Phase 2 | Pending |
