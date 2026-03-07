@@ -235,6 +235,37 @@ export interface Database {
         };
         Relationships: [];
       };
+
+      tts_cache: {
+        Row: {
+          id: string;
+          cache_key: string;
+          audio_base64_parts: string[];
+          word_timestamps: unknown[];
+          text_length: number;
+          voice_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          cache_key: string;
+          audio_base64_parts: string[];
+          word_timestamps: unknown[];
+          text_length: number;
+          voice_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          cache_key?: string;
+          audio_base64_parts?: string[];
+          word_timestamps?: unknown[];
+          text_length?: number;
+          voice_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
 
     Views: Record<string, never>;

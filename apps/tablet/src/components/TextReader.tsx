@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   useTextToSpeechWithTimestamps,
   type TtsStatus,
@@ -26,12 +26,128 @@ const WORD_CLASS_SPOKEN = 'opacity-40';
 const WORD_CLASS_UPCOMING = 'opacity-90';
 
 // ============================================================
+// Markdown helpers
+// ============================================================
+
+/**
+ * Strip markdown syntax for TTS. Produces the same word sequence
+ * as the visual renderer (both skip `#` and `~~` markers).
+ */
+function stripMarkdownForTTS(text: string): string {
+  return text
+    .replace(/^#+\s*/gm, '')   // header markers
+    .replace(/~~/g, '')        // strikethrough markers
+    .replace(/ {2,}$/gm, ''); // trailing double-space line break markers
+}
+
+/**
+ * Parse a content string into words with inline strikethrough flags.
+ * Splits on `~~` to detect strikethrough regions, then splits each
+ * region into whitespace-delimited words.
+ */
+function parseContentToWords(
+  content: string,
+): Array<{ word: string; strikethrough: boolean }> {
+  const result: Array<{ word: string; strikethrough: boolean }> = [];
+  const parts = content.split(/(~~)/);
+
+  let inStrike = false;
+  for (const part of parts) {
+    if (part === '~~') {
+      inStrike = !inStrike;
+      continue;
+    }
+    const words = part.split(/\s+/).filter(Boolean);
+    for (const word of words) {
+      result.push({ word, strikethrough: inStrike });
+    }
+  }
+
+  return result;
+}
+
+type LineType = 'header' | 'list-item' | 'text';
+
+interface ParsedWord {
+  word: string;
+  strikethrough: boolean;
+  globalIndex: number;
+}
+
+interface ParsedLine {
+  type: LineType;
+  words: ParsedWord[];
+}
+
+interface ParsedParagraph {
+  lines: ParsedLine[];
+}
+
+/**
+ * Parse markdown text into paragraphs → lines → words.
+ * Each word gets a globally sequential index that matches
+ * the word sequence produced by `stripMarkdownForTTS`.
+ */
+function parseMarkdownText(text: string): ParsedParagraph[] {
+  const result: ParsedParagraph[] = [];
+  let globalIdx = 0;
+
+  // Split into paragraphs on blank lines (with optional whitespace)
+  const rawParagraphs = text.split(/\n\s*\n/);
+
+  for (const rawPara of rawParagraphs) {
+    const rawLines = rawPara.split(/\n/).filter((l) => l.trim().length > 0);
+    const lines: ParsedLine[] = [];
+
+    for (const rawLine of rawLines) {
+      // Strip trailing double-space line break markers
+      const line = rawLine.replace(/ {2,}$/, '');
+
+      // Detect line type
+      const headerMatch = line.match(/^(#+)\s+(.*)/);
+      if (headerMatch) {
+        const contentWords = parseContentToWords(headerMatch[2]!);
+        lines.push({
+          type: 'header',
+          words: contentWords.map((w) => ({ ...w, globalIndex: globalIdx++ })),
+        });
+        continue;
+      }
+
+      if (/^\d+\.\s/.test(line)) {
+        const contentWords = parseContentToWords(line);
+        lines.push({
+          type: 'list-item',
+          words: contentWords.map((w) => ({ ...w, globalIndex: globalIdx++ })),
+        });
+        continue;
+      }
+
+      const contentWords = parseContentToWords(line);
+      lines.push({
+        type: 'text',
+        words: contentWords.map((w) => ({ ...w, globalIndex: globalIdx++ })),
+      });
+    }
+
+    if (lines.length > 0) {
+      result.push({ lines });
+    }
+  }
+
+  return result;
+}
+
+// ============================================================
 // Component
 // ============================================================
 
 export function TextReader({ text, voiceId, apiKey, language, onComplete }: TextReaderProps) {
+  // Strip markdown for TTS so it doesn't speak "#" or "~~"
+  const ttsText = useMemo(() => stripMarkdownForTTS(text), [text]);
+
   const { status, words, activeWordIndex, play, pause, error, volume, setVolume } = useTextToSpeechWithTimestamps({
-    text,
+    text: ttsText,
     voiceId,
     apiKey,
     autoPlay: true,
@@ -166,10 +282,53 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
         : 'Read at your own pace',
   };
 
-  // Split text into words for rendering (must match the word splitting in
-  // buildWordTimestamps so indices line up)
-  const textWords = text.split(/(\s+)/).filter(Boolean);
-  let wordIdx = 0;
+  // -----------------------------------------------------------------------
+  // Auto-continue after text finishes reading (2s delay)
+  // -----------------------------------------------------------------------
+  useEffect(() => {
+    if (status !== 'done') return;
+    const timer = setTimeout(() => {
+      onComplete();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [status, onComplete]);
+
+  // -----------------------------------------------------------------------
+  // Parse markdown into renderable structure with global word indices.
+  // -----------------------------------------------------------------------
+  const paragraphs = useMemo(() => parseMarkdownText(text), [text]);
+
+  // -----------------------------------------------------------------------
+  // Render a single word span
+  // -----------------------------------------------------------------------
+  const renderWord = (w: ParsedWord, wIdx: number) => (
+    <span key={`wg-${w.globalIndex}`}>
+      {wIdx > 0 && ' '}
+      <span
+        data-index={w.globalIndex}
+        ref={(el) => setWordRef(w.globalIndex, el)}
+        className={`${WORD_CLASS_BASE} ${WORD_CLASS_UPCOMING}`}
+        style={{
+          transition: 'color 0.2s ease, opacity 0.4s ease',
+          ...(w.strikethrough ? { textDecoration: 'line-through' } : {}),
+        }}
+      >
+        {w.word}
+      </span>
+    </span>
+  );
+
+  // -----------------------------------------------------------------------
+  // Base text style
+  // -----------------------------------------------------------------------
+  const baseStyle: React.CSSProperties = {
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontSize: 'clamp(1.2rem, 3vw, 1.8rem)',
+    lineHeight: '1.8',
+    color: '#ffffff',
+    letterSpacing: '0.02em',
+    margin: 0,
+  };
 
   return (
     <div className="flex flex-col w-full h-full bg-black">
@@ -192,42 +351,54 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
           }
         }}
       >
-        <p
-          className="max-w-[700px] mx-auto"
-          style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
-            fontSize: 'clamp(1.2rem, 3vw, 1.8rem)',
-            lineHeight: '1.8',
-            color: '#ffffff',
-            margin: 0,
-            letterSpacing: '0.02em',
-          }}
-        >
-          {textWords.map((token, tokenIndex) => {
-            // Whitespace tokens: render as-is
-            if (/^\s+$/.test(token)) {
-              return (
-                <span key={`ws-${tokenIndex}`}>{token}</span>
-              );
-            }
+        <div className="max-w-[700px] mx-auto">
+          {paragraphs.map((para, pIdx) => (
+            <div
+              key={pIdx}
+              style={{ marginBottom: pIdx < paragraphs.length - 1 ? '1.5em' : 0 }}
+            >
+              {para.lines.map((line, lineIdx) => {
+                if (line.type === 'header') {
+                  return (
+                    <div
+                      key={lineIdx}
+                      style={{
+                        ...baseStyle,
+                        fontSize: 'clamp(0.9rem, 2vw, 1.1rem)',
+                        fontStyle: 'italic',
+                        opacity: 0.5,
+                        marginBottom: '0.5em',
+                      }}
+                    >
+                      {line.words.map(renderWord)}
+                    </div>
+                  );
+                }
 
-            // Word token: render with ref and base classes
-            const currentWordIdx = wordIdx;
-            wordIdx++;
+                if (line.type === 'list-item') {
+                  return (
+                    <div
+                      key={lineIdx}
+                      style={{
+                        ...baseStyle,
+                        paddingLeft: '1.5em',
+                        textIndent: '-1.5em',
+                      }}
+                    >
+                      {line.words.map(renderWord)}
+                    </div>
+                  );
+                }
 
-            return (
-              <span
-                key={`word-${currentWordIdx}`}
-                data-index={currentWordIdx}
-                ref={(el) => setWordRef(currentWordIdx, el)}
-                className={`${WORD_CLASS_BASE} ${WORD_CLASS_UPCOMING}`}
-                style={{ transition: 'color 0.2s ease, opacity 0.4s ease' }}
-              >
-                {token}
-              </span>
-            );
-          })}
-        </p>
+                return (
+                  <div key={lineIdx} style={baseStyle}>
+                    {line.words.map(renderWord)}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Loading indicator */}
@@ -271,10 +442,13 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
         </div>
       )}
 
-      {/* Done — ready to proceed */}
+      {/* Done — auto-advancing after 2s delay */}
       {isDone && (
-        <div className="flex justify-center pb-8 animate-fade-in">
-          <ActionButton label={i18n.ready} onClick={onComplete} />
+        <div
+          className="flex justify-center pb-8 animate-fade-in"
+          style={{ animation: 'pulse 2s ease-in-out infinite' }}
+        >
+          <LoadingDots />
         </div>
       )}
 

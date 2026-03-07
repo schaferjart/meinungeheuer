@@ -1,5 +1,5 @@
 export const APP_NAME = 'MeinUngeheuer';
-export const DEFAULT_TERM = 'BIRD';
+export const DEFAULT_TERM = 'KREATIVITÄT';
 export const DEFAULT_MODE = 'text_term' as const;
 
 export const FACE_DETECTION = {

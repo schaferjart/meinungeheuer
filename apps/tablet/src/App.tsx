@@ -101,6 +101,13 @@ function InstallationApp() {
       });
   }, [dispatch]);
 
+  // Auto-wake: start immediately without waiting for face detection or tap
+  useEffect(() => {
+    if (state.screen === 'sleep') {
+      dispatch({ type: 'WAKE' });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Camera detection callbacks — stable references via useCallback
   const handleWake = useCallback(() => {
     dispatch({ type: 'WAKE' });
