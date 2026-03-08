@@ -9,14 +9,15 @@ MeinUngeheuer — art installation: spoken AI dialogue with visitors, producing 
 ## Architecture
 
 ```
-Tablet (React/Vite) → ElevenLabs Conversational AI (WebSocket) → Custom LLM (OpenRouter) → Cloud Backend (Hono) → Supabase → Printer Bridge (local) → ESC/POS Printer
+Tablet (React/Vite) → ElevenLabs Conversational AI (WebSocket) → Custom LLM (OpenRouter) → Supabase → Printer Bridge (local) → ESC/POS Printer
 ```
 
 Monorepo (pnpm workspaces):
 - `apps/tablet` — React web app, runs in tablet browser (kiosk mode)
-- `apps/backend` — Hono server, deployed to Vercel/Railway
 - `apps/printer-bridge` — Local Node.js service, runs on Pi/laptop near printer
 - `packages/shared` — Types, Supabase client, constants
+
+No separate backend server — `save_definition` is a client tool handled in-browser, writing directly to Supabase. `apps/backend/` exists but is unused legacy.
 
 ## Three Modes
 
@@ -27,6 +28,7 @@ Monorepo (pnpm workspaces):
 ## Key Tech Decisions
 
 - **Voice pipeline:** ElevenLabs Conversational AI SDK (`@elevenlabs/react`). Handles STT + LLM + TTS in one WebSocket. Do NOT build a custom STT→LLM→TTS chain.
+- **ElevenLabs agent config:** Agent ID `agent_7201kjt1wgyqfjp8zkr68r3ngas6`. Configurable via ElevenLabs MCP tools or REST API (`PATCH /v1/convai/agents/{id}`). System prompt is overridden at session start from `systemPrompt.ts`. Tools and built-in tools are configured on the agent. API key: `VITE_ELEVENLABS_API_KEY` in `apps/tablet/.env`.
 - **LLM:** Custom LLM via OpenRouter (`google/gemini-2.0-flash-001` default). Configured in ElevenLabs dashboard.
 - **Text reader highlighting:** ElevenLabs TTS with-timestamps API returns character-level timing. Convert to word-level timestamps in `useTextToSpeechWithTimestamps.ts`. Sync highlight to `audio.currentTime` via `requestAnimationFrame`.
 - **Database:** Supabase (PostgreSQL + pgvector + Realtime).
@@ -79,9 +81,9 @@ The `/build` command executes in order:
 
 **Tablet state machine** (`useInstallationMachine.ts`): Single reducer with 9 screens: sleep → welcome → text_display → term_prompt → conversation → synthesizing → definition → printing → farewell. Actions: WAKE, TIMER_*, READY, DEFINITION_RECEIVED, FACE_LOST, SET_CONFIG, SET_SESSION_ID, SET_LANGUAGE, RESET.
 
-**ElevenLabs role mapping**: SDK uses "user"/"agent" → map to shared types "visitor"/"agent" in `useConversation.ts`. The `save_definition` tool call from the agent triggers a webhook to the backend.
+**ElevenLabs role mapping**: SDK uses "user"/"agent" → map to shared types "visitor"/"agent" via `mapRole()` in `useConversation.ts`.
 
-**Webhook flow**: ElevenLabs agent calls save_definition tool → POST /webhook/definition → backend saves definition, generates embedding (async), advances chain (Mode C), inserts print_queue job → printer bridge picks up via Supabase Realtime subscription.
+**save_definition flow**: `save_definition` is a **client tool** — the ElevenLabs agent calls it, the SDK delivers it to the browser, `useConversation.ts` handles it client-side → dispatches `DEFINITION_RECEIVED` → tablet writes to Supabase directly. No backend webhook needed.
 
 ## Working Conventions
 
@@ -106,9 +108,8 @@ Delegate to specialized subagents by domain:
 | Agent | Model | Scope |
 |-------|-------|-------|
 | **frontend-builder** | Sonnet | `apps/tablet/` — React components, state machine, UI, styling |
-| **backend-builder** | Sonnet | `apps/backend/` — API routes, webhooks, chain state, embeddings |
 | **printer-engineer** | Sonnet | `apps/printer-bridge/` — ESC/POS layout, Supabase Realtime |
-| **elevenlabs-integrator** | **Opus** | Cross-cutting — SDK integration, system prompts, TTS timestamps, voice config |
+| **elevenlabs-integrator** | **Opus** | Cross-cutting — SDK integration, system prompts, TTS timestamps, voice config, agent API config |
 | **supabase-admin** | Sonnet | `supabase/`, `packages/shared/` — Schema, migrations, RLS, types, seed |
 
 The ElevenLabs integrator uses Opus because system prompt engineering and audio pipeline integration require highest reasoning quality.
@@ -117,9 +118,10 @@ When a task spans multiple domains, break it into subtasks and delegate. Prefer 
 
 ## Deployment
 
-- **Tablet**: Docker (2-stage: node build → nginx SPA). Accepts `VITE_*` build args. Deployed via Coolify.
-- **Backend**: Vercel (`vercel.json` in `apps/backend/`).
+- **Tablet**: Docker (2-stage: node build → nginx SPA). Accepts `VITE_*` build args. Deployed via Coolify from GitHub `main` branch.
 - **Printer bridge**: Runs locally on Pi/laptop near the printer. Not deployed to cloud.
+- **Supabase**: Managed cloud. Schema via migrations.
+- **ElevenLabs**: Agent configured via API/MCP. No separate deployment needed.
 
 ## Quality Gates
 
