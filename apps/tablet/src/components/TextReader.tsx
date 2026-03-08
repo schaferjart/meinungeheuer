@@ -146,17 +146,18 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
   // We need a way to control play/pause from wrapper buttons.
   // The audio element is created by KaraokeReader internally.
   // But we can pass an HTMLAudioElement via audioSrc instead of a URL string.
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // NOTE: Must be state (not ref) so the component re-renders when audio is ready.
+  const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
 
   // Create/update audio element when ttsResult changes
   useEffect(() => {
     if (!ttsResult) {
-      audioRef.current = null;
+      setAudioElement(null);
       return;
     }
 
     const audio = new Audio(ttsResult.audioUrl);
-    audioRef.current = audio;
+    setAudioElement(audio);
 
     return () => {
       audio.pause();
@@ -167,27 +168,25 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
 
   // Play/pause handlers using the audio element
   const handlePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.play().catch((err: unknown) => {
+    if (!audioElement) return;
+    audioElement.play().catch((err: unknown) => {
       console.error('[TextReader] Playback error:', err);
     });
-  }, []);
+  }, [audioElement]);
 
   const handlePause = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-  }, []);
+    if (!audioElement) return;
+    audioElement.pause();
+  }, [audioElement]);
 
   return (
     <div className="flex flex-col w-full h-full bg-black">
       {/* KaraokeReader with text + highlighting */}
-      {ttsResult && audioRef.current && (
+      {ttsResult && audioElement && (
         <KaraokeReader
           text={text}
           timestamps={ttsResult.timestamps}
-          audioSrc={audioRef.current}
+          audioSrc={audioElement}
           autoPlay
           onStatusChange={handleStatusChange}
           hideControls
@@ -262,8 +261,8 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
       )}
 
       {/* Volume slider — subtle, visible during playback */}
-      {(isPlaying || isPaused) && audioRef.current && (
-        <VolumeSlider audioElement={audioRef.current} />
+      {(isPlaying || isPaused) && audioElement && (
+        <VolumeSlider audioElement={audioElement} />
       )}
 
       {/* Playing — no visible controls, tap text to pause */}
