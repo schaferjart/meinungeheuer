@@ -57,9 +57,9 @@
 
 ### Validation
 
-- [ ] **VAL-01**: MeinUngeheuer tablet app wired to consume the extracted package with zero behavior regression
-- [ ] **VAL-02**: Core logic has unit tests (timestamp conversion, text chunking, cache key)
-- [ ] **VAL-03**: Hook and component have integration tests (DOM class toggling, status transitions)
+- [x] **VAL-01**: MeinUngeheuer tablet app wired to consume the extracted package with zero behavior regression
+- [x] **VAL-02**: Core logic has unit tests (timestamp conversion, text chunking, cache key)
+- [x] **VAL-03**: Hook and component have integration tests (DOM class toggling, status transitions)
 
 ## v2 Requirements
 
@@ -128,9 +128,9 @@
 | CACHE-03 | Phase 3 | Complete |
 | DOC-01 | Phase 4 | Pending |
 | DOC-02 | Phase 4 | Pending |
-| VAL-01 | Phase 4 | Pending |
-| VAL-02 | Phase 4 | Pending |
-| VAL-03 | Phase 4 | Pending |
+| VAL-01 | Phase 4 | Complete |
+| VAL-02 | Phase 4 | Complete |
+| VAL-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 32 total
