@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import {
-  useTextToSpeechWithTimestamps,
-  type TtsStatus,
-} from '../hooks/useTextToSpeechWithTimestamps';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { KaraokeReader, stripMarkdownForTTS } from 'karaoke-reader';
+import { useElevenLabsTTS } from 'karaoke-reader/elevenlabs';
+import type { TtsStatus } from 'karaoke-reader';
+import 'karaoke-reader/styles.css';
+import { createSupabaseTTSCache } from '../lib/supabaseCacheAdapter';
 
 // ============================================================
 // Types
@@ -17,125 +18,32 @@ export interface TextReaderProps {
 }
 
 // ============================================================
-// CSS class names for word states (Tailwind)
+// Voice settings (MeinUngeheuer-specific)
 // ============================================================
 
-const WORD_CLASS_BASE = 'inline';
-const WORD_CLASS_ACTIVE = 'text-amber-300';
-const WORD_CLASS_SPOKEN = 'opacity-40';
-const WORD_CLASS_UPCOMING = 'opacity-90';
+const VOICE_SETTINGS = {
+  stability: 0.35,
+  similarity_boost: 0.65,
+  style: 0.6,
+  use_speaker_boost: true,
+} as const;
 
 // ============================================================
-// Markdown helpers
+// Combined status type
 // ============================================================
 
-/**
- * Strip markdown syntax for TTS. Produces the same word sequence
- * as the visual renderer (both skip `#` and `~~` markers).
- */
-function stripMarkdownForTTS(text: string): string {
-  return text
-    .replace(/^#+\s*/gm, '')   // header markers
-    .replace(/~~/g, '')        // strikethrough markers
-    .replace(/ {2,}$/gm, ''); // trailing double-space line break markers
-}
+type CombinedStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'done' | 'error';
 
-/**
- * Parse a content string into words with inline strikethrough flags.
- * Splits on `~~` to detect strikethrough regions, then splits each
- * region into whitespace-delimited words.
- */
-function parseContentToWords(
-  content: string,
-): Array<{ word: string; strikethrough: boolean }> {
-  const result: Array<{ word: string; strikethrough: boolean }> = [];
-  const parts = content.split(/(~~)/);
+// ============================================================
+// Singleton cache adapter (created once)
+// ============================================================
 
-  let inStrike = false;
-  for (const part of parts) {
-    if (part === '~~') {
-      inStrike = !inStrike;
-      continue;
-    }
-    const words = part.split(/\s+/).filter(Boolean);
-    for (const word of words) {
-      result.push({ word, strikethrough: inStrike });
-    }
+let cacheAdapter: ReturnType<typeof createSupabaseTTSCache> | null = null;
+function getCacheAdapter() {
+  if (!cacheAdapter) {
+    cacheAdapter = createSupabaseTTSCache();
   }
-
-  return result;
-}
-
-type LineType = 'header' | 'list-item' | 'text';
-
-interface ParsedWord {
-  word: string;
-  strikethrough: boolean;
-  globalIndex: number;
-}
-
-interface ParsedLine {
-  type: LineType;
-  words: ParsedWord[];
-}
-
-interface ParsedParagraph {
-  lines: ParsedLine[];
-}
-
-/**
- * Parse markdown text into paragraphs → lines → words.
- * Each word gets a globally sequential index that matches
- * the word sequence produced by `stripMarkdownForTTS`.
- */
-function parseMarkdownText(text: string): ParsedParagraph[] {
-  const result: ParsedParagraph[] = [];
-  let globalIdx = 0;
-
-  // Split into paragraphs on blank lines (with optional whitespace)
-  const rawParagraphs = text.split(/\n\s*\n/);
-
-  for (const rawPara of rawParagraphs) {
-    const rawLines = rawPara.split(/\n/).filter((l) => l.trim().length > 0);
-    const lines: ParsedLine[] = [];
-
-    for (const rawLine of rawLines) {
-      // Strip trailing double-space line break markers
-      const line = rawLine.replace(/ {2,}$/, '');
-
-      // Detect line type
-      const headerMatch = line.match(/^(#+)\s+(.*)/);
-      if (headerMatch) {
-        const contentWords = parseContentToWords(headerMatch[2]!);
-        lines.push({
-          type: 'header',
-          words: contentWords.map((w) => ({ ...w, globalIndex: globalIdx++ })),
-        });
-        continue;
-      }
-
-      if (/^\d+\.\s/.test(line)) {
-        const contentWords = parseContentToWords(line);
-        lines.push({
-          type: 'list-item',
-          words: contentWords.map((w) => ({ ...w, globalIndex: globalIdx++ })),
-        });
-        continue;
-      }
-
-      const contentWords = parseContentToWords(line);
-      lines.push({
-        type: 'text',
-        words: contentWords.map((w) => ({ ...w, globalIndex: globalIdx++ })),
-      });
-    }
-
-    if (lines.length > 0) {
-      result.push({ lines });
-    }
-  }
-
-  return result;
+  return cacheAdapter;
 }
 
 // ============================================================
@@ -146,131 +54,52 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
   // Strip markdown for TTS so it doesn't speak "#" or "~~"
   const ttsText = useMemo(() => stripMarkdownForTTS(text), [text]);
 
-  const { status, words, activeWordIndex, play, pause, error, volume, setVolume } = useTextToSpeechWithTimestamps({
-    text: ttsText,
-    voiceId,
-    apiKey,
-    autoPlay: true,
-  });
-
-  const wordSpansRef = useRef<Map<number, HTMLSpanElement>>(new Map());
-  const containerRef = useRef<HTMLDivElement>(null);
-  const prevActiveRef = useRef<number>(-1);
-  const lastScrollTimeRef = useRef(0);
-  const scrollResetTimerRef = useRef<ReturnType<typeof setTimeout>>();
-
-  // -----------------------------------------------------------------------
-  // Direct DOM manipulation for word highlighting (perf: no re-renders)
-  // -----------------------------------------------------------------------
-  useEffect(() => {
-    const prevIndex = prevActiveRef.current;
-    const spans = wordSpansRef.current;
-
-    // Remove active class from previous word
-    if (prevIndex >= 0) {
-      const prevSpan = spans.get(prevIndex);
-      if (prevSpan) {
-        prevSpan.classList.remove(...WORD_CLASS_ACTIVE.split(' '));
-        prevSpan.classList.add(...WORD_CLASS_SPOKEN.split(' '));
-      }
-    }
-
-    // Mark all words before active as spoken (in case we jumped)
-    if (activeWordIndex >= 0) {
-      for (let i = 0; i < activeWordIndex; i++) {
-        const span = spans.get(i);
-        if (span) {
-          span.classList.remove(...WORD_CLASS_ACTIVE.split(' '));
-          span.classList.remove(...WORD_CLASS_UPCOMING.split(' '));
-          if (!span.classList.contains(WORD_CLASS_SPOKEN.split(' ')[0] ?? '')) {
-            span.classList.add(...WORD_CLASS_SPOKEN.split(' '));
-          }
-        }
-      }
-    }
-
-    // Add active class to current word
-    if (activeWordIndex >= 0) {
-      const activeSpan = spans.get(activeWordIndex);
-      if (activeSpan) {
-        activeSpan.classList.remove(...WORD_CLASS_SPOKEN.split(' '));
-        activeSpan.classList.remove(...WORD_CLASS_UPCOMING.split(' '));
-        activeSpan.classList.add(...WORD_CLASS_ACTIVE.split(' '));
-
-        // Comfort-zone auto-scroll: only scroll when word leaves middle band
-        const container = containerRef.current;
-        if (container) {
-          const now = Date.now();
-          if (now - lastScrollTimeRef.current >= 2000 || lastScrollTimeRef.current === 0) {
-            const rect = activeSpan.getBoundingClientRect();
-            const cRect = container.getBoundingClientRect();
-            const rel = (rect.top - cRect.top) / cRect.height;
-            // Comfort zone: 20%–65% of viewport
-            if (rel < 0.2 || rel > 0.65) {
-              const target = cRect.height * 0.35;
-              container.scrollBy({
-                top: rect.top - cRect.top - target,
-                behavior: 'smooth',
-              });
-            }
-          }
-        }
-      }
-    }
-
-    prevActiveRef.current = activeWordIndex;
-  }, [activeWordIndex]);
-
-  // -----------------------------------------------------------------------
-  // Manual scroll tracking — cooldown prevents scroll-fighting
-  // -----------------------------------------------------------------------
-  const handleContainerScroll = useCallback(() => {
-    lastScrollTimeRef.current = Date.now();
-    clearTimeout(scrollResetTimerRef.current);
-    scrollResetTimerRef.current = setTimeout(() => {
-      lastScrollTimeRef.current = 0;
-    }, 4000);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      clearTimeout(scrollResetTimerRef.current);
+  // Build TTS options — null when params are missing (hook stays idle)
+  const ttsOptions = useMemo(() => {
+    if (!ttsText || !voiceId || !apiKey) return null;
+    return {
+      apiKey,
+      voiceId,
+      text: ttsText,
+      voiceSettings: VOICE_SETTINGS,
+      cache: getCacheAdapter(),
     };
+  }, [ttsText, voiceId, apiKey]);
+
+  // Fetch TTS data via karaoke-reader's ElevenLabs adapter
+  const { status: ttsStatus, result: ttsResult, error: ttsError } = useElevenLabsTTS(ttsOptions);
+
+  // Track playback status from KaraokeReader
+  const [playbackStatus, setPlaybackStatus] = useState<TtsStatus>('idle');
+
+  // Track play/pause from KaraokeReader's internal hook
+  const karaokeRef = useRef<{ play: () => void; pause: () => void } | null>(null);
+
+  // -----------------------------------------------------------------------
+  // Combined status: TTS fetch phase → playback phase
+  // -----------------------------------------------------------------------
+  const combinedStatus: CombinedStatus = useMemo(() => {
+    if (ttsStatus === 'error') return 'error';
+    if (ttsStatus === 'idle' || ttsStatus === 'loading') return 'loading';
+    // ttsStatus is 'ready' — use playback status from KaraokeReader
+    if (playbackStatus === 'playing') return 'playing';
+    if (playbackStatus === 'paused') return 'paused';
+    if (playbackStatus === 'done') return 'done';
+    if (playbackStatus === 'error') return 'error';
+    return 'ready';
+  }, [ttsStatus, playbackStatus]);
+
+  // -----------------------------------------------------------------------
+  // KaraokeReader status change handler
+  // -----------------------------------------------------------------------
+  const handleStatusChange = useCallback((status: TtsStatus) => {
+    setPlaybackStatus(status);
   }, []);
 
   // -----------------------------------------------------------------------
-  // Ref callback for word spans
+  // i18n strings
   // -----------------------------------------------------------------------
-  const setWordRef = useCallback((index: number, el: HTMLSpanElement | null) => {
-    if (el) {
-      wordSpansRef.current.set(index, el);
-    } else {
-      wordSpansRef.current.delete(index);
-    }
-  }, []);
-
-  // -----------------------------------------------------------------------
-  // Tap to pause/resume
-  // -----------------------------------------------------------------------
-  const handleTextTap = useCallback(() => {
-    if (status === 'playing') {
-      pause();
-    } else if (status === 'paused' || status === 'ready') {
-      play();
-    }
-  }, [status, play, pause]);
-
-  // -----------------------------------------------------------------------
-  // Render helpers
-  // -----------------------------------------------------------------------
-  const isLoading = status === 'loading' || status === 'idle';
-  const isPlaying = status === 'playing';
-  const isPaused = status === 'paused';
-  const isDone = status === 'done';
-  const isError = status === 'error';
-  const isReady = status === 'ready';
-
-  const i18n = {
+  const i18n = useMemo(() => ({
     loading: language === 'de' ? 'Wird vorbereitet...' : 'Preparing...',
     pause: language === 'de' ? 'Angehalten' : 'Paused',
     continue: language === 'de' ? 'Weiter' : 'Continue',
@@ -280,134 +109,114 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
       language === 'de'
         ? 'Lesen Sie in Ihrem Tempo'
         : 'Read at your own pace',
-  };
+    tapToPause: language === 'de' ? 'Tippen zum Pausieren' : 'Tap to pause',
+  }), [language]);
+
+  // -----------------------------------------------------------------------
+  // Render helpers
+  // -----------------------------------------------------------------------
+  const isLoading = combinedStatus === 'loading';
+  const isPlaying = combinedStatus === 'playing';
+  const isPaused = combinedStatus === 'paused';
+  const isDone = combinedStatus === 'done';
+  const isError = combinedStatus === 'error';
+  const isReady = combinedStatus === 'ready';
 
   // -----------------------------------------------------------------------
   // Auto-continue after text finishes reading (2s delay)
   // -----------------------------------------------------------------------
   useEffect(() => {
-    if (status !== 'done') return;
+    if (combinedStatus !== 'done') return;
     const timer = setTimeout(() => {
       onComplete();
     }, 2000);
     return () => clearTimeout(timer);
-  }, [status, onComplete]);
+  }, [combinedStatus, onComplete]);
 
   // -----------------------------------------------------------------------
-  // Parse markdown into renderable structure with global word indices.
+  // We need play/pause controls for the wrapper buttons.
+  // KaraokeReader with hideControls still handles click-to-toggle internally.
+  // For explicit buttons, we use the ref-based approach:
+  // We store the current playback status and use a hidden audio element trick.
+  // Actually, since KaraokeReader handles toggle on click internally,
+  // the wrapper buttons need to interact with the same audio element.
+  // We'll use the audioUrl from ttsResult and manage it via the ref.
   // -----------------------------------------------------------------------
-  const paragraphs = useMemo(() => parseMarkdownText(text), [text]);
 
-  // -----------------------------------------------------------------------
-  // Render a single word span
-  // -----------------------------------------------------------------------
-  const renderWord = (w: ParsedWord, wIdx: number) => (
-    <span key={`wg-${w.globalIndex}`}>
-      {wIdx > 0 && ' '}
-      <span
-        data-index={w.globalIndex}
-        ref={(el) => setWordRef(w.globalIndex, el)}
-        className={`${WORD_CLASS_BASE} ${WORD_CLASS_UPCOMING}`}
-        style={{
-          transition: 'color 0.2s ease, opacity 0.4s ease',
-          ...(w.strikethrough ? { textDecoration: 'line-through' } : {}),
-        }}
-      >
-        {w.word}
-      </span>
-    </span>
-  );
+  // We need a way to control play/pause from wrapper buttons.
+  // The audio element is created by KaraokeReader internally.
+  // But we can pass an HTMLAudioElement via audioSrc instead of a URL string.
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // -----------------------------------------------------------------------
-  // Base text style
-  // -----------------------------------------------------------------------
-  const baseStyle: React.CSSProperties = {
-    fontFamily: "Georgia, 'Times New Roman', serif",
-    fontSize: 'clamp(1.2rem, 3vw, 1.8rem)',
-    lineHeight: '1.8',
-    color: '#ffffff',
-    letterSpacing: '0.02em',
-    margin: 0,
-  };
+  // Create/update audio element when ttsResult changes
+  useEffect(() => {
+    if (!ttsResult) {
+      audioRef.current = null;
+      return;
+    }
+
+    const audio = new Audio(ttsResult.audioUrl);
+    audioRef.current = audio;
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+      // The blob URL is revoked by useElevenLabsTTS cleanup
+    };
+  }, [ttsResult]);
+
+  // Play/pause handlers using the audio element
+  const handlePlay = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.play().catch((err: unknown) => {
+      console.error('[TextReader] Playback error:', err);
+    });
+  }, []);
+
+  const handlePause = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.pause();
+  }, []);
 
   return (
     <div className="flex flex-col w-full h-full bg-black">
-      {/* Scrollable text area */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-y-auto"
-        style={{
-          padding: 'clamp(2rem, 6vw, 4rem) clamp(2rem, 8vw, 6rem)',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-        }}
-        onClick={handleTextTap}
-        onScroll={handleContainerScroll}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === ' ' || e.key === 'Enter') {
-            handleTextTap();
-          }
-        }}
-      >
-        <div className="max-w-[700px] mx-auto">
-          {paragraphs.map((para, pIdx) => (
-            <div
-              key={pIdx}
-              style={{ marginBottom: pIdx < paragraphs.length - 1 ? '1.5em' : 0 }}
-            >
-              {para.lines.map((line, lineIdx) => {
-                if (line.type === 'header') {
-                  return (
-                    <div
-                      key={lineIdx}
-                      style={{
-                        ...baseStyle,
-                        fontSize: 'clamp(0.9rem, 2vw, 1.1rem)',
-                        fontStyle: 'italic',
-                        opacity: 0.5,
-                        marginBottom: '0.5em',
-                      }}
-                    >
-                      {line.words.map(renderWord)}
-                    </div>
-                  );
-                }
+      {/* KaraokeReader with text + highlighting */}
+      {ttsResult && audioRef.current && (
+        <KaraokeReader
+          text={text}
+          timestamps={ttsResult.timestamps}
+          audioSrc={audioRef.current}
+          autoPlay
+          onStatusChange={handleStatusChange}
+          hideControls
+          className="flex-1"
+          style={{
+            '--kr-bg': 'transparent',
+            '--kr-color': '#ffffff',
+            '--kr-highlight': '#fcd34d',
+            '--kr-spoken-opacity': '0.4',
+            '--kr-upcoming-opacity': '0.9',
+            '--kr-font-family': "Georgia, 'Times New Roman', serif",
+            '--kr-font-size': 'clamp(1.2rem, 3vw, 1.8rem)',
+            '--kr-line-height': '1.8',
+            '--kr-letter-spacing': '0.02em',
+            '--kr-content-max-width': '700px',
+            '--kr-padding': 'clamp(2rem, 6vw, 4rem) clamp(2rem, 8vw, 6rem)',
+          } as React.CSSProperties}
+        />
+      )}
 
-                if (line.type === 'list-item') {
-                  return (
-                    <div
-                      key={lineIdx}
-                      style={{
-                        ...baseStyle,
-                        paddingLeft: '1.5em',
-                        textIndent: '-1.5em',
-                      }}
-                    >
-                      {line.words.map(renderWord)}
-                    </div>
-                  );
-                }
-
-                return (
-                  <div key={lineIdx} style={baseStyle}>
-                    {line.words.map(renderWord)}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Loading indicator */}
+      {/* Loading indicator — show when TTS is idle/loading OR KaraokeReader not yet rendered */}
       {isLoading && (
-        <div
-          className="flex justify-center pb-8"
-          style={{ animation: 'pulse 2s ease-in-out infinite' }}
-        >
-          <LoadingDots />
+        <div className="flex-1 flex items-end justify-center">
+          <div
+            className="flex justify-center pb-8"
+            style={{ animation: 'pulse 2s ease-in-out infinite' }}
+          >
+            <LoadingDots />
+          </div>
         </div>
       )}
 
@@ -430,14 +239,14 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
       {/* Ready to start (TTS loaded but not yet playing) */}
       {isReady && (
         <div className="flex justify-center pb-8 animate-fade-in">
-          <ActionButton label={i18n.continue} onClick={play} />
+          <ActionButton label={i18n.continue} onClick={handlePlay} />
         </div>
       )}
 
       {/* Paused controls */}
       {isPaused && (
         <div className="flex justify-center gap-6 pb-8 animate-fade-in">
-          <ActionButton label={i18n.continue} onClick={play} />
+          <ActionButton label={i18n.continue} onClick={handlePlay} />
           <ActionButton label={i18n.skip} onClick={onComplete} variant="ghost" />
         </div>
       )}
@@ -453,8 +262,8 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
       )}
 
       {/* Volume slider — subtle, visible during playback */}
-      {(isPlaying || isPaused) && (
-        <VolumeSlider volume={volume} onVolumeChange={setVolume} />
+      {(isPlaying || isPaused) && audioRef.current && (
+        <VolumeSlider audioElement={audioRef.current} />
       )}
 
       {/* Playing — no visible controls, tap text to pause */}
@@ -468,12 +277,12 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
               letterSpacing: '0.1em',
             }}
           >
-            {language === 'de' ? 'Tippen zum Pausieren' : 'Tap to pause'}
+            {i18n.tapToPause}
           </p>
         </div>
       )}
 
-      {/* Hide scrollbar + volume slider styling */}
+      {/* Hide scrollbar + animation styling */}
       <style>{`
         ::-webkit-scrollbar { display: none; }
         @keyframes fade-in {
@@ -541,7 +350,15 @@ function LoadingDots() {
   );
 }
 
-function VolumeSlider({ volume, onVolumeChange }: { volume: number; onVolumeChange: (v: number) => void }) {
+function VolumeSlider({ audioElement }: { audioElement: HTMLAudioElement }) {
+  const [volume, setVolume] = useState(audioElement.volume);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = parseFloat(e.target.value);
+    setVolume(v);
+    audioElement.volume = v;
+  }, [audioElement]);
+
   return (
     <div className="flex items-center justify-center py-2 volume-control">
       <input
@@ -550,7 +367,7 @@ function VolumeSlider({ volume, onVolumeChange }: { volume: number; onVolumeChan
         max="1"
         step="0.01"
         value={volume}
-        onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+        onChange={handleChange}
         className="volume-slider"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
