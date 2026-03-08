@@ -14,12 +14,9 @@ Plans:
 ### Phase 2: PWA + Fullscreen + Face Detection
 **Goal:** Tablet runs as autonomous kiosk — no touch, true fullscreen, face-triggered wake/sleep.
 **Requirements:** R3, R4
-**Tasks:**
-- Add PWA meta tags to `index.html` (apple-mobile-web-app-capable, status-bar-style)
-- Update `fullscreen.ts` to detect standalone mode and skip requestFullscreen()
-- Verify face detection on target iPad (camera permissions, MediaPipe performance)
-- Test wake/sleep cycle in PWA standalone mode
-- Document kiosk setup procedure (Add to Home Screen + Guided Access)
+**Plans:** 1 plan
+Plans:
+- [ ] 02-01-PLAN.md — PWA standalone detection + manifest fix + iPad kiosk verification
 **Gate:** Walk up → wakes in 3s. Walk away → sleeps in 30s. True fullscreen, no UI chrome.
 
 ### Phase 3: Printer Integration
