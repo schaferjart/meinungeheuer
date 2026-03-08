@@ -102,13 +102,6 @@ function InstallationApp() {
       });
   }, [dispatch]);
 
-  // Auto-wake: start immediately without waiting for face detection or tap
-  useEffect(() => {
-    if (state.screen === 'sleep') {
-      dispatch({ type: 'WAKE' });
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
   // Camera detection callbacks — stable references via useCallback
   const handleWake = useCallback(() => {
     dispatch({ type: 'WAKE' });
@@ -195,9 +188,11 @@ function InstallationApp() {
     }
   }, [screen, startConversation]);
 
-  // End the conversation when leaving the conversation/synthesizing screens
+  // End the ElevenLabs session once we leave the conversation screen.
+  // After save_definition fires, the screen transitions to synthesizing —
+  // we no longer need the WebSocket open.
   useEffect(() => {
-    if (screen === 'sleep' && conversationStatus === 'connected') {
+    if (screen !== 'conversation' && conversationStatus === 'connected') {
       endConversation().catch(() => {});
     }
   }, [screen, conversationStatus, endConversation]);
