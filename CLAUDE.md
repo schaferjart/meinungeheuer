@@ -26,7 +26,7 @@ Monorepo (pnpm workspaces):
 
 ## Key Tech Decisions
 
-- **Voice pipeline:** ElevenLabs Conversational AI SDK (`@11labs/react`). Handles STT + LLM + TTS in one WebSocket. Do NOT build a custom STT→LLM→TTS chain.
+- **Voice pipeline:** ElevenLabs Conversational AI SDK (`@elevenlabs/react`). Handles STT + LLM + TTS in one WebSocket. Do NOT build a custom STT→LLM→TTS chain.
 - **LLM:** Custom LLM via OpenRouter (`google/gemini-2.0-flash-001` default). Configured in ElevenLabs dashboard.
 - **Text reader highlighting:** ElevenLabs TTS with-timestamps API returns character-level timing. Convert to word-level timestamps in `useTextToSpeechWithTimestamps.ts`. Sync highlight to `audio.currentTime` via `requestAnimationFrame`.
 - **Database:** Supabase (PostgreSQL + pgvector + Realtime).
@@ -79,7 +79,7 @@ The `/build` command executes in order:
 
 **Tablet state machine** (`useInstallationMachine.ts`): Single reducer with 9 screens: sleep → welcome → text_display → term_prompt → conversation → synthesizing → definition → printing → farewell. Actions: WAKE, TIMER_*, READY, DEFINITION_RECEIVED, FACE_LOST, SET_CONFIG, SET_SESSION_ID, SET_LANGUAGE, RESET.
 
-**ElevenLabs role mapping**: SDK uses "user"/"ai" → map to shared types "visitor"/"agent" in `useConversation.ts`. The `save_definition` tool call from the agent triggers a webhook to the backend.
+**ElevenLabs role mapping**: SDK uses "user"/"agent" → map to shared types "visitor"/"agent" in `useConversation.ts`. The `save_definition` tool call from the agent triggers a webhook to the backend.
 
 **Webhook flow**: ElevenLabs agent calls save_definition tool → POST /webhook/definition → backend saves definition, generates embedding (async), advances chain (Mode C), inserts print_queue job → printer bridge picks up via Supabase Realtime subscription.
 

@@ -7,7 +7,7 @@
 **Requirements:** R1, R2
 **Plans:** 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — SDK migration + useConversation hook update + keep-alive
+- [x] 01-01-PLAN.md — SDK migration + useConversation hook update + keep-alive
 - [x] 01-02-PLAN.md — System prompt guardrails + unit tests
 **Gate:** Conversation runs to natural conclusion (visitor-initiated `save_definition` only)
 

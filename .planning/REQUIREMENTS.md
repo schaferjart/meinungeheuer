@@ -18,11 +18,12 @@ One complete autonomous loop runs without human intervention:
 - **UAT:** Run a 10+ minute conversation without the bot ending it. Only `save_definition` triggers end.
 - **Dependencies:** ElevenLabs dashboard access
 
-### R2: Migrate ElevenLabs SDK
+### R2: Migrate ElevenLabs SDK [COMPLETE]
 - **Priority:** HIGH
 - **What:** Migrate from deprecated `@11labs/react@0.2.0` to `@elevenlabs/react@0.14.1`. Update imports, fix type mismatches.
 - **UAT:** Conversation starts, runs, and ends cleanly with new SDK. Disconnect reason is logged with close codes.
 - **Dependencies:** R1 (dashboard changes first)
+- **Completed:** 2026-03-08 (Plan 01-01)
 
 ### R3: PWA Standalone + Fullscreen Fix
 - **Priority:** HIGH
