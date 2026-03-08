@@ -1,857 +1,212 @@
-# Architecture Research: Karaoke Text Reader Package
+# Architecture Patterns
 
-**Date:** 2026-03-07
-**Scope:** Designing the extraction of MeinUngeheuer's TTS-synced karaoke highlighting system into a standalone, publishable npm package.
+**Domain:** Modular conversation programs for art installation
+**Researched:** 2026-03-08
 
----
+## Recommended Architecture
 
-## 1. System Overview
-
-The package converts text + word-level timestamps + audio into a synchronized highlighting experience. The consumer can bring their own audio and timestamps (generic mode) or use the built-in ElevenLabs adapter to generate both from text.
+### High-Level: Program as Configuration Object
 
 ```
-                          KARAOKE TEXT READER PACKAGE
- ============================================================================
-
- CONSUMER APPLICATION
- --------------------
-                                                       +-------------------+
-   Option A: Generic (BYO)                             |                   |
-   ~~~~~~~~~~~~~~~~~~~~~~~~                            |   <KaraokeReader  |
-   Consumer provides:                                  |     text={...}    |
-     - WordTimestamp[]                                 |     words={...}   |
-     - Audio (HTMLAudioElement | Blob | URL)           |     audio={...}   |
-                          |                            |     onComplete    |
-                          |                            |     theme={...}   |
-                          v                            |   />              |
-              +------------------------+               |                   |
-              |   useKaraokeSync()     |               |   -- OR --        |
-              |   (headless hook)      |<------------->|                   |
-              +------------------------+               |   useKaraokeSync()|
-                          |                            |   (headless)      |
-                          |                            |                   |
-   Option B: ElevenLabs Adapter                        +-------------------+
-   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-   Consumer provides:
-     - text (string)
-     - ElevenLabs API key + voice ID
-                          |
-                          v
-              +------------------------+
-              |  useElevenLabsTTS()    |
-              |  (adapter hook)        |
-              +--+--+--+--------------+
-                 |  |  |
-   +-------------+  |  +-------------+
-   |                |                 |
-   v                v                 v
- TTS API       Timestamp          Cache
- Fetcher       Converter          Layer
-              (char->word)     (pluggable)
+                    ConversationProgram
+                    /        |        \
+            Prompt       Output Tool    Print
+            Builder      + Handler      Template
+               |              |            |
+        ElevenLabs      Client Tool    Printer
+        Override        + Webhook      Bridge
 ```
 
-### Three API Layers
+A ConversationProgram is a plain TypeScript object (not a class) that bundles:
+1. Functions for building prompts from runtime context
+2. Tool handling configuration
+3. Result display + print formatting references
+
+Programs are resolved at runtime from a registry. The same ElevenLabs agent handles all programs via per-session overrides.
+
+### Component Boundaries
+
+| Component | Responsibility | Communicates With |
+|-----------|---------------|-------------------|
+| `packages/shared/src/programs/types.ts` | ConversationProgram interface | All consumers import this |
+| `packages/shared/src/programs/registry.ts` | Program lookup by ID | Tablet app, backend |
+| `packages/shared/src/programs/aphorism.ts` | First program (current behavior) | Registry |
+| `apps/tablet/src/hooks/useConversation.ts` | Passes program's prompt + tools to ElevenLabs SDK | Programs, ElevenLabs SDK |
+| `apps/tablet/src/App.tsx` | Component registry: maps program to result screen | Programs, screen components |
+| `apps/backend/src/routes/webhook.ts` | Routes result by program_id to correct handling | Programs, Supabase |
+| `apps/backend/src/routes/config.ts` | Returns active program_id to tablet | installation_config table |
+| `apps/printer-bridge/src/printer.ts` | Routes print by template name | POS server |
+
+### Data Flow
 
 ```
- +===========================================================================+
- |                         EXPORT SURFACE                                     |
- |                                                                            |
- |   LAYER 1: Core Utilities (pure functions, zero React)                     |
- |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                     |
- |   buildWordTimestamps()     splitTextIntoChunks()                          |
- |   stripMarkdownForTTS()     parseMarkdownText()                            |
- |   computeCacheKey()         base64ToAudioUrl()                             |
- |                                                                            |
- |   LAYER 2: Headless Hooks (React hooks, no DOM/styles)                     |
- |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                     |
- |   useKaraokeSync()          useAudioPlayback()                             |
- |   useAutoScroll()           useWordHighlight()                             |
- |                                                                            |
- |   LAYER 3: Styled Components (React components, CSS)                       |
- |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                      |
- |   <KaraokeReader />         <VolumeSlider />                               |
- |   <KaraokeControls />       <LoadingIndicator />                           |
- |                                                                            |
- |   ADAPTER: ElevenLabs (optional, separate subpath export)                  |
- |   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~                  |
- |   useElevenLabsTTS()        createElevenLabsAdapter()                      |
- |                                                                            |
- +===========================================================================+
+1. Admin sets active_program_id in installation_config (via admin dashboard)
+2. Tablet fetches config: gets mode + program_id
+3. Tablet resolves program from registry: getProgram(program_id)
+4. Visitor goes through pre-conversation flow (mode-dependent, program-independent)
+5. Conversation starts:
+   a. program.buildSystemPrompt(mode, term, context) -> override prompt
+   b. program.buildFirstMessage(mode, term, context, lang) -> override firstMessage
+   c. program.clientTools -> merged with useConversation clientTools
+   d. ElevenLabs session starts with overrides
+6. Agent calls output tool (e.g., save_definition) per prompt instructions
+   a. Client tool handler fires: tablet gets result immediately
+   b. Webhook fires: backend persists + enqueues print
+7. Tablet shows result via program's ResultComponent
+8. Print queue entry includes template name from program
+9. Printer bridge routes to correct POS endpoint
 ```
 
----
+## Patterns to Follow
 
-## 2. Component Boundaries
+### Pattern 1: Strategy Pattern via Object Registry
 
-The current MeinUngeheuer code has two large files that each contain multiple concerns. The extraction should decompose them into units with a single responsibility.
+**What:** Programs are plain objects implementing a common interface, stored in a Record and looked up by ID.
 
-### What Becomes a Pure Utility (no React)
+**When:** Always. This is the core pattern.
 
-| Function | Source | Rationale |
-|----------|--------|-----------|
-| `buildWordTimestamps()` | useTextToSpeechWithTimestamps.ts:62-127 | Pure: text + alignment -> WordTimestamp[]. No hooks, no state. |
-| `splitTextIntoChunks()` | useTextToSpeechWithTimestamps.ts:133-164 | Pure: text -> string[]. Sentence-boundary splitting logic. |
-| `stripMarkdownForTTS()` | TextReader.tsx:36-41 | Pure: text -> text. Removes markdown syntax before sending to TTS. |
-| `parseMarkdownText()` | TextReader.tsx:91-139 | Pure: text -> ParsedParagraph[]. Markdown to renderable structure. |
-| `computeCacheKey()` | ttsCache.ts:12-18 | Pure (async): text + voiceId -> SHA-256 hash string. |
-| `base64PartsToAudioUrl()` | useTextToSpeechWithTimestamps.ts:229-243 | Pure: base64[] -> blob URL string. |
-
-These functions have existing tests (`useTextToSpeechWithTimestamps.test.ts`) that transfer directly.
-
-### What Becomes a Hook
-
-| Hook | Responsibility | Inputs | Outputs |
-|------|---------------|--------|---------|
-| `useKaraokeSync` | Core sync loop: matches audio.currentTime to word index via requestAnimationFrame + binary search. | `{ words: WordTimestamp[], audio: HTMLAudioElement | null }` | `{ activeWordIndex, isPlaying, play, pause }` |
-| `useAudioPlayback` | Audio lifecycle: create/destroy HTMLAudioElement, volume, play/pause state machine. | `{ src: string | Blob | null, autoPlay?, volume? }` | `{ audio, status, play, pause, volume, setVolume }` |
-| `useAutoScroll` | Comfort-zone scrolling: watches activeWordIndex, scrolls container to keep active word in 20%-65% band. | `{ containerRef, activeWordIndex, wordRefs }` | (side effect only) |
-| `useWordHighlight` | Direct DOM class toggling: sets active/spoken/upcoming classes on word spans. No re-renders. | `{ activeWordIndex, wordRefs }` | (side effect only) |
-| `useElevenLabsTTS` | ElevenLabs-specific: fetches TTS with timestamps, handles chunking, optional caching. | `{ text, voiceId, apiKey, cache? }` | `{ words, audioSrc, status, error }` |
-
-### What Becomes a Component
-
-| Component | Responsibility |
-|-----------|---------------|
-| `<KaraokeReader>` | Full composed experience: renders parsed text with word spans, wires up all hooks, provides default styling via CSS custom properties. |
-| `<KaraokeControls>` | Play/pause/skip buttons. Styled defaults, fully overridable. |
-| `<VolumeSlider>` | Range input for volume. Self-contained CSS. |
-| `<LoadingIndicator>` | Animated dots or spinner during TTS loading. |
-
-### Decomposition from Current Files
-
-```
- CURRENT (MeinUngeheuer)                  EXTRACTED (npm package)
- ========================                 ========================
-
- useTextToSpeechWithTimestamps.ts         src/utils/
- (555 lines, mixed concerns)               buildWordTimestamps.ts
-   - buildWordTimestamps()         ->       splitTextIntoChunks.ts
-   - splitTextIntoChunks()         ->       base64ToAudioUrl.ts
-   - base64PartsToAudioUrl()       ->
-   - fetchTtsWithTimestamps()      ->     src/adapters/elevenlabs/
-   - useTextToSpeechWithTimestamps ->       fetchTtsWithTimestamps.ts
-     - audio lifecycle             ->     src/hooks/
-     - animation frame loop        ->       useAudioPlayback.ts
-     - volume control              ->       useKaraokeSync.ts
-
- TextReader.tsx                           src/utils/
- (600 lines, mixed concerns)               markdown.ts (strip + parse)
-   - stripMarkdownForTTS()         ->     src/hooks/
-   - parseMarkdownText()           ->       useAutoScroll.ts
-   - word highlighting logic       ->       useWordHighlight.ts
-   - auto-scroll logic             ->     src/components/
-   - UI + controls + rendering     ->       KaraokeReader.tsx
-   - VolumeSlider                  ->       VolumeSlider.tsx
-   - ActionButton                  ->       KaraokeControls.tsx
-   - LoadingDots                   ->       LoadingIndicator.tsx
-
- ttsCache.ts                              src/cache/
- (78 lines, Supabase-specific)              types.ts (CacheAdapter interface)
-   - computeCacheKey()             ->       memoryCache.ts (built-in default)
-   - getCachedTts()                ->     src/adapters/elevenlabs/
-   - storeTtsCache()               ->       supabaseCache.ts (example adapter)
-
- TextDisplayScreen.tsx             ->     (stays in consumer app --
- (73 lines, app-specific glue)            not part of package)
-```
-
----
-
-## 3. Adapter Pattern for TTS Providers
-
-### The Interface
-
-The package defines a generic `TTSProvider` interface. ElevenLabs ships as a built-in adapter; consumers can write their own for any TTS service.
+**Example:**
 
 ```typescript
-// src/types.ts
-
-export interface WordTimestamp {
-  word: string;
-  startTime: number;   // seconds
-  endTime: number;     // seconds
-  index: number;       // sequential, 0-based
+// packages/shared/src/programs/types.ts
+export interface ConversationProgram {
+  id: string;
+  name: string;
+  description: string;
+  buildSystemPrompt: (mode: Mode, term: string, contextText: string | null) => string;
+  buildFirstMessage: (mode: Mode, term: string, contextText: string | null, language: string) => string;
+  outputToolName: string;
+  resultType: string;
+  displayComponent: string;
+  printTemplate: string;
 }
 
-export interface TTSResult {
-  /** Audio as a Blob, base64 string, or object URL */
-  audio: Blob | string;
-  /** Word-level timestamps, sorted by startTime */
-  words: WordTimestamp[];
-}
+// packages/shared/src/programs/registry.ts
+import { aphorismProgram } from './aphorism.js';
 
-export interface TTSProvider {
-  /**
-   * Convert text to speech with word-level timing.
-   * Implementations handle chunking, API calls, and timestamp conversion.
-   */
-  synthesize(text: string, options?: TTSProviderOptions): Promise<TTSResult>;
-}
-
-export interface TTSProviderOptions {
-  /** Signal to abort in-flight requests */
-  signal?: AbortSignal;
-  /** Cache adapter for storing/retrieving results */
-  cache?: CacheAdapter;
-}
-```
-
-### ElevenLabs Adapter Implementation
-
-```typescript
-// src/adapters/elevenlabs/provider.ts
-
-export interface ElevenLabsConfig {
-  apiKey: string;
-  voiceId: string;
-  modelId?: string;             // default: 'eleven_multilingual_v2'
-  voiceSettings?: VoiceSettings;
-  maxWordsPerChunk?: number;    // default: 200
-}
-
-export function createElevenLabsProvider(config: ElevenLabsConfig): TTSProvider {
-  return {
-    async synthesize(text, options) {
-      const chunks = splitTextIntoChunks(text, config.maxWordsPerChunk);
-      // ... fetch each chunk, build word timestamps, concatenate audio
-      // ... use cache if provided in options
-      return { audio, words };
-    }
-  };
-}
-```
-
-### Why This Shape
-
-1. **Single method (`synthesize`)**: Keeps the interface minimal. A consumer implementing for Google Cloud TTS or Azure only needs one function.
-2. **Returns `TTSResult`** (audio + words): The package needs both to function. Returning them together avoids coordination problems.
-3. **Cache is passed in options, not baked into the provider**: Separates caching concern from synthesis concern. The same provider can be used with or without caching.
-4. **AbortSignal for cancellation**: Standard web API pattern. Allows the hook to cancel on unmount without custom cancellation flags.
-
-### Consumer-Authored Adapter Example
-
-```typescript
-// Consumer writes this for their own TTS service:
-const myTTSProvider: TTSProvider = {
-  async synthesize(text, options) {
-    const response = await fetch('/api/my-tts', {
-      method: 'POST',
-      body: JSON.stringify({ text }),
-      signal: options?.signal,
-    });
-    const { audioBlob, timestamps } = await response.json();
-    return {
-      audio: audioBlob,
-      words: timestamps.map((t, i) => ({
-        word: t.word,
-        startTime: t.start,
-        endTime: t.end,
-        index: i,
-      })),
-    };
-  },
+const PROGRAMS: Record<string, ConversationProgram> = {
+  aphorism: aphorismProgram,
 };
+
+export function getProgram(id: string): ConversationProgram {
+  return PROGRAMS[id] ?? PROGRAMS['aphorism'];
+}
+
+export function getAllPrograms(): ConversationProgram[] {
+  return Object.values(PROGRAMS);
+}
 ```
 
----
+### Pattern 2: Component Registry for Result Screens
 
-## 4. Cache Interface Design
+**What:** Map program's `displayComponent` string to React components at the app level.
 
-### The Interface
+**When:** When rendering the result screen (currently `DefinitionScreen`).
+
+**Example:**
 
 ```typescript
-// src/cache/types.ts
+// apps/tablet/src/components/screens/results/index.ts
+import { DefinitionScreen } from './DefinitionScreen';
+// import { HaikuScreen } from './HaikuScreen';
 
-export interface CachedTTSData {
-  audio: string;              // base64-encoded audio
-  words: WordTimestamp[];
-}
+export const RESULT_COMPONENTS: Record<string, React.ComponentType<ResultProps>> = {
+  aphorism: DefinitionScreen,
+  // haiku: HaikuScreen,
+};
 
-export interface CacheAdapter {
-  /**
-   * Retrieve cached TTS data. Returns null on miss or error.
-   * Implementations MUST NOT throw -- return null on any failure.
-   */
-  get(key: string): Promise<CachedTTSData | null>;
+// apps/tablet/src/App.tsx
+import { RESULT_COMPONENTS } from './components/screens/results';
 
-  /**
-   * Store TTS data. Fire-and-forget semantics -- failures are
-   * logged but never thrown to the caller.
-   */
-  set(key: string, data: CachedTTSData): Promise<void>;
+// In renderScreen():
+case 'definition': {
+  const ResultComponent = RESULT_COMPONENTS[program.resultType] ?? DefinitionScreen;
+  return <ResultComponent result={definition} />;
 }
 ```
 
-### Built-in Adapters
+### Pattern 3: Prompt Composition (Mode Block + Program Block)
 
-```
- +-------------------+     +-------------------+     +-------------------+
- |   CacheAdapter    |     |   CacheAdapter    |     |   CacheAdapter    |
- |   (interface)     |     |   (interface)     |     |   (interface)     |
- +--------+----------+     +--------+----------+     +--------+----------+
-          |                         |                         |
-          v                         v                         v
- +-------------------+     +-------------------+     +-------------------+
- |   memoryCache()   |     |  localStorageCache |    |  Consumer writes  |
- |   (ships w/ pkg)  |     |  (ships w/ pkg)   |     |  their own:       |
- |                   |     |                   |     |  supabaseCache,   |
- |   Map<string,     |     |  window           |     |  redisCache,      |
- |     CachedTTSData>|     |  .localStorage    |     |  indexedDBCache,  |
- |                   |     |  (with LRU evict) |     |  s3Cache, etc.    |
- +-------------------+     +-------------------+     +-------------------+
-```
+**What:** The system prompt is composed of two independent parts: a mode block (how the visitor entered) and a program block (what the conversation does).
 
-**memoryCache** (default, ships with package):
-- In-memory `Map<string, CachedTTSData>`
-- No persistence across page loads
-- Optional max-entries parameter (LRU eviction)
-- Zero dependencies
+**When:** Every conversation session.
 
-**localStorageCache** (ships with package):
-- Uses `window.localStorage`
-- Persists across page loads, same origin
-- Size-aware: checks `localStorage` quota, evicts oldest entries on overflow
-- Serializes audio as base64 (can be large -- warn in docs)
-
-**supabaseCache** (ships as example/recipe, not bundled):
-- Documented in README as a code recipe
-- Shows how to implement `CacheAdapter` with Supabase
-- Not a dependency of the package
-
-### Key Design Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Cache key is computed by the adapter, not the caller | Different providers may want different key strategies. The built-in `computeCacheKey(text, voiceId)` utility is available but not mandatory. |
-| `get()` returns null, never throws | Caching is optional and best-effort. A failed cache read should fall back to synthesis, not crash the experience. |
-| `set()` is fire-and-forget | Storing in cache should never block the user from hearing audio. Errors are swallowed at the adapter level. |
-| Audio stored as base64 string | Portable across storage backends. Blob URLs are ephemeral (session-scoped). Base64 is verbose but universally serializable. |
-
----
-
-## 5. Export Structure
-
-### Package.json Exports Map
-
-```jsonc
-{
-  "name": "@vakunst/karaoke-reader",
-  "version": "0.1.0",
-  "type": "module",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./hooks": {
-      "import": "./dist/hooks/index.js",
-      "types": "./dist/hooks/index.d.ts"
-    },
-    "./utils": {
-      "import": "./dist/utils/index.js",
-      "types": "./dist/utils/index.d.ts"
-    },
-    "./elevenlabs": {
-      "import": "./dist/adapters/elevenlabs/index.js",
-      "types": "./dist/adapters/elevenlabs/index.d.ts"
-    },
-    "./styles.css": "./dist/styles.css"
-  },
-  "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
-  },
-  "sideEffects": ["*.css"]
-}
-```
-
-### Import Patterns for Consumers
+**Example:**
 
 ```typescript
-// Full styled component (most common use case)
-import { KaraokeReader } from '@vakunst/karaoke-reader';
-import '@vakunst/karaoke-reader/styles.css';
+// In the aphorism program:
+buildSystemPrompt(mode, term, contextText) {
+  const modeBlock = buildModeBlock(mode, term, contextText);  // shared util
+  return `You are an interviewer in an art installation.
 
-// Headless hooks only (custom UI)
-import { useKaraokeSync, useAudioPlayback } from '@vakunst/karaoke-reader/hooks';
+${modeBlock}
 
-// Pure utilities only (no React)
-import { buildWordTimestamps, splitTextIntoChunks } from '@vakunst/karaoke-reader/utils';
+${APHORISM_CONVERSATION_RULES}
 
-// ElevenLabs adapter (optional, tree-shakes if unused)
-import { createElevenLabsProvider, useElevenLabsTTS } from '@vakunst/karaoke-reader/elevenlabs';
-```
-
-### Why Subpath Exports
-
-1. **Tree-shaking**: A consumer using only `useKaraokeSync` does not pull in the styled components or ElevenLabs adapter.
-2. **Separation of concerns**: The ElevenLabs adapter has its own fetch logic and types. Keeping it in a subpath makes clear it is optional.
-3. **CSS isolation**: `styles.css` is a separate entry. Consumers who build their own UI never load it.
-4. **No barrel re-export bloat**: Each subpath has its own index, avoiding the common problem where a single `index.ts` forces the bundler to parse everything.
-
----
-
-## 6. Project Structure
-
-```
-karaoke-reader/
-|-- package.json
-|-- tsconfig.json
-|-- tsup.config.ts              # Build config (ESM output, dts generation)
-|-- vitest.config.ts            # Test config
-|-- LICENSE
-|-- README.md
-|
-|-- src/
-|   |-- index.ts                # Main entry: re-exports components + hooks + types
-|   |
-|   |-- types.ts                # Core types: WordTimestamp, TTSProvider,
-|   |                           #   CacheAdapter, TtsStatus, KaraokeTheme
-|   |
-|   |-- utils/                  # Pure functions (no React, no browser globals)
-|   |   |-- index.ts
-|   |   |-- buildWordTimestamps.ts
-|   |   |-- buildWordTimestamps.test.ts
-|   |   |-- splitTextIntoChunks.ts
-|   |   |-- splitTextIntoChunks.test.ts
-|   |   |-- markdown.ts         # stripMarkdownForTTS, parseMarkdownText
-|   |   |-- markdown.test.ts
-|   |   |-- base64ToAudioUrl.ts
-|   |   |-- computeCacheKey.ts
-|   |
-|   |-- hooks/                  # React hooks (headless, no styles)
-|   |   |-- index.ts
-|   |   |-- useKaraokeSync.ts   # Core: rAF loop, binary search, activeWordIndex
-|   |   |-- useKaraokeSync.test.ts
-|   |   |-- useAudioPlayback.ts # Audio element lifecycle, status state machine
-|   |   |-- useAudioPlayback.test.ts
-|   |   |-- useAutoScroll.ts    # Comfort-zone scroll tracking
-|   |   |-- useWordHighlight.ts # Direct DOM class toggling (perf)
-|   |
-|   |-- cache/                  # Cache adapter interface + built-in impls
-|   |   |-- types.ts            # CacheAdapter interface, CachedTTSData
-|   |   |-- memoryCache.ts      # In-memory Map-based cache
-|   |   |-- memoryCache.test.ts
-|   |   |-- localStorageCache.ts
-|   |   |-- localStorageCache.test.ts
-|   |
-|   |-- components/             # Styled React components
-|   |   |-- index.ts
-|   |   |-- KaraokeReader.tsx   # Full composed experience
-|   |   |-- KaraokeControls.tsx # Play/pause/skip buttons
-|   |   |-- VolumeSlider.tsx
-|   |   |-- LoadingIndicator.tsx
-|   |
-|   |-- styles/                 # Self-contained CSS (no Tailwind)
-|   |   |-- karaoke-reader.css  # CSS custom properties + base styles
-|   |
-|   |-- adapters/
-|       |-- elevenlabs/
-|           |-- index.ts
-|           |-- provider.ts     # createElevenLabsProvider(): TTSProvider
-|           |-- provider.test.ts
-|           |-- fetchTts.ts     # Raw API call to ElevenLabs with-timestamps
-|           |-- types.ts        # ElevenLabs-specific types (AlignmentData, etc.)
-|           |-- useElevenLabsTTS.ts  # Convenience hook wrapping provider
-|
-|-- examples/                   # Usage examples (not published to npm)
-|   |-- generic/                # BYO timestamps + audio
-|   |-- elevenlabs/             # ElevenLabs adapter with caching
-|   |-- custom-ui/              # Headless hooks + custom rendering
-```
-
-### Build Tooling: tsup
-
-tsup is chosen over Rollup for simplicity. It wraps esbuild for fast builds and generates `.d.ts` files via TypeScript compiler.
-
-```typescript
-// tsup.config.ts
-import { defineConfig } from 'tsup';
-
-export default defineConfig({
-  entry: {
-    index: 'src/index.ts',
-    'hooks/index': 'src/hooks/index.ts',
-    'utils/index': 'src/utils/index.ts',
-    'adapters/elevenlabs/index': 'src/adapters/elevenlabs/index.ts',
-  },
-  format: ['esm'],
-  dts: true,
-  sourcemap: true,
-  clean: true,
-  external: ['react', 'react-dom'],
-  treeshake: true,
-});
-```
-
----
-
-## 7. Data Flow
-
-### Full Pipeline: Text to Highlighted Words
-
-```
- TEXT INPUT (string)
-      |
-      | stripMarkdownForTTS()
-      v
- CLEAN TEXT (no # or ~~ markers)
-      |
-      | TTSProvider.synthesize()
-      |   |
-      |   | splitTextIntoChunks()  (if text > 200 words)
-      |   |   |
-      |   |   v
-      |   | [chunk1, chunk2, ...]
-      |   |   |
-      |   |   | (for each chunk, in sequence)
-      |   |   |
-      |   |   | CacheAdapter.get(key)?
-      |   |   |   |-- HIT  -> use cached audio + timestamps
-      |   |   |   |-- MISS -> fetch from TTS API
-      |   |   |            |
-      |   |   |            | fetchTtsWithTimestamps()
-      |   |   |            |   -> { audio_base64, alignment }
-      |   |   |            |
-      |   |   |            | buildWordTimestamps(chunk, alignment, timeOffset)
-      |   |   |            |   -> WordTimestamp[] for this chunk
-      |   |   |            |
-      |   |   |            | CacheAdapter.set(key, data)  (fire-and-forget)
-      |   |   |
-      |   |   | Accumulate: audioParts[], allWords[]
-      |   |   |   (reindex words globally, accumulate timeOffset)
-      |   |
-      |   v
-      | TTSResult { audio: Blob, words: WordTimestamp[] }
-      |
-      v
- +----+----+
- |         |
- v         v
-AUDIO   WORD TIMESTAMPS
-(Blob)  (WordTimestamp[])
- |         |
- |         |    parseMarkdownText(originalText)
- |         |       -> ParsedParagraph[] (with globalIndex per word)
- |         |
- v         v
- useAudioPlayback()     useKaraokeSync()
-   |                      |
-   | HTMLAudioElement      | activeWordIndex (updated every rAF)
-   | status machine        |
-   | play/pause            |
-   v                      v
-         +----------------------------------+
-         |                                  |
-         |   useWordHighlight()             |
-         |     - toggles CSS classes on     |
-         |       word <span> elements       |
-         |     - spoken / active / upcoming |
-         |     - NO React re-renders        |
-         |                                  |
-         |   useAutoScroll()                |
-         |     - monitors activeWordIndex   |
-         |     - scrolls container when     |
-         |       active word leaves the     |
-         |       20%-65% comfort zone       |
-         |     - respects manual scroll     |
-         |       cooldown (4s)              |
-         |                                  |
-         +----------------------------------+
-                      |
-                      v
-              RENDERED DOM
-         (word spans with classes
-          toggled at 60fps via refs)
-```
-
-### The Sync Loop (Performance-Critical Path)
-
-```
- requestAnimationFrame
-      |
-      v
- audio.currentTime  (float, seconds)
-      |
-      | Binary search over WordTimestamp[]
-      | (sorted by startTime -- O(log n))
-      |
-      v
- activeWordIndex (integer)
-      |
-      | Compare to previous activeWordIndex
-      |
-      |-- SAME -> no DOM update, schedule next frame
-      |
-      |-- CHANGED ->
-           |
-           | 1. Previous word span:
-           |      remove 'active' class
-           |      add 'spoken' class
-           |
-           | 2. Current word span:
-           |      remove 'upcoming' class
-           |      add 'active' class
-           |
-           | 3. Check scroll position:
-           |      word.getBoundingClientRect() vs container
-           |      if outside comfort zone AND no recent manual scroll:
-           |        container.scrollBy({ behavior: 'smooth' })
-           |
-           | Schedule next frame
-```
-
-### Why Direct DOM Manipulation
-
-The existing code (TextReader.tsx lines 164-222) deliberately bypasses React's rendering pipeline for the highlight loop. This is preserved because:
-
-1. **60fps target**: `requestAnimationFrame` fires up to 60 times/second. Running `setState` on each frame would trigger a full React reconciliation pass.
-2. **Ref-based class toggling**: `span.classList.add/remove` is a direct DOM mutation. React does not need to diff the virtual DOM.
-3. **No layout thrashing**: Only `classList` and occasional `getBoundingClientRect` are touched. No writes to `style` properties in the hot path.
-4. **Proven in production**: This approach runs smoothly on tablets with long texts (2500+ words, 12+ audio chunks).
-
-The package preserves this pattern in `useWordHighlight` by accepting a `Map<number, HTMLSpanElement>` ref from the consuming component.
-
----
-
-## 8. Styling Strategy
-
-### CSS Custom Properties (No Tailwind)
-
-The current code uses Tailwind classes (`text-amber-300`, `opacity-40`, etc.) which creates a Tailwind dependency. The package replaces these with CSS custom properties that ship in a standalone `styles.css` file.
-
-```css
-/* src/styles/karaoke-reader.css */
-
-.karaoke-reader {
-  /* Layout */
-  --kr-font-family: Georgia, 'Times New Roman', serif;
-  --kr-font-size: clamp(1.2rem, 3vw, 1.8rem);
-  --kr-line-height: 1.8;
-  --kr-letter-spacing: 0.02em;
-  --kr-max-width: 700px;
-  --kr-padding: clamp(2rem, 6vw, 4rem) clamp(2rem, 8vw, 6rem);
-
-  /* Colors */
-  --kr-bg: #000000;
-  --kr-text-color: #ffffff;
-  --kr-active-color: #fcd34d;         /* amber-300 equivalent */
-  --kr-spoken-opacity: 0.4;
-  --kr-upcoming-opacity: 0.9;
-
-  /* Transitions */
-  --kr-color-transition: color 0.2s ease;
-  --kr-opacity-transition: opacity 0.4s ease;
-
-  /* Controls */
-  --kr-control-font: system-ui, sans-serif;
-  --kr-control-border: rgba(255, 255, 255, 0.3);
-  --kr-control-border-hover: rgba(255, 255, 255, 0.8);
+${APHORISM_OUTPUT_INSTRUCTIONS}`;
 }
 ```
 
-Consumers override by setting these properties on a parent element:
+The `buildModeBlock()` function is shared across all programs -- it describes the text/term/chain context. Each program adds its own conversation rules and output instructions.
 
-```css
-.my-app .karaoke-reader {
-  --kr-bg: #1a1a2e;
-  --kr-active-color: #e94560;
-  --kr-font-family: 'Inter', sans-serif;
-}
-```
+### Pattern 4: Fallback-First Design
 
-Or via the `theme` prop on the component:
+**What:** Every lookup has a sensible fallback. Unknown program ID -> aphorism. Unknown template -> dictionary. Unknown result type -> DefinitionScreen.
 
-```tsx
-<KaraokeReader
-  theme={{
-    backgroundColor: '#1a1a2e',
-    activeColor: '#e94560',
-    fontFamily: "'Inter', sans-serif",
-  }}
-/>
-```
+**When:** All registry lookups.
 
----
+**Why:** Art installation must never crash. An operator might configure a program ID that doesn't exist in the tablet's build. The system must still work.
 
-## 9. Build Order for Extraction
+## Anti-Patterns to Avoid
 
-### Phase 1: Foundation (Pure Utils + Types)
+### Anti-Pattern 1: Dynamic State Machine
 
-Extract and test all pure functions. No React dependency at this stage.
+**What:** Making the state machine flow configurable per program.
 
-```
- Step 1a: Create package scaffold
-   - package.json, tsconfig.json, tsup.config.ts, vitest.config.ts
-   - src/types.ts (WordTimestamp, TtsStatus, TTSProvider, CacheAdapter)
+**Why bad:** The 9 states map to the physical visitor experience. You always approach, optionally read, always talk, always see a result, always get a card. Changing the state graph per program creates untested code paths and breaks the simple reducer pattern.
 
- Step 1b: Extract pure utilities
-   - buildWordTimestamps.ts  (from useTextToSpeechWithTimestamps.ts:62-127)
-   - splitTextIntoChunks.ts  (from useTextToSpeechWithTimestamps.ts:133-164)
-   - markdown.ts             (from TextReader.tsx:36-139)
-   - base64ToAudioUrl.ts     (from useTextToSpeechWithTimestamps.ts:229-243)
-   - computeCacheKey.ts      (from ttsCache.ts:12-18)
+**Instead:** Keep 9 states. Vary what CONTENT appears at each state. If a program doesn't need synthesizing, dispatch DEFINITION_READY with 0ms delay. If it doesn't need printing, dispatch PRINT_DONE immediately.
 
- Step 1c: Transfer + expand tests
-   - Move existing tests from useTextToSpeechWithTimestamps.test.ts
-   - Add tests for markdown parsing (no existing tests)
+### Anti-Pattern 2: One Agent Per Program
 
- Gate: pnpm build && pnpm test passes.
-       All pure functions work identically to original.
-```
+**What:** Creating a separate ElevenLabs agent for each conversation program.
 
-### Phase 2: Cache Layer
+**Why bad:** Agent management is manual via the ElevenLabs dashboard. Each agent needs its own tool configuration, knowledge base, etc. Scaling to N programs means N agents to maintain.
 
-```
- Step 2a: Define CacheAdapter interface
-   - src/cache/types.ts
+**Instead:** One agent. All tool definitions on that agent. Per-session prompt overrides determine behavior.
 
- Step 2b: Implement built-in adapters
-   - memoryCache.ts (Map-based, with optional LRU)
-   - localStorageCache.ts (browser localStorage)
+### Anti-Pattern 3: Program Logic in the State Machine
 
- Step 2c: Test adapters
-   - get/set round-trip
-   - null on miss
-   - eviction behavior
+**What:** Adding program-specific cases to the reducer.
 
- Gate: Cache adapters pass unit tests.
-```
+**Why bad:** The reducer is program-agnostic. It knows about screen transitions, not about aphorisms vs haikus. Adding `if (program === 'haiku')` to the reducer breaks separation of concerns.
 
-### Phase 3: Headless Hooks
+**Instead:** Program logic lives in the program definition and the components. The reducer only knows: conversation started, result received, print done.
 
-```
- Step 3a: useAudioPlayback
-   - Extract audio lifecycle from useTextToSpeechWithTimestamps.ts:249-554
-   - Status state machine: idle -> loading -> ready -> playing -> paused -> done | error
-   - Volume control, play/pause, cleanup
+### Anti-Pattern 4: Storing Prompts in the Database
 
- Step 3b: useKaraokeSync
-   - Extract rAF loop + binary search from useTextToSpeechWithTimestamps.ts:272-309
-   - Input: WordTimestamp[] + HTMLAudioElement
-   - Output: activeWordIndex (reactive)
+**What:** Putting system prompts in Supabase so they can be edited at runtime.
 
- Step 3c: useWordHighlight
-   - Extract DOM manipulation from TextReader.tsx:165-222
-   - Input: activeWordIndex + Map<number, HTMLSpanElement>
-   - Side effect: toggles CSS classes
+**Why bad:** System prompts are complex multi-paragraph texts with embedded instructions for tool usage, conversation flow, edge cases. They need version control, code review, and testing. A textarea in the admin UI is not the right editing environment.
 
- Step 3d: useAutoScroll
-   - Extract scroll logic from TextReader.tsx:200-233
-   - Input: containerRef + activeWordIndex + wordRefs
-   - Side effect: scrollBy when word leaves comfort zone
+**Instead:** Prompts as TypeScript template literals in the program source files. Deploy to update.
 
- Gate: Hooks can be composed in a test harness.
-       useKaraokeSync produces correct activeWordIndex for mock audio.
-```
+## Scalability Considerations
 
-### Phase 4: ElevenLabs Adapter
+| Concern | At 1 program | At 5 programs | At 20+ programs |
+|---------|-------------|---------------|-----------------|
+| Registry size | Trivial | Trivial | Still trivial -- programs are small objects |
+| ElevenLabs tools | 1 tool (save_definition) | 1 tool (save_result) | 1 generic tool handles all |
+| Result components | 1 screen component | 5 components, lazy loaded | Lazy load all, code split per program |
+| Print templates | 1 POS endpoint | 5 POS endpoints | Consider template engine in POS server |
+| Admin UI | Dropdown | Dropdown with descriptions | Searchable list, program preview |
+| Prompt maintenance | 1 file | 5 files | Consider shared prompt snippets/mixins |
+| Testing | 1 test suite | 5 suites | Each program has isolated prompt tests |
 
-```
- Step 4a: Extract fetchTtsWithTimestamps
-   - From useTextToSpeechWithTimestamps.ts:172-223
-   - Parameterize: remove hardcoded voice settings, accept config object
+At the 20+ scale, the main pressure point is prompt maintenance. Consider extracting shared conversation rules (tone, voice constraints, edge cases) into reusable snippets that programs compose.
 
- Step 4b: Create TTSProvider implementation
-   - createElevenLabsProvider(config) -> TTSProvider
-   - Integrates chunking, timestamp building, caching
+## Sources
 
- Step 4c: Create convenience hook
-   - useElevenLabsTTS(config) wraps provider + useAudioPlayback
-
- Gate: ElevenLabs adapter produces same output as original code
-       for the same input text.
-```
-
-### Phase 5: Styled Components
-
-```
- Step 5a: Create CSS file
-   - Convert Tailwind classes to CSS custom properties
-   - Self-contained, no external dependencies
-
- Step 5b: Build KaraokeReader component
-   - Composes: useKaraokeSync + useAudioPlayback + useWordHighlight
-                + useAutoScroll + markdown parsing
-   - Renders word spans with ref callbacks
-   - Accepts theme prop that maps to CSS custom properties
-
- Step 5c: Build sub-components
-   - KaraokeControls, VolumeSlider, LoadingIndicator
-   - Extract from TextReader.tsx sub-components
-
- Step 5d: Wire up exports
-   - Main entry re-exports everything
-   - Subpath exports for hooks, utils, elevenlabs
-
- Gate: <KaraokeReader> renders and highlights identically to
-       the original TextReader component.
-```
-
-### Phase 6: Validation + Publish
-
-```
- Step 6a: Integration test
-   - Full pipeline: text -> ElevenLabs adapter -> KaraokeReader
-   - Verify visual output matches original
-
- Step 6b: Bundle analysis
-   - Check tree-shaking (importing only hooks should not pull components)
-   - Verify CSS is not auto-included when using headless hooks
-
- Step 6c: Documentation
-   - README with usage examples for all three modes
-   - API reference generated from TSDoc
-
- Step 6d: Wire into MeinUngeheuer as consumer
-   - Replace apps/tablet TextReader + useTextToSpeechWithTimestamps
-     with imports from the published package
-   - Verify identical behavior
-
- Gate: npm pack produces clean tarball.
-       MeinUngeheuer tablet works identically with the extracted package.
-```
-
----
-
-## 10. Key Risks and Mitigations
-
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| **Audio concatenation from base64 chunks may behave differently across browsers** | Silent glitches between chunks | Test on Chrome, Safari, Firefox. Consider using AudioContext.decodeAudioData for more precise concatenation if issues arise. |
-| **CSS custom properties not supported in older browsers** | Broken styling on IE11 | IE11 is already excluded (React 18 does not support it). Document minimum browser versions. |
-| **ElevenLabs API changes break the adapter** | Adapter stops working | Pin to specific API version in adapter. Add integration test that runs against live API (skip in CI by default). |
-| **Large audio base64 in localStorage exceeds quota** | Cache silently fails | localStorageCache checks quota before write, evicts oldest entries. Document the size tradeoff in README. |
-| **Consumers expect SSR support** | Hydration errors | Document that the package is browser-only. Export a `typeof window !== 'undefined'` guard in the hooks. |
-
----
-
-## References
-
-Research sources consulted:
-
-- [Headless Component: a pattern for composing React UIs](https://martinfowler.com/articles/headless-component.html) -- Martin Fowler's article on the headless pattern as applied to React.
-- [React Aria Hooks](https://react-spectrum.adobe.com/react-aria/hooks.html) -- Adobe's canonical implementation of the headless hook + styled component dual-layer pattern.
-- [react-lectorem](https://github.com/kevinsmithwebdev/react-lectorem) -- An existing (simpler) React library for audio-text synchronization.
-- [react-speech-highlight](https://github.com/albirrkarim/react-speech-highlight-demo) -- React text-to-speech with word/sentence highlighting, demonstrating the audio sync challenge.
-- [js-tts-wrapper](https://github.com/willwade/js-tts-wrapper) -- Multi-provider TTS wrapper with unified API, demonstrating the adapter pattern for TTS services.
-- [@type-cacheable](https://github.com/joshuaslate/type-cacheable) -- TypeScript caching with pluggable adapter pattern (Redis, LRU, node-cache).
-- [Building React npm packages with tsup](https://www.hungrimind.com/articles/packaging-react-typescript) -- Modern guide to packaging React + TypeScript as npm modules.
-- [Adapter pattern in TypeScript](https://refactoring.guru/design-patterns/adapter/typescript/example) -- Refactoring Guru's TypeScript adapter pattern reference.
-
----
-
-## Summary
-
-The package is structured around three concentric layers:
-
-1. **Core utilities** -- pure functions, zero dependencies, testable anywhere.
-2. **Headless hooks** -- React hooks that manage state and side effects without rendering anything.
-3. **Styled components** -- opinionated defaults built on top of the hooks, overridable via CSS custom properties.
-
-The ElevenLabs integration sits outside these layers as an optional adapter, accessed via a separate subpath export. Caching is similarly pluggable via the `CacheAdapter` interface.
-
-The extraction follows a bottom-up build order: utilities first, then hooks, then components. Each phase has a clear gate. The final phase wires the package back into MeinUngeheuer as a consumer, validating that no behavior was lost.
-
----
-*Last updated: 2026-03-07*
+- Strategy pattern: established software design pattern, applied to React component architecture
+- [Martin Fowler: Modularizing React Applications](https://martinfowler.com/articles/modularizing-react-apps.html)
+- Codebase analysis: current architecture in apps/tablet/src/, apps/backend/src/

@@ -1,30 +1,74 @@
-# Roadmap: Karaoke Text Reader
+# Roadmap: MeinUngeheuer MVP
 
-## Milestones
+## Milestone: v2.0 — End-to-End Autonomous Installation
 
-- ✅ **v1.0 Karaoke Text Reader** — Phases 1-4 (shipped 2026-03-08)
+### Phase 1: Conversation Fix + SDK Migration
+**Goal:** Conversations no longer end prematurely. SDK is on maintained version.
+**Requirements:** R1, R2
+**Tasks:**
+- Remove `end_call` from ElevenLabs dashboard agent tools
+- Migrate `@11labs/react` → `@elevenlabs/react` (update imports, fix types)
+- Update `useConversation.ts` for new SDK API
+- Add disconnect reason logging with close codes
+- Improve system prompt guardrails against premature ending
+- Test: 10+ minute conversation without bot ending it
+**Gate:** Conversation runs to natural conclusion (visitor-initiated `save_definition` only)
 
-## Phases
+### Phase 2: PWA + Fullscreen + Face Detection
+**Goal:** Tablet runs as autonomous kiosk — no touch, true fullscreen, face-triggered wake/sleep.
+**Requirements:** R3, R4
+**Tasks:**
+- Add PWA meta tags to `index.html` (apple-mobile-web-app-capable, status-bar-style)
+- Update `fullscreen.ts` to detect standalone mode and skip requestFullscreen()
+- Verify face detection on target iPad (camera permissions, MediaPipe performance)
+- Test wake/sleep cycle in PWA standalone mode
+- Document kiosk setup procedure (Add to Home Screen + Guided Access)
+**Gate:** Walk up → wakes in 3s. Walk away → sleeps in 30s. True fullscreen, no UI chrome.
 
-<details>
-<summary>✅ v1.0 Karaoke Text Reader (Phases 1-4) — SHIPPED 2026-03-08</summary>
+### Phase 3: Printer Integration
+**Goal:** Print queue jobs produce physical thermal cards.
+**Requirements:** R5, R6
+**Tasks:**
+- Clone POS-thermal-printer into `apps/pos-server/`
+- Add pnpm scripts (`dev:pos`, `start:pos`) that shell to Python venv
+- Configure printer-bridge `POS_SERVER_URL` to point at POS server
+- Test Supabase Realtime → printer-bridge → POS server → printed card
+- Add health check and error recovery
+**Gate:** Insert print_queue row → card prints within 10s.
 
-- [x] Phase 1: Package Foundation (2/2 plans) — scaffolded npm package, extracted 5 utilities, 41 tests
-- [x] Phase 2: Core Component and Hooks (5/5 plans) — KaraokeReader component, 60fps rAF sync, auto-scroll, status machine, 86 tests
-- [x] Phase 3: Adapters and Styling (3/3 plans) — ElevenLabs adapter, cache layer, CSS theming, 111 tests
-- [x] Phase 4: Validation and Publication (2/2 plans) — tablet integration, README, npm publish v0.1.0, 138 tests
+### Phase 4: Portrait + End-to-End Polish
+**Goal:** Visitor portrait captured and printed. Full loop works autonomously.
+**Requirements:** R7, R8
+**Tasks:**
+- Create `usePortraitCapture` hook — share camera stream from face detection at higher resolution
+- Capture face frame during conversation (Canvas API → blob)
+- POST captured image to POS server `/portrait/capture` endpoint
+- Coordinate print order: definition card first, then portrait (or combined layout)
+- Improve Mode A system prompt for better text citations
+- Full end-to-end test: approach → read → converse → print (definition + portrait) → reset
+**Gate:** Complete autonomous loop with printed card showing definition + visitor portrait.
 
-</details>
+### Phase 5: Program Architecture (Post-MVP)
+**Goal:** Pluggable conversation programs and print templates.
+**Requirements:** R9
+**Tasks:**
+- Define `ConversationProgram` interface in shared package
+- Extract current behavior into `aphorism` program
+- Add `program` column to `installation_config`
+- Wire program selection through config endpoint
+- Component registry for per-program result display
+- Print template routing to POS server
+- Implement second program to validate architecture
+**Gate:** Two programs switchable via config, both produce correct output.
 
-## Progress
+## Phase Dependencies
 
-| Phase | Milestone | Plans Complete | Status | Completed |
-|-------|-----------|---------------|--------|-----------|
-| 1. Package Foundation | v1.0 | 2/2 | Complete | 2026-03-07 |
-| 2. Core Component and Hooks | v1.0 | 5/5 | Complete | 2026-03-07 |
-| 3. Adapters and Styling | v1.0 | 3/3 | Complete | 2026-03-08 |
-| 4. Validation and Publication | v1.0 | 2/2 | Complete | 2026-03-08 |
+```
+Phase 1 ──→ Phase 2 ──→ Phase 4
+                ↘         ↗
+         Phase 3 ──────→
+                          ↘
+                     Phase 5
+```
 
----
-*Roadmap created: 2026-03-07*
-*v1.0 shipped: 2026-03-08*
+Phase 1 and Phase 3 can run in parallel. Phase 2 depends on Phase 1 (SDK). Phase 4 depends on both Phase 2 and Phase 3. Phase 5 is post-MVP.

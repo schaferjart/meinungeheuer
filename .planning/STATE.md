@@ -1,41 +1,28 @@
----
-gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Karaoke Text Reader
-current_phase: null
-current_plan: null
-status: milestone_complete
-last_updated: "2026-03-08"
-progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 12
-  completed_plans: 12
----
-
 # Project State
 
-**Status:** v1.0 milestone complete — shipped 2026-03-08
+## Current Phase
+Phase 0 — Planning complete. Ready to start Phase 1.
 
-## Project Reference
+## What's Done
+- Codebase mapped (.planning/codebase/)
+- Research completed (.planning/research/)
+- Requirements defined (R1-R9)
+- Roadmap created (5 phases)
+- Root cause of conversation bug identified (ElevenLabs `end_call` tool)
 
-See: .planning/PROJECT.md (updated 2026-03-08)
-**Core value:** Buttery-smooth word highlighting synced to audio
-**Current focus:** Planning next milestone
+## What's Next
+Run `/gsd:plan-phase 1` to create detailed plan for Phase 1 (Conversation Fix + SDK Migration).
 
-## Phase Progress
+Phases 1 and 3 can run in parallel since they're independent.
 
-| Phase | Name | Status |
-|-------|------|--------|
-| 1 | Package Foundation | Complete (2/2 plans) |
-| 2 | Core Component and Hooks | Complete (5/5 plans) |
-| 3 | Adapters and Styling | Complete (3/3 plans) |
-| 4 | Validation and Publication | Complete (2/2 plans) |
+## Key Decisions
+- PWA standalone mode instead of Fullscreen API for kiosk
+- Keep Node.js bridge + Python POS server as separate services
+- POS-thermal-printer moved to apps/pos-server/ in monorepo
+- Programs as TypeScript code, not DB records (Phase 5)
+- One ElevenLabs agent, programs differentiated via prompt overrides
 
 ## Blockers
-
-None.
-
----
-*State initialized: 2026-03-07*
-*v1.0 shipped: 2026-03-08*
+- Need ElevenLabs dashboard access to remove `end_call` tool
+- Need target iPad for face detection / PWA testing
+- Need thermal printer + Pi for print testing
