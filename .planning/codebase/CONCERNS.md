@@ -1,700 +1,203 @@
-# MeinUngeheuer — Technical Concerns & Debt
-
-**Last Updated:** March 2026
-**Scope:** Full monorepo analysis (tablet, backend, printer-bridge, shared)
-
----
-
-## Technical Debt
-
-### 1. Type Safety Workarounds with ElevenLabs SDK
-
-**File(s):** `apps/tablet/src/hooks/useConversation.ts` (lines 100–164)
-
-**Issue:** The ElevenLabs React SDK (`@11labs/react`) has type mismatches between exported types and actual runtime behavior.
-
-- `useElevenLabsConversation` callback parameters do not strictly match documented types.
-- `MessagePayload`, `Role`, `DisconnectionDetails` types have minor incompatibilities.
-- No `@ts-ignore` needed currently, but the integration relies on duck typing and assumes SDK stability.
-
-**Risk:** SDK version bumps or API shifts could silently break the conversation flow without type warnings.
-
-**Mitigation:**
-- Maintain manual test suite for conversation start/end/tool-call flows.
-- Pin `@11labs/react` to a known-good version in `pnpm-lock.yaml`.
-- Consider wrapping the SDK hook in a thin validation layer that post-validates callback shapes.
-
----
-
-### 2. Blob/Uint8Array Incompatibility in TTS Audio Assembly
-
-**File(s):** `apps/tablet/src/hooks/useTextToSpeechWithTimestamps.ts` (lines 229–243)
-
-**Issue:** Browser's `Blob` constructor accepts `(BlobPart[] | string | Blob)[]` but TypeScript's type definitions are strict. The code passes `Uint8Array[]` directly.
-
-```typescript
-const blob = new Blob(binaryParts, { type: 'audio/mpeg' }); // binaryParts is Uint8Array[]
-```
-
-**Why it works:** JavaScript's Blob constructor is permissive at runtime; `Uint8Array` is a valid BlobPart.
-
-**Risk:** Future TypeScript strictness or bundler changes could fail the build without code changes.
-
-**Mitigation:**
-- Cast explicitly: `const blob = new Blob(binaryParts as BlobPart[], ...)`
-- Or wrap: `const blob = new Blob([...binaryParts], ...)`
-
----
-
-### 3. Fire-and-Forget Async Operations Without Error Tracking
-
-**Files affected:**
-- `apps/backend/src/routes/webhook.ts` line 253: `void generateEmbedding(definitionId)`
-- `apps/tablet/src/lib/ttsCache.ts` lines 47–77: `storeTtsCache()` fire-and-forget
-- `apps/tablet/src/lib/persist.ts` lines 7–39: `persistDefinition()` fire-and-forget
-- `apps/printer-bridge/src/index.ts` line 176: `processJob().catch()`
-
-**Issue:** These async operations are intentionally not awaited to avoid blocking the UI or main thread. However, failures are only logged to console and not tracked in any metrics/observability system.
-
-**Risk:**
-- Silent failures: If embedding generation fails consistently, the system has no alerting mechanism.
-- Printer jobs fail but webhook still returns 200 OK.
-- TTS cache writes fail but the user doesn't know (they re-fetch from API).
-
-**Current Handling:** Errors logged to console only. No retry logic, no dead-letter queue, no monitoring.
-
-**Mitigation:**
-- Add a simple error counter / last-error timestamp to Supabase for observability.
-- Implement retry logic with exponential backoff for critical operations (embeddings, print jobs).
-- Log to external service (Sentry, LogRocket, etc.) if available.
-
----
-
-### 4. Insufficient Input Validation at API Boundaries
-
-**Files affected:**
-- `apps/backend/src/routes/webhook.ts` line 85: Receives `definition_text` with `.min(1)` only
-- `apps/tablet/src/lib/api.ts`: Response validation is lenient (allows optional fields without defaults)
-- `apps/backend/src/routes/session.ts`: May be missing validation for visitor input
-
-**Issue:** Zod schemas validate shape but allow minimal/empty values that could degrade UX or cause downstream errors.
-
-**Risk:**
-- Empty definition text prints as blank card.
-- Missing term on session causes undefined behavior downstream.
-- Malformed chain_ref crashes printer layout engine.
-
-**Mitigation:**
-- Add stricter Zod rules: `.min(1).trim()` for text fields, disallow all-whitespace.
-- Sanitize HTML/control chars if any user input reaches the printer.
-- Add integration tests that verify round-trip with edge-case inputs.
-
----
-
-### 5. Unstable Printer Reconnection Logic
-
-**File(s):** `apps/printer-bridge/src/printer.ts`, `apps/printer-bridge/src/index.ts` (lines 32–42, 196–220)
-
-**Issue:** Printer reconnection happens via `reconnect()` function with fixed retry count and delay.
-
-- If the printer is temporarily unreachable (network hiccup), the bridge may give up after 3 attempts.
-- Heartbeat runs every 30s, so a transient 2-minute outage may be missed.
-- No exponential backoff; all retries happen at once.
-
-**Risk:**
-- Print jobs pile up if printer is briefly unavailable.
-- No graduated degradation; printer goes from "OK" to "gave up."
-- User may not realize their card didn't print.
-
-**Mitigation:**
-- Implement exponential backoff in reconnect logic.
-- Increase heartbeat frequency or add adaptive retry during detected downtime.
-- Track consecutive failures and alert (via Realtime or HTTP) when printing is unavailable.
-
----
-
-### 6. Unbounded Emoji / Unicode Handling in Printer Layout
-
-**File(s):** `apps/printer-bridge/src/layout.ts` (lines 17–44)
-
-**Issue:** The transliteration map is hardcoded and incomplete. If visitor input contains emoji or uncommon Unicode, the printer will either:
-- Silently drop the character (if charset="UTF-8" but printer doesn't support it).
-- Output garbled if charset is CP437 and the character isn't in TRANSLITERATION_MAP.
-
-**Risk:**
-- Definition containing emoji prints with missing characters.
-- Card readability degrades without warning.
-
-**Mitigation:**
-- Validate term/definition text before inserting into print_queue (remove/warn on unsupported chars).
-- Log skipped characters to help diagnose printer charset issues.
-- Consider a more robust transliteration library (e.g., `unidecode`).
-
----
-
-## Type Safety Issues
-
-### 7. Loose Record<string, unknown> in Print Payload Handling
-
-**File(s):**
-- `apps/backend/src/routes/webhook.ts` line 219: `printPayload as unknown as Record<string, unknown>`
-- `apps/printer-bridge/src/index.ts` line 148: `row.payload as Record<string, unknown>`
-
-**Issue:** Casting to `Record<string, unknown>` bypasses Zod validation until the printer bridge parses it. If the schema changes, the cast is stale.
-
-**Risk:**
-- Printer bridge receives an incorrectly shaped payload and crashes at runtime.
-- No compile-time safety across the backend→printer boundary.
-
-**Mitigation:**
-- Remove the `as unknown` cast; pass `PrintPayload` directly (already Zod-validated).
-- Update Supabase type to reflect this explicitly in the insert.
-
----
-
-### 8. Implicit Type Coercion in ElevenLabs Tool Parameters
-
-**File(s):** `apps/tablet/src/hooks/useConversation.ts` lines 144–162
-
-**Issue:** The `save_definition` tool receives `parameters: Record<string, unknown>` and casts fields to strings manually:
-
-```typescript
-term: String(parameters['term'] ?? term),
-definition_text: String(parameters['definition_text'] ?? ''),
-```
-
-This assumes the agent always returns these keys. If the agent (or ElevenLabs) changes the tool schema, no error is raised—the defaults silently kick in.
-
-**Risk:**
-- Definition gets saved with wrong term or empty text without alerting.
-- Difficult to debug because the error is silent.
-
-**Mitigation:**
-- Use Zod to validate the `parameters` object before coercion.
-- Add console warnings if fallbacks are used.
-- Test with mocked agent responses that omit fields.
-
----
-
-### 9. Weak Typing of Admin Page Authentication
-
-**File(s):** `apps/tablet/src/pages/Admin.tsx` (entire file)
-
-**Issue:** Admin dashboard is protected only by checking `?admin=true` in URL and using a single `VITE_WEBHOOK_SECRET` environment variable.
-
-- `VITE_` prefix means this secret is shipped to the browser.
-- No session tokens, no CSRF protection, no rate limiting on sensitive operations (reset chain, etc.).
-
-**Risk:**
-- Anyone with access to the tablet can reach the admin page and reset the installation state.
-- The "secret" is visible in the network panel or bundle.
-
-**Mitigation:**
-- Move admin functions to the backend with proper authentication (API key in Authorization header, not in URL).
-- Remove `?admin=true` check from the tablet app entirely.
-- If an admin UI is needed on the tablet, require an operator to enter a PIN or scan a code at startup.
-
----
-
-### 10. Missing Null Checks in Supabase Response Handling
-
-**File(s):**
-- `apps/backend/src/routes/webhook.ts` line 119: `!newSession` check but then immediately uses `newSession`
-- `apps/backend/src/services/chain.ts` line 60: Cast to `Definition` without full validation
-
-**Issue:** Supabase `.single()` can return partial data or unexpected shape. The code assumes fields exist without explicit checks.
-
-**Risk:**
-- Null pointer errors at runtime if Supabase schema or RLS policies change.
-
-**Mitigation:**
-- Use Zod to validate all Supabase responses, not just the top-level shape.
-- Test with empty/malformed rows to ensure graceful degradation.
-
----
+# Codebase Concerns
+
+**Analysis Date:** 2026-03-08
+
+## Tech Debt
+
+**Session creation never called from tablet:**
+- Issue: The tablet defines `startSession()` in `apps/tablet/src/lib/api.ts` (line 78) and the state machine has a `SET_SESSION_ID` action in `apps/tablet/src/hooks/useInstallationMachine.ts` (line 49), but neither is ever used. The tablet never creates a server-side session before starting a conversation. Sessions are only created reactively when the webhook fires (if no session exists for that `elevenlabs_conversation_id`).
+- Files: `apps/tablet/src/lib/api.ts`, `apps/tablet/src/hooks/useInstallationMachine.ts`, `apps/tablet/src/App.tsx`
+- Impact: Definitions persisted directly by the tablet (`apps/tablet/src/lib/persist.ts`) have `session_id: null` because no session exists yet. The webhook creates a minimal session retroactively, but the tablet's own persist call happens first with a null session. This means the tablet-persisted definition row and the webhook-persisted session are disconnected. Duplicate definition rows can also appear (one from tablet, one from webhook) mitigated only by the `23505` duplicate key catch.
+- Fix approach: Either (a) call `startSession` from `App.tsx` when entering the conversation screen and dispatch `SET_SESSION_ID`, then pass the session ID to `persistDefinition`, or (b) remove the dead `startSession` function and `SET_SESSION_ID` action to reduce confusion, and rely entirely on the webhook path for session/definition creation.
+
+**Orphan `packages/core` directory:**
+- Issue: `packages/core/` exists with only `dist/` and `node_modules/` folders -- no `package.json`, no source code. The `pnpm-workspace.yaml` includes `packages/*`, so this empty package may cause workspace resolution noise.
+- Files: `packages/core/`
+- Impact: Minimal runtime impact, but confusing for developers exploring the project.
+- Fix approach: Delete `packages/core/` entirely.
+
+**Duplicate `TranscriptEntry` type definition:**
+- Issue: `TranscriptEntry` is defined in both `apps/tablet/src/hooks/useConversation.ts` (line 16) and `apps/tablet/src/components/screens/ConversationScreen.tsx` (line 5) with slightly different shapes (the hook version has `timestamp`, the screen version uses `Role` from shared types).
+- Files: `apps/tablet/src/hooks/useConversation.ts`, `apps/tablet/src/components/screens/ConversationScreen.tsx`
+- Impact: Type divergence risk. If one is updated and the other is not, mismatches can occur. Currently compatible because `App.tsx` passes the hook's transcript to the screen component and TypeScript structurally matches them.
+- Fix approach: Define a single `TranscriptEntry` type in `packages/shared/src/types.ts` and import it in both locations.
+
+**Print test button is a no-op:**
+- Issue: The admin `insertPrintTest` function in `apps/tablet/src/pages/Admin.tsx` (line 133) sends an empty `{}` body to the config update endpoint instead of inserting an actual print queue job. The comment acknowledges this: "Real print test would hit a dedicated endpoint."
+- Files: `apps/tablet/src/pages/Admin.tsx` (lines 133-145)
+- Impact: The "Send Print Test" button in the admin UI does nothing useful -- it just confirms auth works.
+- Fix approach: Create a `POST /api/print-test` endpoint on the backend that inserts a test payload into `print_queue`, then call it from the admin.
+
+**`voice_id` hardcoded to `'unknown'` in TTS cache writes:**
+- Issue: When the tablet writes to the `tts_cache` table via the Supabase cache adapter, it sets `voice_id` to the literal string `'unknown'` because the generic `CacheAdapter` interface does not carry the voice ID.
+- Files: `apps/tablet/src/lib/supabaseCacheAdapter.ts` (line 45)
+- Impact: Cache entries cannot be distinguished by voice. If the voice ID is changed, stale cached audio with the old voice will be served because the cache key (SHA-256 of text + voiceId) should differentiate them, but the stored metadata is inaccurate for debugging or manual cache management.
+- Fix approach: Pass the voice ID through the cache adapter constructor or extend the `CacheAdapter` interface to include metadata.
+
+## Known Bugs
+
+**Auto-wake bypasses face detection:**
+- Symptoms: The app immediately dispatches `WAKE` on mount (line 107-110 in `apps/tablet/src/App.tsx`) regardless of face detection state. The `CameraDetector` component also runs and will fire `onWake`, but the auto-wake effect fires first, making face-detection-based wake redundant.
+- Files: `apps/tablet/src/App.tsx` (lines 106-110)
+- Trigger: Every page load.
+- Workaround: This appears intentional for development/testing ("auto-wake: start immediately"), but it defeats the art installation's sleep-to-wake flow. For production, this effect should be removed so the tablet waits for face detection or tap.
+
+**`handleConversationEnd` has stale closure over `state.screen`:**
+- Symptoms: The `handleConversationEnd` callback in `apps/tablet/src/App.tsx` (line 136) depends on `state.screen` and `state.definition` in its dependency array. However, it is passed to `useConversation` which stores it in a ref, so the ref update and the callback's closure may be out of sync during rapid state transitions. If the conversation ends exactly while a screen transition is happening, the fallback definition may fire incorrectly.
+- Files: `apps/tablet/src/App.tsx` (lines 136-157)
+- Trigger: Agent disconnects during a rapid screen transition.
+- Workaround: In practice this is rare due to the sequential nature of the flow.
 
 ## Security Considerations
 
-### 11. Anon Key Used for Sensitive Operations
+**CORS set to `origin: '*'` on backend:**
+- Risk: The backend allows requests from any origin. While acceptable for an art installation with a single tablet client, this means any website can make authenticated requests if they know the `WEBHOOK_SECRET`.
+- Files: `apps/backend/src/app.ts` (lines 15-22)
+- Current mitigation: The installation runs on a private network. Admin endpoints require the `WEBHOOK_SECRET`.
+- Recommendations: Restrict CORS to the tablet's origin (e.g., the Coolify deployment URL) in production.
 
-**File(s):** `apps/printer-bridge/src/index.ts` line 47, `apps/tablet/src/lib/supabase.ts`
+**No rate limiting on backend API:**
+- Risk: All endpoints (webhook, session creation, config reads) have no rate limiting. A malicious actor on the network could flood the database with sessions, definitions, or print jobs.
+- Files: `apps/backend/src/app.ts`, all route files under `apps/backend/src/routes/`
+- Current mitigation: Installation operates on a controlled network.
+- Recommendations: Add basic rate limiting middleware (e.g., `hono-rate-limiter`) on mutation endpoints, at minimum on `/webhook/definition` and `/api/session/start`.
 
-**Issue:** The anon key is used to update `print_queue` status and read `installation_config`. In production, the anon key can be extracted from the browser (VITE_* prefix) or the printer bridge binary.
+**Webhook secret bypassed when not configured:**
+- Risk: Both the webhook middleware (`apps/backend/src/routes/webhook.ts` line 17) and admin middleware (`apps/backend/src/routes/config.ts` line 19) skip auth entirely if `WEBHOOK_SECRET` is unset. This is documented as "dev mode" but there is no warning if the backend is deployed to production without the secret.
+- Files: `apps/backend/src/routes/webhook.ts` (lines 13-20), `apps/backend/src/routes/config.ts` (lines 13-23)
+- Current mitigation: `.env.example` documents the variable.
+- Recommendations: Log a prominent warning at startup if `WEBHOOK_SECRET` is not set.
 
-**Risk:**
-- Malicious actor could update print_queue status directly, preventing cards from printing.
-- Could modify installation_config to change the installation state without backend validation.
+**Admin secret exposed in URL query string:**
+- Risk: The admin page reads the secret from `?secret=xxx` in the URL (`apps/tablet/src/pages/Admin.tsx` line 154). Query strings appear in browser history, server logs, and network tabs.
+- Files: `apps/tablet/src/pages/Admin.tsx` (lines 152-154)
+- Current mitigation: Admin is accessed only during setup on a controlled network.
+- Recommendations: Use a session cookie or Authorization header instead of query parameters.
 
-**Current RLS Protection:** Policies restrict anon to specific operations, but they are permissive:
-- `tablet_insert_sessions` allows inserting any session.
-- `printer_update_print_queue` allows updating status to any valid state.
+**Anon key can insert definitions and turns without authentication:**
+- Risk: RLS policies allow the `anon` role to INSERT into `definitions` (migration 007), `sessions`, and `turns` (migration 004) with `WITH CHECK (true)`. Anyone with the anon key can insert arbitrary data.
+- Files: `supabase/migrations/004_rls.sql`, `supabase/migrations/007_anon_insert_definitions.sql`
+- Current mitigation: The anon key is only embedded in the tablet app (a controlled device). Not exposed publicly.
+- Recommendations: For a public-facing deployment, add constraints (e.g., require a valid session_id FK, limit insert rate via PostgreSQL functions).
 
-**Mitigation:**
-- Use service role key for write operations; keep anon key read-only where possible.
-- Add a `session_secret` token to sessions table; validate it in UPDATE policies.
-- Rate-limit anonymous writes per IP.
-- Log all administrative state changes to an audit table.
+## Performance Bottlenecks
 
----
+**`chain_depth` counting is a full table scan:**
+- Problem: In the webhook definition handler, chain depth is calculated by counting all definitions where `chain_depth IS NOT NULL` via `SELECT * ... count: 'exact'`. This scans the entire definitions table on every Mode C definition save.
+- Files: `apps/backend/src/routes/webhook.ts` (lines 141-145)
+- Cause: No targeted index; the query counts ALL rows with non-null chain_depth rather than reading the max value.
+- Improvement path: Replace with `SELECT MAX(chain_depth) FROM definitions WHERE chain_depth IS NOT NULL` and add 1, or read the current chain_state depth directly.
 
-### 12. Webhook Secret Validation is Optional
+**Session count for print card is a full table scan:**
+- Problem: Every definition save counts ALL sessions to generate `session_number` for the print card: `SELECT * FROM sessions ... count: 'exact', head: true`.
+- Files: `apps/backend/src/routes/webhook.ts` (lines 180-182)
+- Cause: No alternative to counting all rows. With thousands of sessions, this degrades.
+- Improvement path: Store a running counter in `installation_config` and increment atomically on each session.
 
-**File(s):** `apps/backend/src/routes/webhook.ts` lines 13–33
+**MediaPipe WASM loaded from CDN on every page load:**
+- Problem: The face detection model and WASM runtime are fetched from `cdn.jsdelivr.net` every time the app loads. No service worker caches these assets.
+- Files: `apps/tablet/src/hooks/useFaceDetection.ts` (lines 35-39)
+- Cause: CDN URLs without local caching strategy.
+- Improvement path: Bundle the WASM files locally or add a service worker with cache-first strategy for the CDN assets.
 
-**Issue:** If `WEBHOOK_SECRET` environment variable is not set, webhook authentication is skipped entirely.
-
-```typescript
-if (!secret) {
-  await next();
-  return;
-}
-```
-
-**Risk:**
-- In development, this is fine. In production, if the secret is accidentally omitted, the webhook accepts any request.
-- Anyone could POST to `/webhook/definition` and create fake definitions.
-
-**Mitigation:**
-- Make `WEBHOOK_SECRET` required in production (check `NODE_ENV` or a separate `REQUIRE_WEBHOOK_SECRET` flag).
-- Add warning logs if secret is missing.
-- Return 400 (not 403/401) if secret is invalid, to avoid leaking that the endpoint exists.
-
----
-
-### 13. No Rate Limiting on Public API Endpoints
-
-**File(s):** `apps/backend/src/routes/session.ts`, `apps/backend/src/routes/config.ts`
-
-**Issue:** The tablet can call `/api/session/start` and `/api/config` without rate limiting. A malicious client could spam these endpoints.
-
-**Risk:**
-- Denial of service: create thousands of sessions, exhaust Supabase quota.
-- ElevenLabs agent creation is rate-limited by ElevenLabs, but before reaching that, you could exhaust Supabase write quota.
-
-**Mitigation:**
-- Add rate limiting middleware (Redis-backed or Hono built-in).
-- Limit by IP and/or anon key.
-- Return 429 (Too Many Requests) when exceeded.
-
----
-
-### 14. Credentials Embedded in Environment Files
-
-**Files affected:** `.env` files (not checked in, but developer workflows)
-
-**Issue:** If `.env` files are accidentally committed, they expose API keys (OPENROUTER_API_KEY, ElevenLabs credentials, etc.).
-
-**Current State:** `.env.example` files exist and show the required shape, but developers must be disciplined.
-
-**Risk:**
-- One misplaced commit leaks all credentials.
-- CI/CD logs may echo environment variables.
-
-**Mitigation:**
-- Ensure `.env` is in `.gitignore` (already done).
-- Use GitHub Secrets for CI/CD, not .env files.
-- Rotate credentials if they are ever exposed.
-- Add a pre-commit hook to prevent accidental commits of .env files.
-
----
-
-## Performance Concerns
-
-### 15. TTS with-timestamps API Fragmentation
-
-**File(s):** `apps/tablet/src/hooks/useTextToSpeechWithTimestamps.ts` (lines 172–223)
-
-**Issue:** The hook splits long texts into chunks (200-word chunks by default) to avoid API limits. Each chunk is fetched separately, then concatenated.
-
-**Risk:**
-- If a text is very long (1000+ words), there will be 5+ API calls.
-- Time offset recalculation could be off by floating-point errors.
-- If one chunk fails, the entire TTS is abandoned (no partial retry).
-
-**Performance Impact:**
-- Mode A (text_term) with Kleist's essay (~2500 words) → ~12 API calls on first load.
-- Cache mitigates this, but cache misses are expensive.
-
-**Mitigation:**
-- Consider increasing chunk size or requesting a higher limit from ElevenLabs.
-- Add granular error handling: if one chunk fails, mark that section as "TTS unavailable" and continue.
-- Pre-warm the cache with common texts during installation setup.
-
----
-
-### 16. Animation Frame Loop Never Pauses
-
-**File(s):** `apps/tablet/src/hooks/useTextToSpeechWithTimestamps.ts` lines 272–309
-
-**Issue:** The `updateActiveWord` callback calls `requestAnimationFrame` unconditionally, even when the audio is paused or not playing.
-
-```typescript
-const updateActiveWord = useCallback(() => {
-  // ... logic ...
-  animationFrameRef.current = requestAnimationFrame(updateActiveWord);
-}, []);
-```
-
-**Risk:**
-- The loop runs at 60 fps (or screen refresh rate) even when no highlighting is needed.
-- Battery drain on tablets / mobile devices.
-- Unnecessary CPU usage when the user has moved away from the text reader.
-
-**Mitigation:**
-- Only schedule next frame when `status === 'playing'`.
-- Add a visibility API check to pause the loop when the tab/screen is not visible.
-
----
-
-### 17. No Pagination on Supabase List Operations
-
-**File(s):**
-- `apps/backend/src/services/chain.ts` line 102: Fetches all definitions with `chain_depth != null` without limit
-- `apps/printer-bridge/src/index.ts` line 134: Fetches all pending jobs without limit
-
-**Issue:** If the system has thousands of chained definitions or print jobs, these queries load everything into memory.
-
-**Risk:**
-- High memory usage on the backend or printer bridge.
-- Slow response times as the list grows.
-
-**Mitigation:**
-- Add `.limit(1000)` or implement cursor-based pagination.
-- Test with large datasets (10k+ records) to identify performance cliffs.
-
----
+**TTS cache stores base64 audio in Supabase JSONB:**
+- Problem: TTS audio is stored as an array of base64-encoded strings in a JSONB column in the `tts_cache` table. For long texts, this can be multiple MB of base64 data per row.
+- Files: `supabase/migrations/006_kreativitaetsrant_and_tts_cache.sql`, `apps/tablet/src/lib/supabaseCacheAdapter.ts`
+- Cause: Design choice for simplicity (no separate file storage needed).
+- Improvement path: Move audio blobs to Supabase Storage and store only a reference in the cache table. This reduces database size and allows streaming.
 
 ## Fragile Areas
 
-### 18. Face Detection Model Dependency on CDN
+**`advanceChain` is not atomic:**
+- Files: `apps/backend/src/services/chain.ts` (lines 69-91)
+- Why fragile: `advanceChain` performs two separate database operations (deactivate old entries, insert new entry) without a transaction. If the process crashes between deactivate and insert, the chain has no active entry, and Mode C visitors see no context.
+- Safe modification: Wrap both operations in a Supabase RPC (PostgreSQL function) that runs in a single transaction.
+- Test coverage: No tests for `chain.ts`. The chain service is completely untested.
 
-**File(s):** `apps/tablet/src/hooks/useFaceDetection.ts` lines 35–39
+**Dual definition persistence (tablet + webhook):**
+- Files: `apps/tablet/src/lib/persist.ts`, `apps/backend/src/routes/webhook.ts`
+- Why fragile: Definitions are saved from two independent paths: the tablet calls `persistDefinition` directly via Supabase anon key, and the ElevenLabs webhook calls the backend which also inserts. Both paths insert with `session_id: null` from the tablet side. The dedup relies on the `id` field (tablet generates a UUID via `crypto.randomUUID()`) and the `23505` unique constraint error code. But the webhook creates its own definition row with a different ID, so duplicates with different IDs can exist.
+- Safe modification: Choose one canonical path for definition creation. Either (a) remove tablet-side persist and rely entirely on the webhook, or (b) have the tablet create the session first and only persist from the tablet.
+- Test coverage: No integration tests verify the dual-write scenario.
 
-**Issue:** The face detection model is loaded from a CDN at runtime:
-- MEDIAPIPE_CDN: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm`
-- MODEL_URL: `https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite`
+**`App.tsx` is a 297-line monolith orchestrator:**
+- Files: `apps/tablet/src/App.tsx`
+- Why fragile: The main `InstallationApp` component manages the state machine, conversation hook, config fetching, definition handling, transcript persistence, screen rendering, and multiple `useEffect` side effects. Changes to any one concern risk breaking others.
+- Safe modification: Extract each concern into its own hook (e.g., `useConfigFetch`, `useConversationLifecycle`, `useScreenRouter`). Keep `App.tsx` as a thin composition layer.
+- Test coverage: No tests for `App.tsx`. The state machine itself (`useInstallationMachine`) has tests, but the orchestration logic does not.
 
-**Risk:**
-- If jsdelivr is down, camera detection fails silently.
-- If the CDN URLs change or Google moves the model, detection breaks.
-- In an air-gapped installation, this won't work at all.
+**Conversation end fallback creates a German-only stub:**
+- Files: `apps/tablet/src/App.tsx` (lines 143-154)
+- Why fragile: When the conversation ends without a definition (agent disconnects), the fallback creates a stub definition with `definition_text: 'Die Unterhaltung wurde beendet.'` (German only), regardless of the visitor's language. This stub gets persisted and printed.
+- Safe modification: Use the `language` state to select the appropriate fallback text.
+- Test coverage: None.
 
-**Current Fallback:** The component logs a warning and the user can still tap the SleepScreen to wake manually. But this is a degraded UX.
+## Scaling Limits
 
-**Mitigation:**
-- Bundle the WASM runtime and model files locally (increases bundle size ~5MB).
-- Implement a fallback: if CDN fails, emit a warning and rely on tap-to-start.
-- Test both online and offline scenarios during development.
+**Single-row installation_config table:**
+- Current capacity: 1 installation.
+- Limit: The architecture assumes a single `installation_config` row. Multiple tablets or installations sharing the same Supabase project would conflict.
+- Scaling path: Add an `installation_id` column to `installation_config`, `sessions`, and `print_queue`. Pass the installation ID as an env var to each tablet.
 
----
+**Supabase Realtime for print queue:**
+- Current capacity: Works well for 1 printer bridge instance with low throughput (1 job every few minutes).
+- Limit: Supabase Realtime has connection limits on free tier (200 concurrent). If multiple printer bridges subscribe, or if the Realtime connection drops and reconnects without draining, jobs may be processed twice (no dedup beyond the `status` claim pattern).
+- Scaling path: The current claim pattern (`UPDATE ... WHERE status='pending'`) provides basic idempotency. For multiple printers, add a `claimed_by` column.
 
-### 19. Audio Playback Permission Denied Silently
+## Dependencies at Risk
 
-**File(s):** `apps/tablet/src/hooks/useTextToSpeechWithTimestamps.ts` lines 495–500
+**ElevenLabs SDK (`@11labs/react`):**
+- Risk: The project has pre-existing type mismatches with the SDK (documented in CLAUDE.md memory): `MessagePayload`, `connectionType`, `Uint8Array/BlobPart` incompatibility. These are worked around with type annotations in `apps/tablet/src/hooks/useConversation.ts`.
+- Impact: SDK upgrades may break the workarounds. The SDK is the critical path for the entire conversation flow.
+- Migration plan: Pin the SDK version strictly. Test any upgrade in isolation before merging.
 
-**Issue:** If the browser blocks audio autoplay (common on mobile), the promise rejection is caught but the status stays in 'ready' instead of showing an error.
+**MediaPipe CDN pinned to specific version:**
+- Risk: `useFaceDetection.ts` pins `@mediapipe/tasks-vision@0.10.32` in the CDN URL. If jsdelivr CDN has an outage or removes the version, face detection breaks silently (falls back to tap-to-start).
+- Impact: Face detection becomes unavailable.
+- Migration plan: Self-host the WASM files or use a fallback CDN.
 
-```typescript
-audio.play().catch((err: unknown) => {
-  console.error('[TTS] Auto-play blocked:', err);
-  // Browsers may block autoplay — stay in ready state
-  setStatus('ready');
-});
-setStatus('playing');
-```
+## Missing Critical Features
 
-**Risk:**
-- User sees the text but hears no audio (no alert).
-- User thinks the TTS is broken when it's actually a browser policy.
+**No conversation timeout:**
+- Problem: The conversation has no maximum duration. If a visitor walks away mid-conversation without the face detection triggering sleep (e.g., they step just out of frame), the ElevenLabs session stays open indefinitely, consuming API credits.
+- Blocks: Unattended cost control.
 
-**Mitigation:**
-- Set status to 'playing' only if `.play()` succeeds (move the status change into the promise resolution).
-- Show a UI prompt: "Tap the screen to start audio" if autoplay fails.
+**No language detection feedback loop:**
+- Problem: The `language` state is set to `'de'` by default and never updated based on actual visitor speech. The `language_detected` field on sessions is always `null`. The system prompt tells the agent to match the visitor's language, but the tablet UI (welcome text, button labels) stays in the default language.
+- Files: `apps/tablet/src/hooks/useInstallationMachine.ts` (line 30), `apps/tablet/src/App.tsx`
+- Blocks: Proper bilingual UX. Visitors who speak English still see German UI text for welcome, farewell, printing screens.
 
----
+**No error recovery UI for conversation failures:**
+- Problem: If `startConversation()` fails in `App.tsx` (line 188), the error is only logged to console. The visitor sees the conversation screen with no transcript and no mic activity, with no way to retry or go back.
+- Files: `apps/tablet/src/App.tsx` (lines 184-196)
+- Blocks: Graceful degradation for API outages.
 
-### 20. Cleanup Timing Issues in React Effects
+## Test Coverage Gaps
 
-**File(s):**
-- `apps/tablet/src/hooks/useFaceDetection.ts` lines 83–242: Cleanup function accesses refs that may be null
-- `apps/tablet/src/hooks/useTextToSpeechWithTimestamps.ts` lines 531–542: Cleanup may not cancel pending TTS fetch
+**Backend has zero tests:**
+- What's not tested: All backend routes (`webhook.ts`, `config.ts`, `session.ts`), all services (`chain.ts`, `embeddings.ts`, `supabase.ts`).
+- Files: `apps/backend/src/`
+- Risk: Webhook handler is the most critical path (definition save, print queue, chain advance) and has no test coverage. Any refactor could break the core loop silently.
+- Priority: High
 
-**Issue:** React cleanup functions run after unmount. If the component unmounts while a fetch is in-flight, the cleanup may try to revoke a URL that hasn't been created yet, or the fetch completes after unmount.
+**Tablet app has minimal tests:**
+- What's not tested: `App.tsx` orchestration, `useConversation.ts`, `useFaceDetection.ts`, `TextReader.tsx`, `persist.ts`, `api.ts`, all screen components, `systemPrompt.ts`, `firstMessage.ts`.
+- Files: Only `apps/tablet/src/hooks/useInstallationMachine.test.ts` exists (378 lines, tests the state machine reducer thoroughly).
+- Risk: The state machine is well-tested, but none of the side effects, API calls, or UI rendering is tested.
+- Priority: Medium (the state machine test covers the most complex logic)
 
-**Current Handling:**
-- `useFaceDetection` uses `mountedRef` to avoid setting state after unmount (good).
-- `useTextToSpeechWithTimestamps` uses a `cancelled` flag (good).
+**Printer bridge has zero tests:**
+- What's not tested: Job processing, claim logic, POS server relay, Realtime subscription handling.
+- Files: `apps/printer-bridge/src/`
+- Risk: Print failures in production would be hard to diagnose without test coverage.
+- Priority: Medium
 
-**Risk (Minor):**
-- If timing is just right, `animationFrameRef.current` could be accessed after it's been set to null.
-- No strict ordering guarantees between effect and cleanup.
-
-**Mitigation:**
-- Current code is mostly safe, but could be more explicit by always checking `mountedRef` before any state update.
-- Consider using AbortController for fetch cancellation (more standard).
-
----
-
-### 21. System Prompt Exceeds Token Limits in Some Scenarios
-
-**File(s):** `apps/tablet/src/lib/systemPrompt.ts` (entire file)
-
-**Issue:** The system prompt is very long (300+ lines, 5KB+) and injected dynamically. If the visitor's context text is also long (Kleist essay ~2500 words), the initial request to ElevenLabs could exceed token budgets.
-
-**Current Behavior:** ElevenLabs truncates or rejects oversized payloads (handled gracefully as disconnection).
-
-**Risk:**
-- Mode A with long texts may fail silently if the combined prompt + context exceeds limits.
-- No warning to the operator that the system is hitting token limits.
-
-**Mitigation:**
-- Measure system prompt size and log a warning if approaching token limits.
-- Consider using a shorter version of the system prompt for long texts.
-- Document the recommended max context text length in CLAUDE.md.
-
----
-
-### 22. ElevenLabs Conversation Disconnection Reasons Not Logged
-
-**File(s):** `apps/tablet/src/hooks/useConversation.ts` line 119
-
-**Issue:** The `onDisconnect` handler logs the disconnection reason, but doesn't provide enough detail for diagnosis.
-
-```typescript
-onDisconnect: (details: DisconnectionDetails) => {
-  console.log('[MeinUngeheuer] Disconnected, reason:', details.reason);
-  onConversationEndRef.current?.(details.reason);
-},
-```
-
-**Risk:**
-- If a visitor's conversation drops, it's hard to know if it was a network error, token limit, or intentional end.
-- No metric tracking; the logs are ephemeral.
-
-**Mitigation:**
-- Log additional details: `details.code`, conversation duration, last message content (first 100 chars).
-- Store disconnection events in Supabase for analysis.
-- Show operator a badge: "Conversation ended unexpectedly" if reason is not 'agent' or 'visitor'.
+**No integration or E2E tests:**
+- What's not tested: The full flow from tablet wake to definition print. No test verifies that the webhook correctly creates a session, inserts a definition, queues a print job, and advances the chain in sequence.
+- Files: No test infrastructure for cross-app testing exists.
+- Risk: Breaking changes in one app (e.g., changing a webhook payload shape) could go undetected.
+- Priority: High
 
 ---
 
-## Missing Features / Incomplete Implementations
-
-### 23. No Conversation Timeout Handling
-
-**File(s):** State machine (`apps/tablet/src/hooks/useInstallationMachine.ts`), ElevenLabs integration
-
-**Issue:** If a visitor's conversation goes silent (they stop talking), there's no timeout to transition out of the `conversation` state. The UI waits indefinitely.
-
-**Current Behavior:** The 30-second printer timeout eventually kicks in and transitions to `printing` even if the definition wasn't received.
-
-**Risk:**
-- Long wait times if a visitor is thinking.
-- Definition might be incomplete if the transition happens mid-thought.
-
-**Mitigation:**
-- Add a conversation timeout (e.g., 5 minutes without a visitor turn) that transitions to `synthesizing` and prompts the agent to wrap up.
-- Or implement a "Continue?" prompt: "I'll give you 30 more seconds. Ready?" if silence is detected.
-
----
-
-### 24. No Visitor Session "Card Taken" Confirmation
-
-**File(s):** Database schema, State machine, API
-
-**Issue:** The `sessions.card_taken` field is nullable and never updated. There's no mechanism to confirm that the visitor actually took their printed card.
-
-**Risk:**
-- Metrics on "cards distributed" are unreliable.
-- If the card gets stuck in the printer, the system doesn't know.
-
-**Mitigation:**
-- Add a button or tap-to-confirm on the `FarewellScreen` that updates `card_taken = true`.
-- Or use a passive optical sensor on the printer to detect card removal.
-- Track this metric in the admin dashboard.
-
----
-
-### 25. No Embedded Metrics or Observability Dashboard
-
-**File(s):** Entire backend, no metrics middleware
-
-**Issue:** There's no built-in observability. The only way to understand what's happening is to tail logs or query Supabase directly.
-
-**Missing:**
-- Request duration metrics (API latency).
-- Error rates by endpoint.
-- ElevenLabs conversation success rate.
-- Print job failure reasons.
-- Cache hit/miss rates for TTS.
-
-**Risk:**
-- Operator can't diagnose why the installation is slow or failing.
-- No data-driven debugging.
-
-**Mitigation:**
-- Add a simple middleware to count requests/errors by route.
-- Store event summaries in a `metrics` table (counters, recent errors).
-- Build a basic admin dashboard that queries this table.
-- Or integrate with an external service (Sentry, Datadog, etc.).
-
----
-
-### 26. Chain Mode (Mode C) Not Fully Tested
-
-**File(s):** `apps/backend/src/services/chain.ts`, `apps/backend/src/routes/webhook.ts` lines 200–215
-
-**Issue:** Mode C logic is implemented but the interaction between:
-- Fetching the active chain definition for a new session.
-- Advancing the chain after a definition is saved.
-- Handling race conditions if two definitions are saved in quick succession.
-
-...has not been validated in an end-to-end test.
-
-**Risk:**
-- Chain might loop back or skip a step under concurrent conditions.
-- The `definition_id` might be null in the fetched chain_state.
-- Operator starts Mode C, visitors see no context, Mode C silently breaks.
-
-**Mitigation:**
-- Write integration tests that:
-  1. Insert a text and start Mode A.
-  2. Receive a definition.
-  3. Advance the chain.
-  4. Start a new session in Mode C and verify the context is the previous definition.
-  5. Repeat 2–4 and check chain depth increments.
-- Test with simulated concurrent definitions.
-
----
-
-### 27. No Operator Control of Installation State During Live Session
-
-**File(s):** Admin page, Installation config
-
-**Issue:** An operator can change the mode / term via the admin page, but there's no verification that the change doesn't disrupt an in-progress session. If a visitor is mid-conversation and the operator changes the mode, the UI state machine might be confused.
-
-**Current Behavior:** The tablet fetches config once at startup. Mid-session config changes are ignored.
-
-**Risk:**
-- Operator accidentally changes the term mid-session → definition gets saved for the wrong term.
-- Operator enables Mode C but the backend has no active chain_state → session fails.
-
-**Mitigation:**
-- Lock the config during an active session (disable edits if a session is in progress).
-- Or notify the frontend of config changes via Realtime and pause the current session gracefully.
-- Show the current session state in the admin dashboard (status, elapsed time, definition received or not).
-
----
-
-### 28. Printer Bridge Doesn't Validate Printer Connectivity Before Starting
-
-**File(s):** `apps/printer-bridge/src/index.ts` lines 244–256
-
-**Issue:** The printer bridge starts successfully even if the printer is unreachable. It logs a warning and continues, hoping the printer will be available later.
-
-**Risk:**
-- Print jobs accumulate in the queue while the printer is offline.
-- No alerting to the operator that printing is unavailable.
-- After hours, jobs might be stuck.
-
-**Mitigation:**
-- Make printer connectivity a hard requirement for startup (require `--allow-offline` flag to tolerate temporary unavailability).
-- Or add a background health check that inserts a warning into Supabase if the printer is offline for >5 minutes.
-- Show printer status in the operator dashboard.
-
----
-
-### 29. No Graceful Shutdown of TTS Playback on State Transition
-
-**File(s):** `apps/tablet/src/components/screens/TextDisplayScreen.tsx`, TTS hook integration
-
-**Issue:** If the user is mid-playback and the state machine transitions away (e.g., to `term_prompt`), the audio keeps playing in the background.
-
-**Current Behavior:** Depends on component cleanup. If the TextReader is unmounted, the audio should stop, but the effect cleanup may race with the state change.
-
-**Risk:**
-- Visitor hears overlapping audio from multiple screens.
-- Battery drain if audio buffer isn't cleared.
-
-**Mitigation:**
-- Explicitly call `pause()` on the TTS hook before transitioning states.
-- Or add a `onStateChange` callback to the TTS hook to auto-pause.
-
----
-
-### 30. No Support for Multiple Languages in UI
-
-**File(s):** All screen components, system prompt, first message
-
-**Issue:** The UI (screens, buttons, labels) is hardcoded in German with some English. The system prompt is built dynamically with `language`, but the UI itself is not translatable.
-
-**Risk:**
-- If installation needs to support English-speaking visitors, the UI remains in German.
-- Operator can't change language per session independently of mode.
-
-**Current State:**
-- `language` is passed to ElevenLabs (affects agent voice and first message).
-- But the tablet UI (welcome screen, farewell, etc.) doesn't change.
-
-**Mitigation:**
-- Extract UI strings to a JSON file keyed by language.
-- Wrap components in a `useLanguage()` hook that reads the current language from state/config.
-- Test with German and English variants of all screens.
-
----
-
-## Summary Table
-
-| Severity | Category | Count | Examples |
-|----------|----------|-------|----------|
-| **High** | Security | 3 | Anon key for sensitive ops, optional webhook auth, no rate limiting |
-| **High** | Type Safety | 3 | SDK type mismatches, loose Record<> casts, weak admin auth |
-| **High** | Missing Features | 3 | No timeout, no observability, Mode C untested |
-| **Medium** | Debt | 6 | Fire-and-forget ops, input validation, printer reconnect, unicode handling |
-| **Medium** | Performance | 3 | TTS fragmentation, animation loop, unbounded queries |
-| **Medium** | Fragile | 3 | CDN dependency, audio permission silent failure, cleanup timing |
-| **Low** | Polish | 3 | Session confirmation, config locking, language support |
-| | **TOTAL** | **24** | |
-
----
-
-## Recommended Action Items (Priority Order)
-
-### Urgent (P0 — Do Before Next Installation)
-1. **Security:** Move admin operations to backend with proper auth.
-2. **Observability:** Add basic error counting and recent-failures tracking.
-3. **Mode C Testing:** Write e2e test for chain advance + context fetch.
-
-### Short Term (P1 — Before Feature Releases)
-4. Wrap Zod validation around all Supabase responses.
-5. Implement conversation timeout handling.
-6. Add rate limiting to public API endpoints.
-7. Test TTS with long texts and edge-case Unicode.
-
-### Medium Term (P2 — Polish & Scaling)
-8. Implement exponential backoff for printer reconnection.
-9. Add session state visibility to admin dashboard.
-10. Implement graceful TTS cleanup on state transitions.
-11. Add language support to UI.
-
-### Low Priority (P3 — Nice to Have)
-12. Pre-warm TTS cache.
-13. Add card-taken confirmation.
-14. Optimize animation frame loop with visibility API.
-15. Comprehensive metrics dashboard.
-
----
-
-## Testing Recommendations
-
-- **Unit Tests:** Increase coverage for system prompt generation, word wrapping, transliteration.
-- **Integration Tests:** Add Mode C chain flow, concurrent definition handling.
-- **E2E Tests:** Full visitor flow (sleep → welcome → text/term → conversation → definition → print → farewell).
-- **Edge Cases:** Empty definitions, very long texts, no network, offline printer, camera denied, autoplay blocked.
-- **Stress Tests:** 1000+ sessions in rapid succession, printer offline for hours.
-
----
-
-**Document Created:** March 7, 2026
-**Prepared by:** Code analysis agent
-**Next Review:** After P0 items completed
+*Concerns audit: 2026-03-08*

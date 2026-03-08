@@ -1,263 +1,188 @@
 # Technology Stack
 
-## Languages & Runtime
+**Analysis Date:** 2026-03-08
 
-- **Language:** TypeScript 5.7.3 (strict mode enabled)
-- **Runtime:** Node.js 20.0.0+ (minimum specified in root `package.json`)
-- **Module System:** ESM (type: "module" in all package.json files)
-- **Bundler/Build:** Vite 6.1.0 (tablet), tsc (backend, printer-bridge, shared)
+## Languages
 
-## Package Manager
+**Primary:**
+- TypeScript 5.7+ — All application code across every workspace package
 
-- **pnpm** with workspace support (`pnpm-workspace.yaml`)
-- **pnpm-lock.yaml** for reproducible installs
-- Only built dependency: esbuild (configured in `onlyBuiltDependencies`)
+**Secondary:**
+- SQL — Supabase migrations in `supabase/migrations/*.sql`
+- CSS — Tailwind v4 in tablet app (`apps/tablet/src/index.css`), plain CSS in karaoke-reader (`packages/karaoke-reader/src/styles.css`)
+
+## Runtime
+
+**Environment:**
+- Node.js >= 20.0.0 (enforced in root `package.json` `engines` field)
+- Browser (tablet app runs in kiosk-mode browser on a physical tablet)
+
+**Package Manager:**
+- pnpm 9.x (lockfile version 9.0)
+- Lockfile: present (`pnpm-lock.yaml`)
+- Corepack enabled in Docker builds (`corepack enable && corepack prepare pnpm@latest`)
 
 ## Monorepo Structure
 
+**Workspace definition:** `pnpm-workspace.yaml`
 ```
-apps/
-  ├── tablet/           (React 18 web app, Vite, port 3000)
-  ├── backend/          (Hono server, port 3001)
-  └── printer-bridge/   (Node.js service, local execution)
-packages/
-  └── shared/           (Types, Supabase client, constants)
+packages:
+  - 'apps/*'
+  - 'packages/*'
 ```
 
-Each workspace has independent `package.json` and `tsconfig.json` (extends `tsconfig.base.json`).
+**Workspace packages:**
+| Package | Name | Type |
+|---------|------|------|
+| `apps/tablet` | `@meinungeheuer/tablet` | React SPA (Vite) |
+| `apps/backend` | `@meinungeheuer/backend` | Hono HTTP server |
+| `apps/printer-bridge` | `@meinungeheuer/printer-bridge` | Long-running Node.js process |
+| `packages/shared` | `@meinungeheuer/shared` | Shared types, Supabase client, constants |
+| `packages/karaoke-reader` | `karaoke-reader` | Publishable React library (tsup) |
 
-## Frameworks & Libraries
+**Build order matters:** `@meinungeheuer/shared` and `karaoke-reader` must build first — other packages import from their compiled output.
 
-### Tablet App (`@meinungeheuer/tablet`)
+## Frameworks
 
-**Frontend Framework:**
-- React 18.3.1
-- react-dom 18.3.1
+**Core:**
+- React 18.3 — Tablet UI (`apps/tablet`)
+- Hono 4.7 — Backend HTTP framework (`apps/backend`), lightweight, Vercel-compatible
+- Vite 6.1 — Tablet dev server and build tool (`apps/tablet/vite.config.ts`)
 
-**Styling:**
-- Tailwind CSS 4.0.7
-- @tailwindcss/vite 4.0.7 (Vite plugin for CSS-first config)
-- No CSS modules or styled-components; pure Tailwind utility classes
+**Testing:**
+- Vitest 3.0 — Test runner across all packages
+- Testing Library (React 16.3, jest-dom 6.9, user-event 14.6) — Component tests in `karaoke-reader`
+- happy-dom 20.8 — DOM environment for Vitest in `karaoke-reader`
 
-**UI & Interaction:**
-- React hooks (useCallback, useEffect, useRef, useState, etc.)
-- ScreenTransition component for animated state changes
-- CameraDetector component for MediaPipe face detection
+**Build/Dev:**
+- tsc — Build step for `shared`, `backend`, `printer-bridge` (compile TS to JS)
+- tsup 8.5 — Build step for `karaoke-reader` (ESM + CJS dual output with DTS)
+- tsx 4.19 — Dev mode for `backend` and `printer-bridge` (`tsx watch --env-file=.env`)
+- `@vitejs/plugin-react` 4.3 — React Fast Refresh in Vite
+- `@tailwindcss/vite` 4.0 — Tailwind CSS v4 Vite plugin (CSS-first config, not JS config)
 
-**Voice & Audio:**
-- @11labs/react 0.2.0 (ElevenLabs Conversational AI SDK hook)
-- @11labs/client 0.2.0 (ElevenLabs client library)
-- @elevenlabs/client 0.15.0 (ElevenLabs REST client for TTS with-timestamps)
+**Linting/Formatting:**
+- Biome 2.0 — Used in `karaoke-reader` only (`packages/karaoke-reader/biome.json`)
+- No ESLint or Prettier configuration at project level (only in `karaoke-reader`)
 
-**Machine Vision:**
-- @mediapipe/tasks-vision 0.10.18 (Face Detection API)
+## Key Dependencies
 
-**State Management:**
-- Custom state machine reducer (`useInstallationMachine.ts`)
-- 9 screens: sleep → welcome → text_display → term_prompt → conversation → synthesizing → definition → printing → farewell
+**Critical:**
+- `@11labs/react` ^0.2.0 — ElevenLabs Conversational AI React SDK (WebSocket voice pipeline)
+- `@11labs/client` ^0.2.0 — ElevenLabs client SDK (low-level)
+- `@elevenlabs/client` ^0.15.0 — ElevenLabs REST API client (TTS with timestamps)
+- `@supabase/supabase-js` ^2.49.1 — Supabase client (used in all 4 packages)
+- `zod` ^3.24+ — Runtime validation at API boundaries (all packages)
+- `openai` ^4.82.0 — OpenAI-compatible SDK (used to call OpenRouter for embeddings)
 
-**Backend Communication:**
-- fetch API (native, no HTTP client library)
-- Supabase JS client for Realtime subscriptions
+**Infrastructure:**
+- `@hono/node-server` ^1.14.0 — Runs Hono on Node.js (`apps/backend/src/index.ts`)
+- `hono` ^4.7.2 — Core HTTP framework with built-in cors, logger middleware
+- `@mediapipe/tasks-vision` ^0.10.18 — In-browser face detection (tablet)
 
-**Validation & Types:**
-- zod 3.25.76 (runtime validation)
-- TypeScript interfaces for API contracts
+**Internal:**
+- `karaoke-reader` workspace:* — Word-by-word text highlighting synced to audio
+- `@meinungeheuer/shared` workspace:* — Shared types, DB client, constants
 
-**Dev Tools:**
-- @vitejs/plugin-react 4.3.4
-- @types/react 18.3.18, @types/react-dom 18.3.5
-- vitest 3.0.5 (unit testing)
+## TypeScript Configuration
 
-### Backend (`@meinungeheuer/backend`)
-
-**Framework:**
-- hono 4.7.2 (lightweight HTTP server)
-- @hono/node-server 1.14.0 (Hono Node.js adapter)
-
-**Runtime Integration:**
-- tsx 4.19.3 (TypeScript execution + watching)
-- node 22.13.4+ (via @types/node)
-
-**External APIs:**
-- openai 4.82.0 (OpenRouter SDK for text embeddings via OpenAI SDK)
-
-**Database:**
-- @supabase/supabase-js 2.49.1 (Supabase PostgreSQL client)
-
-**Validation:**
-- zod 3.24.2 (schema validation for webhook payloads)
-
-**Dev Tools:**
-- typescript 5.7.3
-- vitest 3.0.5 (minimal test runner, passWithNoTests mode)
-
-### Printer Bridge (`@meinungeheuer/printer-bridge`)
-
-**Hardware Interface:**
-- node-thermal-printer 4.4.3 (ESC/POS thermal printer control)
-
-**Database:**
-- @supabase/supabase-js 2.49.1 (Realtime subscriptions for print_queue)
-
-**Runtime:**
-- tsx 4.19.3
-
-**Validation:**
-- zod 3.24.2
-
-**Dev Tools:**
-- typescript 5.7.3
-- vitest 3.0.5
-
-### Shared Package (`@meinungeheuer/shared`)
-
-**Distribution:**
-- Compiled to `dist/index.js` with type declarations (`dist/index.d.ts`)
-- Exports via `exports` field (ESM import only)
-- Built separately before other apps in the build order
-
-**Content:**
-- Zod schemas for all database types (Session, Turn, Definition, PrintQueueRow, etc.)
-- Supabase client factory
-- Shared constants (printer config, timeouts, etc.)
-- Shared types (Mode, Role, StateName, etc.)
-
-**Dependencies:**
-- @supabase/supabase-js 2.49.1
-- zod 3.24.2
-
-## Build Tools & Configuration
-
-### TypeScript Configuration
-
-**Base:** `tsconfig.base.json`
-- Target: ES2022
-- Module: ESNext
-- Module resolution: bundler
-- Strict mode enabled
-  - noUncheckedIndexedAccess: true
-  - noUnusedLocals: true
-  - noUnusedParameters: true
-- Declaration maps and source maps enabled
-- Isolation: isolatedModules
-
-**Per-workspace overrides:**
-- Tablet: lib=["ES2022", "DOM", "DOM.Iterable"], jsx="react-jsx", noEmit=true
-- Backend: outDir="./dist", rootDir="./src", lib=["ES2022"]
-- Printer-bridge: outDir="./dist", rootDir="./src", lib=["ES2022"]
-- Shared: outDir="./dist", rootDir="./src" (publishes dist/)
-
-### Build Order
-
-Enforced in root package.json:
-```
-pnpm build
-  1. pnpm --filter @meinungeheuer/shared build
-  2. pnpm -r --filter '!@meinungeheuer/shared' build
+**Base config:** `tsconfig.base.json`
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true
+  }
+}
 ```
 
-This ensures shared types are available before other apps compile.
+**Per-package overrides:**
+- `apps/tablet/tsconfig.json`: `jsx: "react-jsx"`, `noEmit: true`, relaxes `noUnusedLocals`/`noUnusedParameters`
+- `apps/backend/tsconfig.json`: `outDir: "./dist"`, `types: ["node"]`
+- `apps/printer-bridge/tsconfig.json`: same pattern as backend
+- `packages/shared/tsconfig.json`: `outDir: "./dist"`, `rootDir: "./src"`
 
-### Vite Configuration (Tablet)
+## Configuration
 
-**File:** `apps/tablet/vite.config.ts`
-```typescript
-defineConfig({
-  plugins: [react(), tailwindcss()],
-  server: { port: 3000 }
-})
+**Environment:**
+- Each app has its own `.env` file (not committed) with `.env.example` tracking shape
+- Tablet uses `VITE_` prefix for client-side env vars (Vite convention)
+- Backend/printer-bridge use `tsx watch --env-file=.env` for env loading
+- Docker build passes `VITE_*` vars as build args
+
+**Required env vars per app:**
+
+| App | Variable | Purpose |
+|-----|----------|---------|
+| tablet | `VITE_SUPABASE_URL` | Supabase project URL |
+| tablet | `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key |
+| tablet | `VITE_ELEVENLABS_API_KEY` | ElevenLabs API key (TTS) |
+| tablet | `VITE_ELEVENLABS_AGENT_ID` | ElevenLabs agent ID (conversation) |
+| tablet | `VITE_ELEVENLABS_VOICE_ID` | ElevenLabs voice ID |
+| tablet | `VITE_BACKEND_URL` | Backend API URL |
+| backend | `SUPABASE_URL` | Supabase project URL |
+| backend | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service role key (bypasses RLS) |
+| backend | `OPENROUTER_API_KEY` | OpenRouter API key (embeddings) |
+| backend | `WEBHOOK_SECRET` | Shared secret for webhook auth |
+| backend | `PORT` | Server port (default 3001) |
+| printer-bridge | `SUPABASE_URL` | Supabase project URL |
+| printer-bridge | `SUPABASE_ANON_KEY` | Supabase anonymous key |
+| printer-bridge | `POS_SERVER_URL` | POS thermal printer server URL |
+
+## Build & Dev Commands
+
+```bash
+pnpm dev              # Start all apps in parallel
+pnpm dev:tablet       # Tablet only (Vite, port 3000)
+pnpm dev:backend      # Backend only (tsx watch, port 3001)
+pnpm dev:printer      # Printer bridge only
+pnpm build            # Build shared first, then all apps
+pnpm test             # Run all tests (Vitest)
+pnpm typecheck        # TypeScript check across workspace
+pnpm lint             # Lint all
 ```
 
-- React plugin for fast refresh
-- Tailwind CSS v4 plugin (CSS-first)
-- Development server on port 3000
-- Default SPA mode (HTML entry point: `index.html`)
+## Deployment
 
-### Environment Variables
+**Tablet:**
+- Docker 2-stage build: `node:20-slim` (build) + `nginx:alpine` (serve)
+- Dockerfile at root: `/Dockerfile`
+- Deployed via Coolify (self-hosted PaaS)
+- Accepts `VITE_*` build args for environment configuration
 
-**.env.example files define shapes:**
-
-**Tablet (`VITE_` prefix for client-side):**
-- VITE_SUPABASE_URL
-- VITE_SUPABASE_ANON_KEY
-- VITE_ELEVENLABS_API_KEY
-- VITE_ELEVENLABS_AGENT_ID
-- VITE_ELEVENLABS_VOICE_ID
-- VITE_BACKEND_URL (default: http://localhost:3001)
-
-**Backend (server-side):**
-- PORT (default: 3001)
-- SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-- OPENROUTER_API_KEY (for embeddings via openai/text-embedding-3-small)
-- WEBHOOK_SECRET (shared with ElevenLabs config)
+**Backend:**
+- Vercel serverless deployment
+- Config: `apps/backend/vercel.json` (uses `@vercel/node` builder)
+- All routes mapped to `src/index.ts`
 
 **Printer Bridge:**
-- SUPABASE_URL, SUPABASE_ANON_KEY (or SERVICE_ROLE_KEY)
-- PRINTER_CONNECTION (e.g., "usb")
-- PRINTER_VENDOR_ID, PRINTER_PRODUCT_ID
-- PRINTER_MAX_WIDTH_CHARS, PRINTER_MAX_WIDTH_MM
-- PRINTER_CHARSET (default: UTF-8)
-- PRINTER_AUTO_CUT (boolean)
+- Runs locally on Raspberry Pi or laptop near physical printer
+- Not deployed to cloud — started via `pnpm dev:printer` or `node dist/index.js`
 
-## Key Dependencies by Version
+## Platform Requirements
 
-### Core Runtime
+**Development:**
+- Node.js 20+
+- pnpm (installed via corepack)
+- ElevenLabs account (API key + agent configured in dashboard)
+- Supabase project (free tier works)
+- OpenRouter account (for embeddings)
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| react | 18.3.1 | UI framework |
-| react-dom | 18.3.1 | React DOM renderer |
-| typescript | 5.7.3 | Language & type checking |
-| zod | 3.24.2–3.25.76 | Runtime schema validation |
+**Production:**
+- Docker host for tablet (or any static file server)
+- Vercel account for backend
+- Physical hardware: tablet device, Raspberry Pi, ESC/POS thermal printer
+- Network: tablet and printer bridge must reach Supabase and backend
 
-### Tablet Frontend
+---
 
-| Package | Version | Purpose |
-|---------|---------|---------|
-| @11labs/react | 0.2.0 | ElevenLabs Conversational AI hook |
-| @11labs/client | 0.2.0 | ElevenLabs SDK |
-| @elevenlabs/client | 0.15.0 | ElevenLabs REST client (TTS timestamps) |
-| @mediapipe/tasks-vision | 0.10.18 | Face Detection |
-| @tailwindcss/vite | 4.0.7 | Tailwind CSS v4 Vite plugin |
-| tailwindcss | 4.0.7 | CSS utility framework |
-| vite | 6.1.0 | Frontend bundler & dev server |
-| @vitejs/plugin-react | 4.3.4 | Vite React plugin |
-| @supabase/supabase-js | 2.49.1 | Supabase client (Realtime) |
-
-### Backend
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| hono | 4.7.2 | HTTP server framework |
-| @hono/node-server | 1.14.0 | Hono Node.js adapter |
-| openai | 4.82.0 | OpenRouter embeddings client |
-| @supabase/supabase-js | 2.49.1 | Supabase PostgreSQL client |
-| tsx | 4.19.3 | TypeScript execution engine |
-
-### Printer Bridge
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| node-thermal-printer | 4.4.3 | ESC/POS printer driver |
-| @supabase/supabase-js | 2.49.1 | Realtime print_queue subscription |
-| tsx | 4.19.3 | TypeScript execution engine |
-
-### Development & Testing
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| vitest | 3.0.5 | Test runner |
-| @types/node | 22.13.4 | Node.js type definitions |
-| @types/react | 18.3.18 | React type definitions |
-| @types/react-dom | 18.3.5 | React DOM type definitions |
-
-## Important Build & Runtime Notes
-
-- **ESM-only codebase:** No CommonJS; `"type": "module"` in all package.json files
-- **Strict TypeScript:** No `any` types; noUnusedLocals and noUnusedParameters enforced
-- **Shared package first:** Must be built before other apps (`pnpm build` enforces this)
-- **Vite v6:** Uses native ESM import/export, no CJS fallbacks needed
-- **Tailwind v4:** CSS-first configuration via @tailwindcss/vite plugin; different from v3 API
-- **Face detection:** Runs in the browser (MediaPipe); optional with tap-to-start fallback
-- **Printer bridge:** Local Node.js process; not deployed to cloud
+*Stack analysis: 2026-03-08*

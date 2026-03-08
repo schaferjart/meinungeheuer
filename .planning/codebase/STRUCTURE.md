@@ -1,564 +1,286 @@
-# MeinUngeheuer Directory & File Structure
+# Codebase Structure
 
-## Monorepo Layout
+**Analysis Date:** 2026-03-08
 
-```
-/Users/janos/Desktop/VAKUNST/code/mein.ung/meinungeheuer/
-├── .claude/                         # Claude Code configuration & memory
-├── .git/                            # Git repository
-├── .planning/                       # Planning documents (this folder)
-│   └── codebase/                    # Architecture & structure docs
-├── apps/                            # Monorepo workspaces (pnpm)
-│   ├── backend/                     # Hono server
-│   ├── printer-bridge/              # Local printer service
-│   └── tablet/                      # React web app
-├── packages/                        # Shared libraries
-│   ├── core/                        # (unused in current version)
-│   └── shared/                      # Types, constants, Supabase client
-├── supabase/                        # Database migrations
-│   └── migrations/                  # SQL migration files
-├── docs/                            # Project documentation
-│   ├── PRD.md                       # Product requirements
-│   ├── PROMPTS.md                   # Agent build specifications
-│   └── SOCRATIC-AGENT-RESEARCH.md   # Background research
-├── CLAUDE.md                        # Claude Code project instructions
-├── package.json                     # Monorepo root (pnpm workspaces)
-├── pnpm-workspace.yaml              # Workspace configuration
-├── tsconfig.base.json               # Base TypeScript config
-└── README.md                        # Project overview
-```
-
----
-
-## Workspace Details
-
-### apps/tablet — React Kiosk App
-
-**Purpose**: Browser-based visitor interface for text reading, voice conversation, and definition display.
-
-**Location**: `/Users/janos/Desktop/VAKUNST/code/mein.ung/meinungeheuer/apps/tablet/`
-
-**Entry point**: `src/main.tsx` → React 18 mount to DOM
-
-**Build**: Vite, runs on port 3000 (`pnpm dev:tablet`)
-
-**Package config**: `package.json`
-- Dependencies: React 18, ElevenLabs SDK (`@11labs/react`), Supabase JS, MediaPipe, Tailwind v4
-- Build command: `vite build`
-- TypeScript: strict mode via base config
-
-**Directory structure**:
+## Directory Layout
 
 ```
-apps/tablet/
-├── public/                          # Static assets (favicon, etc.)
-├── src/
-│   ├── main.tsx                     # React entry point
-│   ├── App.tsx                      # Main component (routing: admin check)
+meinungeheuer/
+├── apps/
+│   ├── tablet/              # React SPA — visitor-facing UI + admin dashboard
+│   │   ├── src/
+│   │   │   ├── components/
+│   │   │   │   ├── screens/ # One component per state machine screen
+│   │   │   │   ├── CameraDetector.tsx
+│   │   │   │   ├── ScreenTransition.tsx
+│   │   │   │   └── TextReader.tsx
+│   │   │   ├── hooks/       # Custom React hooks
+│   │   │   ├── lib/         # Pure utility functions (API client, prompts, persistence)
+│   │   │   ├── pages/       # Full-page views (Admin)
+│   │   │   ├── App.tsx      # Root component, orchestrates state machine + conversation
+│   │   │   ├── main.tsx     # Entry point, mounts App
+│   │   │   └── index.css    # Tailwind v4 imports
+│   │   ├── public/          # Static assets
+│   │   └── package.json
 │   │
-│   ├── components/                  # React components
-│   │   ├── CameraDetector.tsx       # MediaPipe face detection overlay
-│   │   ├── ScreenTransition.tsx     # Animated screen transitions
-│   │   ├── TextReader.tsx           # Karaoke text reader (word highlight sync)
-│   │   └── screens/                 # 9 screen components
-│   │       ├── SleepScreen.tsx      # Idle state (face/tap detection)
-│   │       ├── WelcomeScreen.tsx    # Welcome message (3s timer)
-│   │       ├── TextDisplayScreen.tsx # Text display with TTS sync
-│   │       ├── TermPromptScreen.tsx # Show term (Mode B/C)
-│   │       ├── ConversationScreen.tsx # Live conversation UI
-│   │       ├── SynthesizingScreen.tsx # Waiting for definition
-│   │       ├── DefinitionScreen.tsx # Display definition result
-│   │       ├── PrintingScreen.tsx   # Print confirmation
-│   │       └── FarewellScreen.tsx   # Goodbye (15s timer)
+│   ├── backend/             # Hono REST API server
+│   │   ├── src/
+│   │   │   ├── routes/      # Route handlers (webhook, session, config)
+│   │   │   ├── services/    # Business logic (supabase client, chain, embeddings)
+│   │   │   ├── app.ts       # Hono app with middleware + route mounting
+│   │   │   └── index.ts     # HTTP server entry point
+│   │   └── package.json
 │   │
-│   ├── hooks/                       # React hooks
-│   │   ├── useInstallationMachine.ts # Central state machine (useReducer)
-│   │   ├── useInstallationMachine.test.ts # Tests for state transitions
-│   │   ├── useConversation.ts       # ElevenLabs SDK wrapper
-│   │   ├── useFaceDetection.ts      # MediaPipe integration
-│   │   └── useTextToSpeechWithTimestamps.ts # TTS→word-level sync
-│   │
-│   ├── lib/                         # Utility functions & API
-│   │   ├── systemPrompt.ts          # Build EL system prompt (mode-specific)
-│   │   ├── firstMessage.ts          # Build opening message
-│   │   ├── api.ts                   # Fetch config from backend
-│   │   ├── supabase.ts              # Supabase client instance
-│   │   ├── persist.ts               # Save definition & transcript to DB
-│   │   ├── ttsCache.ts              # Cache layer for TTS audio
-│   │   └── fullscreen.ts            # Kiosk mode helpers
-│   │
-│   ├── pages/                       # Full-page components
-│   │   └── Admin.tsx                # Admin dashboard (mode/term/text management)
-│   │
-│   ├── vite-env.d.ts                # Vite environment types
-│   └── index.css                    # Tailwind v4 directives
+│   └── printer-bridge/      # Local Node.js service near printer
+│       ├── src/
+│       │   ├── config.ts    # POS server URL config
+│       │   ├── printer.ts   # HTTP relay to POS server + console fallback
+│       │   ├── index.ts     # Entry: Supabase Realtime subscription + job processing
+│       │   └── test-print.ts # CLI test script
+│       └── package.json
 │
-├── index.html                       # HTML entry point
-├── vite.config.ts                   # Vite configuration
-├── tsconfig.json                    # TypeScript config (extends base)
-├── package.json                     # App-specific dependencies
-├── .env.example                     # Environment variable template
-└── .env                             # (local; not committed)
-```
-
-**Key files**:
-- `src/App.tsx`: Router; checks `?admin=true` URL param
-- `src/hooks/useInstallationMachine.ts`: 9-screen state machine (9 screens, 12 action types)
-- `src/hooks/useConversation.ts`: ElevenLabs SDK integration
-- `src/lib/systemPrompt.ts`: Dynamic system prompt builder (mode-specific logic)
-- `src/components/screens/*`: Screen renderers (pure, no state — all state comes from parent)
-
-**Styling**: Tailwind CSS v4 (CSS-first, no modules)
-
-**Testing**: Vitest, tests next to source (`useInstallationMachine.test.ts`)
-
----
-
-### apps/backend — Hono REST API Server
-
-**Purpose**: Webhooks, config management, chain state, definition storage, print queue orchestration.
-
-**Location**: `/Users/janos/Desktop/VAKUNST/code/mein.ung/meinungeheuer/apps/backend/`
-
-**Entry point**: `src/index.ts` → Hono server on port 3001
-
-**Build**: TypeScript → JavaScript; `pnpm build` outputs to `dist/`
-
-**Package config**: `package.json`
-- Dependencies: Hono, @hono/node-server, Supabase JS, OpenAI (embeddings), Zod
-- Dev command: `tsx watch --env-file=.env src/index.ts`
-- Build command: `tsc`
-- Start command: `node dist/index.js`
-
-**Directory structure**:
-
-```
-apps/backend/
-├── src/
-│   ├── index.ts                     # Server bootstrap (loads .env, starts Hono)
-│   ├── app.ts                       # Hono app definition (middleware, route mounts)
+├── packages/
+│   ├── shared/              # Types, Supabase client, constants — imported by all apps
+│   │   ├── src/
+│   │   │   ├── types.ts     # Zod schemas + TS types for all DB tables + payloads
+│   │   │   ├── supabase.ts  # Database interface + typed client factory
+│   │   │   ├── constants.ts # APP_NAME, defaults, timer values, face detection config
+│   │   │   └── index.ts     # Barrel re-export
+│   │   └── package.json
 │   │
-│   ├── routes/                      # Route handlers
-│   │   ├── webhook.ts               # POST /webhook/definition (EL agent tool calls)
-│   │   ├── config.ts                # GET /api/config, POST /api/config/update, etc.
-│   │   └── session.ts               # (if needed) Session lifecycle
+│   ├── karaoke-reader/      # Standalone publishable React component library
+│   │   ├── src/
+│   │   │   ├── adapters/
+│   │   │   │   └── elevenlabs/
+│   │   │   │       └── index.ts  # ElevenLabs TTS API fetch + useElevenLabsTTS hook
+│   │   │   ├── components/
+│   │   │   │   └── KaraokeReader.tsx  # Main component — word highlighting
+│   │   │   ├── hooks/
+│   │   │   │   ├── useAudioSync.ts    # requestAnimationFrame word tracking
+│   │   │   │   ├── useAutoScroll.ts   # Smooth scroll to active word
+│   │   │   │   ├── useKaraokeReader.ts # Orchestrator: audio lifecycle + status machine
+│   │   │   │   └── index.ts
+│   │   │   ├── utils/
+│   │   │   │   ├── buildWordTimestamps.ts # Character-level -> word-level timestamps
+│   │   │   │   ├── splitTextIntoChunks.ts # Long text chunking for TTS API
+│   │   │   │   ├── computeCacheKey.ts     # SHA-256 cache key from text+voiceId
+│   │   │   │   ├── markdown.ts            # Markdown parsing for display
+│   │   │   │   └── index.ts
+│   │   │   ├── test-utils/
+│   │   │   │   ├── setup.ts       # Vitest setup (happy-dom, jest-dom matchers)
+│   │   │   │   └── mock-audio.ts  # HTMLAudioElement mock for tests
+│   │   │   ├── types.ts     # WordTimestamp, CacheAdapter, TtsStatus, parsed text types
+│   │   │   ├── cache.ts     # Memory + localStorage cache adapter implementations
+│   │   │   └── index.ts     # Barrel export (types, utils, hooks, components)
+│   │   └── package.json
 │   │
-│   └── services/                    # Business logic
-│       ├── supabase.ts              # Supabase client singleton + helper queries
-│       ├── embeddings.ts            # generateEmbedding(text) → OpenAI
-│       └── chain.ts                 # getActiveChainContext(), advanceChain()
+│   └── core/                # Empty — only contains dist/ and node_modules/
+│       └── (no source files)
 │
-├── dist/                            # Compiled JavaScript (generated by tsc)
-├── tsconfig.json                    # TypeScript config (extends base)
-├── package.json                     # App-specific dependencies
-├── .env.example                     # Environment variable template
-├── .env                             # (local; not committed)
-└── vercel.json                      # Vercel deployment config (if deployed)
-```
-
-**Key files**:
-- `src/app.ts`: Hono app + middleware (CORS, logging); route mounts
-- `src/routes/webhook.ts`: `POST /webhook/definition` — receives tool call from EL agent
-  - Validates body (Zod)
-  - Saves to definitions table
-  - Async: generates embedding, advances chain, creates print job
-- `src/routes/config.ts`: `GET /api/config` — tablet startup fetch
-  - Returns current mode, term, text content, chain context
-- `src/services/supabase.ts`: Supabase client + helper functions (getLatestDefinition, etc.)
-- `src/services/embeddings.ts`: Calls OpenAI to generate pgvector embedding
-- `src/services/chain.ts`: Chain state logic (query active context, increment depth)
-
-**Error handling**: No crashes; all errors caught, logged, HTTP error responses returned
-
-**Authentication**: Webhook & config endpoints optionally protected by `WEBHOOK_SECRET` (query param or Bearer token)
-
----
-
-### apps/printer-bridge — Local Thermal Printer Service
-
-**Purpose**: Subscribes to print_queue jobs, formats ESC/POS, sends to local USB/serial printer.
-
-**Location**: `/Users/janos/Desktop/VAKUNST/code/mein.ung/meinungeheuer/apps/printer-bridge/`
-
-**Entry point**: `src/index.ts` → Node.js standalone service
-
-**Build**: TypeScript → JavaScript; runs via `pnpm dev:printer` (tsx watch) or `node dist/index.js`
-
-**Package config**: `package.json`
-- Dependencies: Supabase JS, Zod, `usb` (USB printer), `serialport` (serial printer), ESC/POS utilities
-- Dev command: `tsx watch --env-file=.env src/index.ts`
-- Build command: `tsc`
-
-**Directory structure**:
-
-```
-apps/printer-bridge/
-├── src/
-│   ├── index.ts                     # Main orchestrator (config, connection, Realtime loop)
-│   ├── config.ts                    # Load config from .env (connection, paper width)
-│   ├── printer.ts                   # Low-level printer I/O (USB, serial, mock)
-│   ├── printer.test.ts              # (if tests exist)
-│   ├── layout.ts                    # ESC/POS command builder (formatting, text wrapping)
-│   ├── layout.test.ts               # Unit tests for layout engine
-│   └── test-print.ts                # Manual test script (if used)
+├── supabase/
+│   └── migrations/          # SQL migration files (001-007)
+│       ├── 001_extensions.sql
+│       ├── 002_tables.sql   # Core schema: sessions, turns, definitions, print_queue, chain_state, installation_config, texts
+│       ├── 003_indexes.sql
+│       ├── 004_rls.sql
+│       ├── 005_seed.sql
+│       ├── 006_kreativitaetsrant_and_tts_cache.sql
+│       └── 007_anon_insert_definitions.sql
 │
-├── dist/                            # Compiled JavaScript (generated by tsc)
-├── tsconfig.json                    # TypeScript config (extends base)
-├── package.json                     # App-specific dependencies
-├── .env.example                     # Environment variable template
-└── .env                             # (local; not committed)
-```
-
-**Key files**:
-- `src/index.ts`: Main loop
-  - Boots config & printer connection
-  - Subscribes to Supabase Realtime: `print_queue where status='pending'`
-  - On job: claim → validate → format → print → update status
-  - Heartbeat: every 30s, check printer, reconnect if needed
-  - Graceful shutdown on SIGINT/SIGTERM
-- `src/printer.ts`: I/O abstraction
-  - `createPrinter(config)`: USB or serial connection
-  - `printCard(handle, escCommands)`: Send bytes to printer
-  - `getStatus(handle)`: Check connectivity
-  - `reconnect(handle, attempts, delay)`: Exponential backoff
-- `src/layout.ts`: ESC/POS formatting
-  - `formatDefinitionCard(definition, config)`: Build command array
-  - Text wrapping, centering, bold, underline, line breaks
-  - Paper width: 58mm (32 chars) or 80mm (48 chars)
-- `src/config.ts`: Load from `.env`
-  - Connection string (USB port, serial port, or mock mode)
-  - Paper width, max char width
-  - Printer vendor (Epson, Star, etc.)
-
-**Error resilience**: Never crashes; all errors caught, logged, marked in DB
-
----
-
-### packages/shared — Shared Types & Utilities
-
-**Purpose**: Centralized types, constants, and Supabase client factory. Used by all apps.
-
-**Location**: `/Users/janos/Desktop/VAKUNST/code/mein.ung/meinungeheuer/packages/shared/`
-
-**Build**: TypeScript → JavaScript; `pnpm build` outputs to `dist/`
-
-**Package config**: `package.json`
-- Type: `module` (ESM)
-- Main export: `./dist/index.js`
-- Exports via `package.json` `"exports"` field (modern)
-- Dependencies: Supabase JS, Zod
-- Build command: `tsc`
-
-**Directory structure**:
-
-```
-packages/shared/
-├── src/
-│   ├── index.ts                     # Main export (re-exports from below)
-│   ├── types.ts                     # Zod schemas + TypeScript types
-│   ├── constants.ts                 # App-wide constants (timers, defaults)
-│   ├── supabase.ts                  # createSupabaseClient(url, key)
-│   └── (other utilities as needed)
+├── docs/
+│   ├── PRD.md               # Full product requirements document
+│   └── PROMPTS.md           # Agent build prompts per component
 │
-├── dist/                            # Compiled JavaScript (generated by tsc)
-├── tsconfig.json                    # TypeScript config (extends base)
-└── package.json
+├── CLAUDE.md                # AI assistant instructions
+├── Dockerfile               # 2-stage: node build -> nginx SPA (tablet only)
+├── package.json             # Root workspace scripts
+├── pnpm-workspace.yaml      # Workspace definition
+├── pnpm-lock.yaml
+└── tsconfig.base.json       # Shared TypeScript config (strict, ES2022, bundler resolution)
 ```
 
-**Key exports**:
+## Directory Purposes
 
-**types.ts**:
-```typescript
-// Schemas
-export const ModeSchema = z.enum(['text_term', 'term_only', 'chain']);
-export const StateNameSchema = z.enum(['sleep', 'welcome', ..., 'farewell']);
-export const RoleSchema = z.enum(['visitor', 'agent']);
-export const PrintStatusSchema = z.enum(['pending', 'printing', 'done', 'error']);
+**`apps/tablet/src/components/screens/`:**
+- Purpose: One React component per state machine screen
+- Contains: `SleepScreen.tsx`, `WelcomeScreen.tsx`, `TextDisplayScreen.tsx`, `TermPromptScreen.tsx`, `ConversationScreen.tsx`, `SynthesizingScreen.tsx`, `DefinitionScreen.tsx`, `PrintingScreen.tsx`, `FarewellScreen.tsx`
+- Naming: `{StateName}Screen.tsx` where StateName matches the `StateName` union type exactly
+- Each screen receives `dispatch` as a prop to trigger state transitions
 
-// Table schemas (mirror SQL exactly)
-export const SessionSchema = z.object({ ... });
-export const TurnSchema = z.object({ ... });
-export const DefinitionSchema = z.object({ ... });
-export const PrintQueueRowSchema = z.object({ ... });
-export const TextSchema = z.object({ ... });
-export const TTSCacheRowSchema = z.object({ ... });
+**`apps/tablet/src/hooks/`:**
+- Purpose: Custom React hooks for complex stateful behavior
+- Contains: `useInstallationMachine.ts` (state machine), `useConversation.ts` (ElevenLabs wrapper), `useFaceDetection.ts` (MediaPipe camera detection)
+- Naming: `use{Name}.ts`
 
-// TypeScript types (inferred from Zod)
-export type Mode = z.infer<typeof ModeSchema>;
-export type StateName = z.infer<typeof StateNameSchema>;
-export type Session = z.infer<typeof SessionSchema>;
-// ... etc.
+**`apps/tablet/src/lib/`:**
+- Purpose: Pure utility functions and configuration — no React hooks, no components
+- Contains: `api.ts` (backend API client with Zod validation), `systemPrompt.ts` (builds LLM prompts), `firstMessage.ts` (builds agent opening line), `persist.ts` (Supabase write helpers), `supabase.ts` (singleton client), `fullscreen.ts` (fullscreen API wrapper), `supabaseCacheAdapter.ts` (TTS cache backed by Supabase)
 
-// Insert variants (omit id, created_at for DB writes)
-export type SessionInsert = Omit<Session, 'id' | 'created_at'>;
-export type DefinitionInsert = Omit<Definition, 'id' | 'created_at'>;
-// ... etc.
-```
+**`apps/tablet/src/pages/`:**
+- Purpose: Full-page views that are not screens in the state machine
+- Contains: `Admin.tsx` — operator dashboard accessible via `?admin=true`
 
-**constants.ts**:
-```typescript
-export const DEFAULT_TERM = 'KREATIVITÄT';
-export const DEFAULT_MODE = 'text_term';
+**`apps/backend/src/routes/`:**
+- Purpose: Hono route group handlers
+- Contains: `webhook.ts` (ElevenLabs callback handlers), `session.ts` (session start), `config.ts` (config read/write, definitions listing, chain history)
+- Pattern: Each file exports a `Hono` instance that is mounted via `app.route()` in `app.ts`
 
-export const FACE_DETECTION = {
-  WAKE_THRESHOLD_MS: 3000,
-  SLEEP_THRESHOLD_MS: 30000,
-  // ...
-};
+**`apps/backend/src/services/`:**
+- Purpose: Business logic separated from route handlers
+- Contains: `supabase.ts` (singleton service-role client), `chain.ts` (chain state management), `embeddings.ts` (OpenRouter embedding generation)
 
-export const TIMERS = {
-  WELCOME_DURATION_MS: 3000,
-  // ...
-};
+**`packages/shared/src/`:**
+- Purpose: Single source of truth for types and shared utilities
+- Key files: `types.ts` (all Zod schemas + types), `supabase.ts` (Database interface + factory), `constants.ts` (all constants)
+- Build output: `dist/` with `.js` + `.d.ts` files. Other packages import from `@meinungeheuer/shared`.
 
-export const PRINTER = {
-  HEARTBEAT_INTERVAL_MS: 30000,
-  // ...
-};
-```
+**`packages/karaoke-reader/src/adapters/elevenlabs/`:**
+- Purpose: ElevenLabs-specific TTS fetching with chunking, caching, and timestamp extraction
+- Contains: `index.ts` with `fetchElevenLabsTTS()` function and `useElevenLabsTTS()` React hook
+- Exported via `karaoke-reader/elevenlabs` subpath
 
-**supabase.ts**:
-```typescript
-export function createSupabaseClient(url: string, key: string): SupabaseClient {
-  // Factory function used by tablet, backend, printer-bridge
-}
-```
+**`supabase/migrations/`:**
+- Purpose: SQL migration files defining the database schema
+- Contains: Extensions (pgvector, uuid), table definitions, indexes, RLS policies, seed data, and incremental schema additions (tts_cache table, anon insert policies)
 
-**Import pattern** (all apps):
-```typescript
-import { Mode, Definition, createSupabaseClient } from '@meinungeheuer/shared';
-```
+## Key File Locations
 
----
+**Entry Points:**
+- `apps/tablet/src/main.tsx`: Browser entry point (React root mount)
+- `apps/backend/src/index.ts`: Backend HTTP server start
+- `apps/printer-bridge/src/index.ts`: Printer bridge main (Supabase Realtime subscription)
 
-## Database Schema (supabase/migrations/)
+**Configuration:**
+- `tsconfig.base.json`: Base TypeScript config inherited by all packages
+- `pnpm-workspace.yaml`: Workspace package locations (`apps/*`, `packages/*`)
+- `package.json` (root): Workspace scripts (`dev`, `build`, `typecheck`, `test`, `lint`)
+- `Dockerfile`: Multi-stage build for tablet SPA (Coolify deployment)
 
-**Location**: `/Users/janos/Desktop/VAKUNST/code/mein.ung/meinungeheuer/supabase/migrations/`
+**Core Logic:**
+- `apps/tablet/src/hooks/useInstallationMachine.ts`: State machine (9 screens, 13 actions)
+- `apps/tablet/src/hooks/useConversation.ts`: ElevenLabs SDK wrapper + role mapping + tool handling
+- `apps/tablet/src/lib/systemPrompt.ts`: Dynamic LLM system prompt builder (different per mode)
+- `apps/tablet/src/lib/firstMessage.ts`: Agent first-message builder (language-aware)
+- `apps/backend/src/routes/webhook.ts`: Definition save + print queue + chain advance orchestration
+- `apps/backend/src/services/chain.ts`: Chain state management (getActive, advance, reset, history)
+- `apps/backend/src/services/embeddings.ts`: Fire-and-forget OpenRouter embedding generation
+- `packages/karaoke-reader/src/adapters/elevenlabs/index.ts`: TTS API integration with chunking + caching
 
-**Files**:
-1. `001_extensions.sql` — Enable pgvector, uuid, etc.
-2. `002_tables.sql` — Create all tables (installation_config, sessions, turns, definitions, print_queue, texts, tts_cache)
-3. `003_indexes.sql` — Create indexes (composite, pgvector)
-4. `004_rls.sql` — Row-level security policies
-5. `005_seed.sql` — Initial config row
-6. `006_kreativitaetsrant_and_tts_cache.sql` — Seeded texts (Kleist essay, Kreativitätsrant)
-7. `007_anon_insert_definitions.sql` — Grant anon INSERT on definitions
+**Type Definitions:**
+- `packages/shared/src/types.ts`: All Zod schemas, TypeScript types, insert variants, payload shapes
+- `packages/shared/src/supabase.ts`: Full `Database` interface (Row/Insert/Update for every table)
+- `packages/karaoke-reader/src/types.ts`: WordTimestamp, CacheAdapter, TtsStatus, parsed text types
 
-**Tables** (detailed in ARCHITECTURE.md):
-- `installation_config`: mode, active_term, active_text_id (single row, mutable by admin)
-- `sessions`: visitor journey metadata
-- `turns`: conversation lines (visitor/agent)
-- `definitions`: distilled term + definition + embedding
-- `print_queue`: printer jobs (status: pending → printing → done/error)
-- `texts`: seeded content (Kleist, Kreativitätsrant, etc.)
-- `tts_cache`: cached TTS audio (SHA-256 keyed)
-
----
-
-## Key File Locations Quick Reference
-
-### Tablet
-| File | Purpose |
-|------|---------|
-| `apps/tablet/src/main.tsx` | React entry point |
-| `apps/tablet/src/App.tsx` | Main app component & router |
-| `apps/tablet/src/hooks/useInstallationMachine.ts` | Central state machine (9 screens) |
-| `apps/tablet/src/hooks/useConversation.ts` | ElevenLabs SDK wrapper |
-| `apps/tablet/src/lib/systemPrompt.ts` | System prompt builder (mode-specific) |
-| `apps/tablet/src/lib/persist.ts` | Save definition & transcript |
-| `apps/tablet/src/components/screens/*.tsx` | 9 screen components |
-| `apps/tablet/src/components/TextReader.tsx` | Karaoke text with TTS sync |
-
-### Backend
-| File | Purpose |
-|------|---------|
-| `apps/backend/src/index.ts` | Server bootstrap |
-| `apps/backend/src/app.ts` | Hono app & middleware |
-| `apps/backend/src/routes/webhook.ts` | `POST /webhook/definition` |
-| `apps/backend/src/routes/config.ts` | Config endpoints |
-| `apps/backend/src/services/supabase.ts` | DB client & helpers |
-| `apps/backend/src/services/embeddings.ts` | OpenAI embedding generation |
-| `apps/backend/src/services/chain.ts` | Chain state logic |
-
-### Printer Bridge
-| File | Purpose |
-|------|---------|
-| `apps/printer-bridge/src/index.ts` | Main orchestrator |
-| `apps/printer-bridge/src/printer.ts` | Low-level I/O (USB, serial) |
-| `apps/printer-bridge/src/layout.ts` | ESC/POS formatting |
-| `apps/printer-bridge/src/config.ts` | Config loading |
-
-### Shared
-| File | Purpose |
-|------|---------|
-| `packages/shared/src/types.ts` | All Zod schemas & types |
-| `packages/shared/src/constants.ts` | App-wide constants |
-| `packages/shared/src/supabase.ts` | Supabase client factory |
-
-### Database
-| File | Purpose |
-|------|---------|
-| `supabase/migrations/002_tables.sql` | Table definitions |
-| `supabase/migrations/003_indexes.sql` | Indexes (composite, pgvector) |
-| `supabase/migrations/004_rls.sql` | Row-level security |
-| `supabase/migrations/005_seed.sql` | Initial installation_config |
-
-### Documentation
-| File | Purpose |
-|------|---------|
-| `CLAUDE.md` | Claude Code project instructions |
-| `README.md` | Project overview |
-| `docs/PRD.md` | Product requirements |
-| `docs/PROMPTS.md` | Agent build specifications |
-
----
+**Testing:**
+- `apps/tablet/src/hooks/useInstallationMachine.test.ts`: State machine unit tests
+- `packages/karaoke-reader/src/**/*.test.{ts,tsx}`: Component, hook, and utility tests (7 test files)
 
 ## Naming Conventions
 
-### React Components
-- **Screen components**: `/components/screens/{StateName}Screen.tsx`
-  - Example: `TextDisplayScreen.tsx` (renders the text_display state)
-  - Always match the state name (e.g., conversation → ConversationScreen)
-- **Utility components**: `/components/{Name}.tsx` (lowercase first letter if internal)
-  - Example: `CameraDetector.tsx`, `ScreenTransition.tsx`
-- **Component exports**: Named exports, named same as filename
-  ```typescript
-  // TextDisplayScreen.tsx
-  export function TextDisplayScreen(props: Props) { ... }
-  ```
+**Files:**
+- React components: `PascalCase.tsx` (e.g., `KaraokeReader.tsx`, `ConversationScreen.tsx`, `TextReader.tsx`)
+- Hooks: `use{Name}.ts` (e.g., `useInstallationMachine.ts`, `useConversation.ts`, `useAudioSync.ts`)
+- Pure utilities/lib: `camelCase.ts` (e.g., `systemPrompt.ts`, `firstMessage.ts`, `persist.ts`)
+- Test files: `{source}.test.ts` or `{source}.test.tsx` co-located next to source
+- Route files: `camelCase.ts` (e.g., `webhook.ts`, `session.ts`, `config.ts`)
+- SQL migrations: `NNN_{description}.sql` (e.g., `002_tables.sql`)
 
-### Hooks
-- File: `/hooks/use{Name}.ts`
-- Export: `export function use{Name}(params) { ... }`
-- Example: `useInstallationMachine.ts` exports `useInstallationMachine()`
+**Directories:**
+- App directories: `kebab-case` (e.g., `printer-bridge`, `karaoke-reader`)
+- Source directories: `camelCase` or `kebab-case` (e.g., `test-utils`, `screens`)
 
-### Styles
-- Tailwind v4 (CSS-first); all styles inline via `className=`
-- No CSS modules, no styled-components
-- Global CSS in `index.css` (Tailwind directives)
+**Exports:**
+- Components: named exports, no default exports (e.g., `export function KaraokeReader`)
+- Hooks: named exports (e.g., `export function useConversation`)
+- Route groups: named exports of Hono instances (e.g., `export const webhookRoutes = new Hono()`)
+- Barrel files: `index.ts` re-exports everything (`export * from './types.js'`)
 
-### Types
-- All in `packages/shared/src/types.ts`
-- Zod schemas + TypeScript inferred types
-- Naming: Base type (e.g., Definition), Insert variant (DefinitionInsert)
-- Example:
-  ```typescript
-  export const DefinitionSchema = z.object({ ... });
-  export type Definition = z.infer<typeof DefinitionSchema>;
-  export type DefinitionInsert = Omit<Definition, 'id' | 'created_at'>;
-  ```
+## Where to Add New Code
 
-### Constants
-- File: `/lib/constants.ts` or `packages/shared/src/constants.ts`
-- UPPERCASE_SNAKE_CASE for primitives
-- camelCase for objects
-- Example:
-  ```typescript
-  export const DEFAULT_TERM = 'KREATIVITÄT';
-  export const FACE_DETECTION = { ... };
-  ```
+**New Screen:**
+- Create: `apps/tablet/src/components/screens/{StateName}Screen.tsx`
+- Add to state machine: Add the new `StateName` to `StateNameSchema` in `packages/shared/src/types.ts`
+- Add transitions: Update reducer in `apps/tablet/src/hooks/useInstallationMachine.ts`
+- Render: Add case in `renderScreen()` switch in `apps/tablet/src/App.tsx`
+- Pattern: Receive `dispatch: React.Dispatch<InstallationAction>` as prop. Use `dispatch({ type: 'ACTION_NAME' })` to trigger transitions.
 
-### Database Tables
-- snake_case (SQL convention)
-- Example: `installation_config`, `print_queue`, `tts_cache`
+**New API Route:**
+- Create route group: `apps/backend/src/routes/{name}.ts` exporting a `new Hono()` instance
+- Mount: Add `app.route('/path', nameRoutes)` in `apps/backend/src/app.ts`
+- Validate: Use Zod schemas for request body/query validation with `.safeParse()`
+- Pattern: Follow existing routes. Use `supabase` from `../services/supabase.js`. Return JSON responses.
 
-### Zod Schemas
-- File: `packages/shared/src/types.ts`
-- Naming: `{EntityName}Schema` and `{EntityName}InsertSchema`
-- Example: `SessionSchema`, `DefinitionInsertSchema`
+**New Backend Service:**
+- Create: `apps/backend/src/services/{name}.ts`
+- Pattern: Export async functions. Import `supabase` from `./supabase.js`. Log with `[{name}]` prefix. Never throw from fire-and-forget operations.
 
-### State Machine
-- States: snake_case (StateNameSchema enum values: 'sleep', 'welcome', 'text_display', etc.)
-- Actions: UPPERCASE (e.g., `SET_CONFIG`, `DEFINITION_RECEIVED`, `FACE_LOST`)
-- Example:
-  ```typescript
-  export type InstallationAction =
-    | { type: 'WAKE' }
-    | { type: 'SET_CONFIG'; mode: Mode; ... }
-    | { type: 'DEFINITION_RECEIVED'; definition: Definition };
-  ```
+**New Shared Type:**
+- Add Zod schema: `packages/shared/src/types.ts`
+- Add insert variant if DB table: `export const Insert{Name}Schema = {Name}Schema.omit({ id: true, created_at: true })`
+- Add to Database interface: `packages/shared/src/supabase.ts` (Row, Insert, Update shapes)
+- Rebuild: `pnpm --filter @meinungeheuer/shared build` (other apps import compiled output)
 
-### Routes (Backend)
-- REST routes follow REST conventions
-- Example:
-  - `GET /api/config` — fetch current config
-  - `POST /api/config/update` — update config (admin-only)
-  - `GET /api/definitions?term=...` — query definitions
-  - `POST /webhook/definition` — EL agent tool call
+**New Database Table:**
+- Add migration: `supabase/migrations/NNN_{description}.sql`
+- Add types: `packages/shared/src/types.ts` (Zod schema) + `packages/shared/src/supabase.ts` (Database interface)
+- Add RLS: Include policy in migration or add to `004_rls.sql`
 
-### Environment Variables
-- Tablet: `VITE_` prefix (Vite build-time substitution)
-  - `VITE_BACKEND_URL`, `VITE_ELEVENLABS_AGENT_ID`, `VITE_SUPABASE_URL`
-- Backend: No prefix (loaded via tsx --env-file=.env)
-  - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `WEBHOOK_SECRET`, `OPENAI_API_KEY`
-- Printer: No prefix
-  - `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `PRINTER_PORT`, `PAPER_WIDTH_MM`
+**New Tablet Hook:**
+- Create: `apps/tablet/src/hooks/use{Name}.ts`
+- Tests: `apps/tablet/src/hooks/use{Name}.test.ts` (co-located)
 
-### Import Paths
-- Shared exports: `import { ... } from '@meinungeheuer/shared'`
-- Relative imports: Use relative paths within same app (e.g., `../hooks/useConversation`)
-- Absolute paths: Use `@meinungeheuer/` for workspace packages
+**New Tablet Utility:**
+- Create: `apps/tablet/src/lib/{name}.ts`
+- Pattern: Pure functions, no React dependencies. Export individual functions (not default).
 
----
+**New Karaoke Reader Feature:**
+- Utility: `packages/karaoke-reader/src/utils/{name}.ts` + test
+- Hook: `packages/karaoke-reader/src/hooks/use{Name}.ts` + test
+- Re-export in barrel: `packages/karaoke-reader/src/hooks/index.ts` and/or `packages/karaoke-reader/src/index.ts`
+- New adapter: `packages/karaoke-reader/src/adapters/{provider}/index.ts`, add subpath export in `package.json`
 
-## Testing
+## Special Directories
 
-**Framework**: Vitest (all apps)
+**`packages/core/`:**
+- Purpose: Appears to be an empty/placeholder package
+- Generated: Has `dist/` and `node_modules/` but no source files
+- Committed: Yes, but no functional code
 
-**Location**: Tests next to source files (`.test.ts` suffix)
+**`.planning/`:**
+- Purpose: GSD planning documents (codebase analysis, milestones, phases)
+- Generated: By Claude Code mapping commands
+- Committed: Yes
 
-**Examples**:
-- `apps/tablet/src/hooks/useInstallationMachine.test.ts` — State machine transitions
-- `apps/printer-bridge/src/layout.test.ts` — ESC/POS formatting
+**`.planning-karaoke-reader/`:**
+- Purpose: Planning documents specific to the karaoke-reader package development
+- Generated: By Claude Code during karaoke-reader development
+- Committed: Yes
 
-**Commands**:
+**`.entire/`:**
+- Purpose: Metadata/logs from the Entire tool
+- Generated: Yes
+- Committed: Check `.gitignore`
+
+**`dist/` directories (in each package/app):**
+- Purpose: TypeScript compilation output
+- Generated: Yes, by `pnpm build`
+- Committed: Yes for `packages/shared/dist/` (other apps depend on it at build time). Typically `.gitignore`d for apps.
+
+## Build Dependencies
+
+Build order is critical due to workspace dependencies:
+
+1. `packages/shared` must build first (other packages/apps import its compiled output)
+2. `packages/karaoke-reader` must build before `apps/tablet` (tablet imports it)
+3. Apps can build in parallel after their dependencies
+
+The root `pnpm build` script enforces this:
 ```bash
-pnpm test                  # Run all tests
-pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/useInstallationMachine.test.ts  # Single file
-pnpm --filter @meinungeheuer/tablet exec vitest src/hooks/useInstallationMachine.test.ts     # Watch mode
+pnpm --filter @meinungeheuer/shared build && pnpm -r --filter '!@meinungeheuer/shared' build
 ```
 
----
-
-## Build Artifacts
-
-After `pnpm build`:
-
-**Shared** (`packages/shared/dist/`):
-- `index.js` — ESM module
-- `index.d.ts` — TypeScript declarations
-- Source maps
-
-**Tablet** (`apps/tablet/dist/`):
-- `index.html` — Entry point
-- `assets/` — JS & CSS bundles (hashed)
-- Static assets (fonts, images)
-
-**Backend** (`apps/backend/dist/`):
-- `index.js` — Main entry point
-- `*.js` files for each `.ts` source
-- Source maps
-
-**Printer Bridge** (`apps/printer-bridge/dist/`):
-- `index.js` — Main entry point
-- `*.js` files for each `.ts` source
+The Dockerfile explicitly sequences: shared -> karaoke-reader -> tablet.
 
 ---
 
-## Deployment Targets
-
-- **Tablet**: Docker → Nginx SPA (Coolify, Vercel, or custom)
-- **Backend**: Vercel (via `vercel.json`)
-- **Printer Bridge**: Local machine only (not deployed to cloud; runs on Pi/laptop near printer)
-
----
-
-## Summary
-
-MeinUngeheuer is a well-structured monorepo with clear separation of concerns:
-- **Tablet**: React UI (state machine-driven)
-- **Backend**: REST API + webhook receiver
-- **Printer Bridge**: Event-driven local service
-- **Shared**: Centralized types & utilities
-
-All code is TypeScript strict; data flow is unidirectional (tablet → backend → Supabase ← printer bridge). No global state managers; single reducer per service.
+*Structure analysis: 2026-03-08*

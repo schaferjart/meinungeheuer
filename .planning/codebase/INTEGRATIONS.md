@@ -1,373 +1,249 @@
 # External Integrations
 
-## External APIs
+**Analysis Date:** 2026-03-08
 
-### ElevenLabs Conversational AI
+## APIs & External Services
 
-**Usage:** Voice conversation loop (speech-to-text, LLM inference, text-to-speech)
+### ElevenLabs (Voice AI Pipeline)
 
-**Client Libraries:**
-- `@11labs/react@0.2.0` — React hook for WebSocket conversation
-- `@11labs/client@0.2.0` — ElevenLabs SDK
-- `@elevenlabs/client@0.15.0` — REST client for TTS with-timestamps API
+The primary external integration. Handles the entire voice conversation loop: speech-to-text, LLM reasoning (via Custom LLM on OpenRouter), and text-to-speech in a single WebSocket connection.
 
-**Integration Points:**
+**Conversational AI (WebSocket):**
+- SDK: `@11labs/react` (React hook), `@11labs/client` (low-level)
+- Used in: `apps/tablet/src/hooks/useConversation.ts`
+- Auth: `VITE_ELEVENLABS_AGENT_ID` (agent configured in ElevenLabs dashboard)
+- Connection: WebSocket via `useConversation` from `@11labs/react`
+- System prompts injected at session start via SDK `overrides.agent.prompt.prompt`
+- Client tools: `save_definition` registered as a client tool to capture definitions in real-time
+- Role mapping: SDK uses "user"/"ai" -- mapped to "visitor"/"agent" in `mapRole()` function
 
-1. **Tablet app** (`apps/tablet/src/hooks/useConversation.ts`):
-   - Hook: `useConversation()` wraps ElevenLabs `useConversation` hook
-   - Establishes WebSocket connection to ElevenLabs agent
-   - Maps roles: ElevenLabs "user"/"ai" → shared types "visitor"/"agent"
-   - Configuration:
-     - Agent ID: `VITE_ELEVENLABS_AGENT_ID` (env)
-     - Voice ID: `VITE_ELEVENLABS_VOICE_ID` (env)
-     - System prompt: Built dynamically per mode/term in `apps/tablet/src/lib/systemPrompt.ts`
-     - Overrides passed to SDK at session start; agent dashboard prompt is a placeholder
-   - Transcript collection: role + content + timestamp per turn
-   - Handles `save_definition` tool call via webhook
+**Text-to-Speech REST API (with timestamps):**
+- SDK: `@elevenlabs/client` ^0.15.0
+- Used in: `packages/karaoke-reader/src/adapters/elevenlabs/index.ts`
+- Auth: `VITE_ELEVENLABS_API_KEY` (via `xi-api-key` header)
+- Endpoint: `https://api.elevenlabs.io/v1/text-to-speech/{voiceId}/with-timestamps`
+- Returns: base64 audio + character-level alignment data (`alignment.character_start_times_seconds`, `character_end_times_seconds`)
+- Model: `eleven_multilingual_v2` (default)
+- Output format: `mp3_44100_128`
+- Voice settings: stability 0.35, similarity_boost 0.65, style 0.6
 
-2. **TTS with-timestamps** (`apps/tablet/src/hooks/useTextToSpeechWithTimestamps.ts`):
-   - Calls ElevenLabs REST endpoint with `with_timestamps=true`
-   - Response shape: `{ audio_base64, alignment, normalized_alignment }`
-   - Character-level timestamps converted to word-level for karaoke highlighting
-   - TTS cache stored in Supabase `tts_cache` table (SHA-256(text + voiceId) key)
+**ElevenLabs Dashboard Configuration (external, not in code):**
+- Agent has a Custom LLM configured pointing to OpenRouter
+- LLM model: `google/gemini-2.0-flash-001` (configured in dashboard, not in code)
+- `save_definition` tool configured as webhook tool pointing to `POST /webhook/definition`
+- Post-conversation webhook configured to `POST /webhook/conversation-data`
 
-3. **Voice settings** (configured in ElevenLabs dashboard, applied per-voice):
-   - stability: 0.35
-   - similarity_boost: 0.65
-   - style: 0.6
-   - For expressive reading of philosophical texts
+### OpenRouter (Embeddings)
 
-4. **Webhook callback** (`apps/backend/src/routes/webhook.ts`):
-   - Receives `POST /webhook/definition` when agent calls `save_definition` tool
-   - Webhook secret verification: Bearer token or ?secret query param
-   - Payload schema (Zod):
-     ```typescript
-     {
-       tool_call_id: string,
-       tool_name: "save_definition",
-       parameters: { term, definition_text, citations, language },
-       conversation_id: string
-     }
-     ```
-   - Triggers definition save, embedding generation, chain advancement
-
-5. **Mode-based system prompts** (`apps/tablet/src/lib/systemPrompt.ts`):
-   - **text_term:** Open-ended exploration of concepts emerging from visitor's reading
-   - **term_only:** Direct conversation about a predefined term
-   - **chain:** Context set from previous visitor's definition
-   - All prompts injected via SDK overrides; not stored on ElevenLabs dashboard
-
-### OpenRouter (via OpenAI SDK)
-
-**Usage:** Generate embeddings for definitions (semantic similarity, chain context)
-
-**Configuration:**
+- SDK: `openai` ^4.82.0 (OpenAI-compatible SDK with custom `baseURL`)
+- Used in: `apps/backend/src/services/embeddings.ts`
+- Auth: `OPENROUTER_API_KEY`
 - Base URL: `https://openrouter.ai/api/v1`
-- Model: `openai/text-embedding-3-small`
-- Dimensions: 1536
-- API Key: `OPENROUTER_API_KEY` (backend env)
+- Model: `openai/text-embedding-3-small` (1536 dimensions)
+- Purpose: Generates vector embeddings for definitions (stored in pgvector column)
+- Pattern: Fire-and-forget (`void generateEmbedding(definitionId)` -- never blocks the webhook response)
 
-**Integration Point:**
-- Backend service (`apps/backend/src/services/embeddings.ts`)
-- Async function `generateEmbedding(definitionId)` called fire-and-forget from webhook
-- Fetches definition text from Supabase
-- Combines term + definition_text for richer embedding
-- Stores 1536-dim vector in `definitions.embedding` (pgvector)
-- Never throws; errors logged and non-blocking
+### MediaPipe (Face Detection)
 
-**Client Library:**
-- `openai@4.82.0` — OpenAI SDK (compatible with OpenRouter baseURL override)
+- SDK: `@mediapipe/tasks-vision` ^0.10.18
+- Used in: `apps/tablet/src/hooks/useFaceDetection.ts`
+- WASM runtime: loaded from CDN `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm`
+- Model: BlazeFace Short Range (float16) from `https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite`
+- Runs entirely in-browser (no external API calls after model download)
+- Detection loop: 2 fps (every 500ms), CPU delegate
+- Debounce: 3s presence for wake, 30s absence for sleep
+- Min confidence: 0.5
 
-### OpenAI (Embeddings Only)
+## Data Storage
 
-Same as OpenRouter above — the OpenAI SDK is pointed to OpenRouter's API.
+### Supabase (PostgreSQL + pgvector + Realtime)
 
-## Database: Supabase (PostgreSQL)
+The sole database. Used by all three apps with different access levels.
 
-**Deployment Model:**
-- Cloud PostgreSQL (Supabase free tier)
-- **Service Role Key:** Full DB access (backend only, never exposed)
-- **Anon Key:** Limited RLS access (tablet + printer-bridge)
+**Connection:**
+- Client library: `@supabase/supabase-js` ^2.49.1
+- Client factory: `packages/shared/src/supabase.ts` -- `createSupabaseClient(url, key)` returns typed `SupabaseClient<Database>`
+- Full type safety via `Database` interface in `packages/shared/src/supabase.ts`
 
-**Client Libraries:**
-- `@supabase/supabase-js@2.49.1` — All apps
+**Access patterns:**
+| App | Key Type | RLS |
+|-----|----------|-----|
+| tablet | anon key (`VITE_SUPABASE_ANON_KEY`) | Subject to RLS policies |
+| backend | service role key (`SUPABASE_SERVICE_ROLE_KEY`) | Bypasses RLS |
+| printer-bridge | anon key or service role key (`SUPABASE_ANON_KEY`) | Subject to RLS if anon |
 
-**URL:** `SUPABASE_URL` (env)
+**Database tables (8 total):**
 
-### Schema Overview
+| Table | Purpose | Key columns |
+|-------|---------|-------------|
+| `sessions` | One row per visitor interaction | `mode`, `term`, `elevenlabs_conversation_id` |
+| `turns` | Conversation transcript turns | `session_id`, `turn_number`, `role`, `content` |
+| `definitions` | AI-generated aphorisms/definitions | `term`, `definition_text`, `embedding` (vector 1536) |
+| `print_queue` | Print job queue | `payload` (JSONB), `status` (pending/printing/done/error) |
+| `chain_state` | Active chain tracking for Mode C | `definition_id`, `is_active` |
+| `installation_config` | Operator settings (singleton row) | `mode`, `active_term`, `active_text_id` |
+| `texts` | Source texts for Mode A | `content_de`, `content_en`, `terms[]` |
+| `tts_cache` | Cached TTS audio + word timestamps | `cache_key`, `audio_base64_parts`, `word_timestamps` |
 
-**Core Tables:**
+**Migrations:** `supabase/migrations/001_extensions.sql` through `007_anon_insert_definitions.sql`
 
-1. **sessions**
-   ```sql
-   id UUID PRIMARY KEY
-   created_at, ended_at TIMESTAMPTZ
-   mode TEXT ('text_term' | 'term_only' | 'chain')
-   term TEXT
-   context_text TEXT (for text_term / chain modes)
-   parent_session_id UUID (chain parent link)
-   language_detected TEXT
-   duration_seconds INT
-   turn_count INT
-   card_taken BOOLEAN
-   elevenlabs_conversation_id TEXT
-   audio_url TEXT
-   ```
-   - One row per visitor interaction
+**Extensions:**
+- `pgvector` -- 1536-dimensional vector column on `definitions.embedding`
 
-2. **turns**
-   ```sql
-   id UUID PRIMARY KEY
-   session_id UUID FOREIGN KEY → sessions
-   turn_number INT
-   role TEXT ('visitor' | 'agent')
-   content TEXT
-   language TEXT
-   created_at TIMESTAMPTZ
-   ```
-   - Conversation transcript (many per session)
+**Row Level Security:**
+- Enabled on all tables (`supabase/migrations/004_rls.sql`)
+- Anon key can: SELECT texts, installation_config, chain_state, definitions; INSERT sessions, turns
+- Anon key for printer: SELECT/UPDATE print_queue (pending/printing status only)
+- TTS cache: anon can SELECT and INSERT (`supabase/migrations/006_kreativitaetsrant_and_tts_cache.sql`)
 
-3. **definitions**
-   ```sql
-   id UUID PRIMARY KEY
-   session_id UUID FOREIGN KEY → sessions (UNIQUE)
-   term TEXT
-   definition_text TEXT
-   citations TEXT[] (array of strings)
-   language TEXT
-   chain_depth INT (default 0)
-   created_at TIMESTAMPTZ
-   embedding VECTOR(1536) (pgvector)
-   ```
-   - One definition per session
-   - Embedding generated async (fire-and-forget)
+**Supabase Realtime:**
+- `print_queue` table published to Supabase Realtime (`ALTER PUBLICATION supabase_realtime ADD TABLE print_queue`)
+- Printer bridge subscribes to INSERT events where `status=eq.pending` via `supabase.channel('print_queue_inserts').on('postgres_changes', ...)`
+- Subscription in: `apps/printer-bridge/src/index.ts`
 
-4. **print_queue**
-   ```sql
-   id UUID PRIMARY KEY
-   session_id UUID FOREIGN KEY → sessions
-   payload JSONB (print layout + content)
-   printer_config JSONB (printer settings)
-   status TEXT ('pending' | 'printing' | 'done' | 'error')
-   created_at, printed_at TIMESTAMPTZ
-   ```
-   - Jobs for thermal printer bridge
-   - Printer-bridge subscribes via Realtime to `status='pending'` inserts
+**File Storage:**
+- Not used. TTS audio cached as base64 in `tts_cache` table, not in Supabase Storage.
 
-5. **chain_state**
-   ```sql
-   id UUID PRIMARY KEY
-   definition_id UUID FOREIGN KEY → definitions
-   is_active BOOLEAN (default true)
-   created_at TIMESTAMPTZ
-   ```
-   - Tracks active definition in chain (Mode C)
-   - Next visitor's context is previous definition
+**Caching:**
+- TTS cache via `tts_cache` table (key: SHA-256 of text + voiceId)
+- Cache adapter: `apps/tablet/src/lib/supabaseCacheAdapter.ts` implements generic `CacheAdapter` interface
+- Cache errors silently swallowed (never block TTS playback)
 
-6. **installation_config**
-   ```sql
-   id UUID PRIMARY KEY
-   mode TEXT (default 'term_only')
-   active_term TEXT (default 'BIRD')
-   active_text_id TEXT (for text_term mode)
-   updated_at TIMESTAMPTZ
-   ```
-   - Operator-configurable settings
-   - Fetched by tablet on startup via `GET /api/config`
+## Authentication & Identity
 
-7. **texts**
-   ```sql
-   id TEXT PRIMARY KEY
-   title TEXT
-   content_de TEXT (German version)
-   content_en TEXT (English version)
-   terms TEXT[] (extractable concepts)
-   created_at TIMESTAMPTZ
-   ```
-   - Curated source texts for Mode A (text_term)
-   - Currently seeded: Kleist (DE/EN), Netzwerke (DE), Kreativitätsrant (EN)
+**Auth Provider:** None (no user authentication)
 
-8. **tts_cache**
-   ```sql
-   cache_key TEXT PRIMARY KEY (SHA-256(text + voiceId))
-   audio_base64 TEXT
-   alignment JSON (character-level timing from ElevenLabs)
-   created_at TIMESTAMPTZ
-   ```
-   - TTS responses cached to avoid re-generation
-   - Tablet reads/writes via anon key
+The installation has no concept of user accounts. Visitors are anonymous.
 
-### Migrations
+**Webhook security:**
+- Shared secret via `WEBHOOK_SECRET` env var
+- Verified on `/webhook/*` and admin endpoints
+- Accepted via `?secret=` query param or `Authorization: Bearer {secret}` header
+- Skipped if `WEBHOOK_SECRET` is not set (dev mode)
+- Implementation: middleware in `apps/backend/src/routes/webhook.ts` and `apps/backend/src/routes/config.ts`
 
-Located in `supabase/migrations/`:
-1. `001_extensions.sql` — Enable pgvector
-2. `002_tables.sql` — Create all tables (shown above)
-3. `003_indexes.sql` — Performance indexes
-4. `004_rls.sql` — Row-level security policies
-5. `005_seed.sql` — Initial config + admin user
-6. `006_kreativitaetsrant_and_tts_cache.sql` — Text seeding
-7. `007_anon_insert_definitions.sql` — RLS rule for anon inserts
+**Supabase auth:**
+- Uses anon key (public, client-side) and service role key (backend, bypasses RLS)
+- No Supabase Auth users or sessions
 
-### Row-Level Security (RLS)
+## Monitoring & Observability
 
-- Anon key: Can INSERT to `definitions`, `turns`, `sessions`
-- Anon key: Can read `texts`, `tts_cache`
-- Service role: Full access (backend webhooks, admin operations)
-- Printer-bridge: Uses anon key for read + update `print_queue` (status transitions)
+**Error Tracking:**
+- None (no Sentry, no error tracking service)
 
-### Realtime Subscriptions
+**Logs:**
+- `console.log` / `console.error` throughout
+- Hono `logger()` middleware on all backend routes (`apps/backend/src/app.ts`)
+- Structured log prefixes: `[bridge]`, `[webhook/definition]`, `[chain]`, `[embeddings]`, `[MeinUngeheuer]`, `[App]`, `[TTS Cache]`
+- Printer bridge: logs every job lifecycle (claim, process, done/error)
+- Backend: logs all DB errors with context objects
 
-- **Printer-bridge** subscribes to `print_queue` table (`status='pending'` filter)
-- **Admin dashboard** can subscribe to definitions feed
-- Channel: `public:print_queue` with Realtime enabled in RLS policies
+## CI/CD & Deployment
 
-## Authentication & Access Control
+**Hosting:**
+- Tablet: Docker on Coolify (self-hosted PaaS)
+- Backend: Vercel serverless
+- Printer bridge: local hardware (Raspberry Pi / laptop)
 
-### No User Authentication
+**CI Pipeline:**
+- None detected (no GitHub Actions, no CI configuration files)
 
-- **Installation is public** — anyone can tap the tablet, no login required
-- **Anon Supabase key** used by tablet + printer-bridge
-- **Service role key** used by backend (never exposed to client)
+**Docker:**
+- `Dockerfile` at project root -- builds tablet SPA only
+- 2-stage: `node:20-slim` build + `nginx:alpine` serve
+- SPA fallback configured in nginx (`try_files $uri $uri/ /index.html`)
 
-### Webhook Secret Verification
+## Webhooks & Callbacks
 
-- **Backend middleware** (`apps/backend/src/routes/webhook.ts`):
-  - Expects ElevenLabs to send webhook secret in:
-    - Query param: `?secret=...`
-    - Header: `Authorization: Bearer ...`
-  - Skipped in dev if `WEBHOOK_SECRET` not set
-  - Returns 401 Unauthorized if mismatch
+### Incoming Webhooks (backend receives)
 
-### Environment Variable Isolation
+**POST `/webhook/definition`:**
+- Source: ElevenLabs (agent calls `save_definition` tool)
+- Auth: `WEBHOOK_SECRET` (query param or Bearer token)
+- Body schema: `SaveDefinitionWebhookSchema` (tool_call_id, tool_name, parameters: {term, definition_text, citations, language}, conversation_id)
+- Actions: find/create session, insert definition, insert print_queue job, advance chain (Mode C), fire-and-forget embedding generation
+- File: `apps/backend/src/routes/webhook.ts`
 
-- Tablet (browser): `VITE_*` vars only (built into JS)
-  - ElevenLabs API key visible to client (necessary for WebSocket)
-  - Supabase anon key visible to client (necessary for DB access)
-- Backend: Server env vars
-  - Service role key (never sent to client)
-  - OpenRouter API key (backend-only)
-- Printer-bridge: Local env vars
+**POST `/webhook/conversation-data`:**
+- Source: ElevenLabs (post-conversation webhook)
+- Auth: `WEBHOOK_SECRET`
+- Body schema: `ConversationDataWebhookSchema` (conversation_id, transcript[], metadata?)
+- Actions: insert turn rows, update session with duration/turn_count/ended_at
+- File: `apps/backend/src/routes/webhook.ts`
 
-## Webhooks & Event Flow
+### Outgoing HTTP Calls
 
-### ElevenLabs → Backend Webhook Flow
+**Printer bridge to POS server:**
+- Endpoint: `{POS_SERVER_URL}/print/dictionary`
+- Method: POST
+- Body: `{word, definition, citations, language, session_number, chain_ref, timestamp}`
+- Timeout: 10 seconds (`AbortSignal.timeout(10_000)`)
+- Retry: once on failure
+- Console mode: if `POS_SERVER_URL` is empty or "console", logs to stdout instead
+- File: `apps/printer-bridge/src/printer.ts`
 
-```
-1. Visitor asks question in conversation
-2. ElevenLabs agent invokes "save_definition" tool
-3. ElevenLabs sends tool_call webhook to:
-   POST https://YOUR_BACKEND/webhook/definition
-   Payload: { tool_call_id, tool_name, parameters, conversation_id }
-   Secret: Bearer token or query param
+**Tablet to backend:**
+- `GET {VITE_BACKEND_URL}/api/config` -- fetch installation config on startup
+- `POST {VITE_BACKEND_URL}/api/session/start` -- register new session
+- File: `apps/tablet/src/lib/api.ts`
 
-4. Backend webhook handler:
-   - Verifies secret
-   - Parses body (Zod schema)
-   - Saves definition to Supabase.definitions
-   - Calls generateEmbedding(definitionId) async (fire-and-forget)
-   - Calls advanceChain() if mode='chain'
-   - Inserts print_queue job
-   - Returns 200 OK
+**Tablet to ElevenLabs TTS API:**
+- `POST https://api.elevenlabs.io/v1/text-to-speech/{voiceId}/with-timestamps`
+- Purpose: Generate audio + word-level timestamps for karaoke text reader
+- File: `packages/karaoke-reader/src/adapters/elevenlabs/index.ts`
 
-5. Tablet waits for definition via:
-   - Callback in useConversation: onDefinitionReceived(result)
-   - OR watches Supabase Realtime (optional)
+**Backend to OpenRouter:**
+- `POST https://openrouter.ai/api/v1/embeddings`
+- Purpose: Generate 1536-dim embeddings for definitions
+- File: `apps/backend/src/services/embeddings.ts`
 
-6. Definition screen displays result
-   → Printing screen triggers print
-   → Printer-bridge picks up from print_queue
-```
+## API Routes Summary
 
-### Async Tasks (Non-blocking)
+All backend routes defined in `apps/backend/src/app.ts`:
 
-All async operations in backend use fire-and-forget pattern with error logging:
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| GET | `/health` | Health check | None |
+| POST | `/webhook/definition` | ElevenLabs save_definition callback | WEBHOOK_SECRET |
+| POST | `/webhook/conversation-data` | ElevenLabs post-conversation data | WEBHOOK_SECRET |
+| POST | `/api/session/start` | Create new session | None |
+| GET | `/api/config` | Get installation config | None |
+| POST | `/api/config/update` | Update installation config | WEBHOOK_SECRET (admin) |
+| GET | `/api/definitions` | List definitions (paginated, filterable) | None |
+| GET | `/api/chain` | Get chain history for Mode C | None |
 
-1. **Embedding generation** (`generateEmbedding`)
-   - Fetches definition, generates vector, stores in DB
-   - Failure: logged, conversation continues
+## Environment Configuration
 
-2. **Chain advancement** (`advanceChain`)
-   - Updates chain_state for Mode C
-   - Failure: logged, conversation continues
+**Required env vars:** See STACK.md for complete table per app.
 
-3. **Tablet definition persist** (`persistDefinition`)
-   - Client-side: Supabase INSERT to definitions table
-   - Awaited by tablet but non-blocking to UI
-
-### Printer Bridge Realtime Subscription
-
-```typescript
-// In apps/printer-bridge/src/index.ts
-const channel = supabase
-  .channel('public:print_queue')
-  .on(
-    'postgres_changes',
-    { event: 'INSERT', schema: 'public', table: 'print_queue' },
-    async (payload) => {
-      // Process new job
-      await processJob(payload.new.id, payload.new.payload);
-    }
-  )
-  .subscribe();
-
-// Job lifecycle:
-// 1. Webhook creates INSERT print_queue (status='pending')
-// 2. Printer bridge receives INSERT event
-// 3. Claims job (UPDATE status='printing')
-// 4. Formats + prints
-// 5. Marks done (UPDATE status='done') or error (status='error')
-```
+**Secrets location:**
+- Per-app `.env` files (not committed)
+- `.env.example` files document required shape
+- Docker build args for tablet deployment (Coolify injects these)
+- Vercel environment variables for backend
 
 ## Data Flow Summary
 
 ```
-Tablet (browser)
-    ↓ WebSocket (ElevenLabs SDK)
-ElevenLabs Agent (Conversational AI)
-    ↓ HTTP POST /webhook/definition
-Backend (Hono server)
-    ├→ Supabase: Save definition + insert print_queue
-    ├→ OpenRouter: Generate embedding (async, fire-and-forget)
-    └→ Supabase Realtime: Notify printer-bridge of new job
-        ↓
-    Printer-bridge (local Node.js)
-        ├→ Realtime subscription for INSERT on print_queue
-        ├→ Claim job (UPDATE status='printing')
-        └→ Print thermal card (ESC/POS)
-            └→ Mark done (UPDATE status='done')
-
-Tablet (browser)
-    ↓ Realtime subscription (optional)
-    Shows definition + printing status
-    ↓ User takes card, triggers completion
-    → Session ends, cycle repeats
+Visitor speaks
+  -> Tablet microphone
+  -> ElevenLabs WebSocket (STT + LLM + TTS)
+  -> Agent calls save_definition tool
+  -> POST /webhook/definition (backend)
+  -> Supabase: insert definition + print_queue job
+  -> Supabase Realtime: notify printer-bridge
+  -> printer-bridge: POST to POS server
+  -> ESC/POS thermal printer
 ```
 
-## Important Configuration Notes
+```
+Text reading (Mode A):
+  -> Tablet fetches text from Supabase (via backend /api/config)
+  -> Tablet calls ElevenLabs TTS REST API with timestamps
+  -> karaoke-reader syncs word highlighting to audio.currentTime
+  -> TTS response cached in Supabase tts_cache table
+```
 
-### ElevenLabs Dashboard Setup
+---
 
-- Create agent with placeholder system prompt (gets overridden per session)
-- Configure tool: `save_definition` with parameters: term, definition_text, citations, language
-- Set webhook URL: `https://YOUR_BACKEND/webhook/definition`
-- Configure webhook secret (shared with backend WEBHOOK_SECRET env var)
-- Agent ID: stored in `VITE_ELEVENLABS_AGENT_ID`
-
-### Supabase Setup
-
-- Enable pgvector extension (via migrations)
-- Set up RLS policies (via migrations)
-- Create anon + service role keys
-- Configure Realtime for print_queue table
-
-### OpenRouter Account
-
-- Requires API key with embeddings quota
-- Model: `openai/text-embedding-3-small`
-- Async fire-and-forget pattern ensures failures don't block conversation
-
-### Deployment Secrets
-
-- Backend: Vercel environment variables for all backend env vars
-- Tablet: Build-time Vite vars (baked into JS)
-- Printer-bridge: Local .env file (never deployed to cloud)
+*Integration audit: 2026-03-08*
