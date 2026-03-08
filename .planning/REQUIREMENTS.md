@@ -52,8 +52,8 @@
 
 ### Documentation
 
-- [ ] **DOC-01**: README with usage examples: generic mode (timestamps + audio URL) and ElevenLabs mode
-- [ ] **DOC-02**: Published to npm, installable via `npm install karaoke-reader`
+- [x] **DOC-01**: README with usage examples: generic mode (timestamps + audio URL) and ElevenLabs mode
+- [x] **DOC-02**: Published to npm, installable via `npm install karaoke-reader`
 
 ### Validation
 
@@ -126,8 +126,8 @@
 | CACHE-01 | Phase 3 | Complete |
 | CACHE-02 | Phase 3 | Complete |
 | CACHE-03 | Phase 3 | Complete |
-| DOC-01 | Phase 4 | Pending |
-| DOC-02 | Phase 4 | Pending |
+| DOC-01 | Phase 4 | Complete |
+| DOC-02 | Phase 4 | Complete |
 | VAL-01 | Phase 4 | Complete |
 | VAL-02 | Phase 4 | Complete |
 | VAL-03 | Phase 4 | Complete |
