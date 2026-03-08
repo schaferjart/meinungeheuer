@@ -156,6 +156,7 @@ function InstallationApp() {
     conversationId,
     startConversation,
     endConversation,
+    sendUserActivity,
   } = useConversation({
     agentId: ELEVENLABS_AGENT_ID,
     mode,
@@ -196,6 +197,23 @@ function InstallationApp() {
       endConversation().catch(() => {});
     }
   }, [screen, conversationStatus, endConversation]);
+
+  // Keep WebSocket alive during active conversation.
+  // ElevenLabs has a 20s inactivity timeout; sendUserActivity() resets it.
+  // Fire every 15s to stay safely under the timeout.
+  useEffect(() => {
+    if (screen !== 'conversation' || conversationStatus !== 'connected') return;
+
+    const interval = setInterval(() => {
+      try {
+        sendUserActivity();
+      } catch {
+        // Connection may be closing — ignore
+      }
+    }, 15_000);
+
+    return () => clearInterval(interval);
+  }, [screen, conversationStatus, sendUserActivity]);
 
   // Derive mic state for the UI
   const micState: 'idle' | 'listening' | 'speaking' =
