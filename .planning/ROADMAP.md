@@ -22,12 +22,10 @@ Plans:
 ### Phase 3: Printer Integration
 **Goal:** Print queue jobs produce physical thermal cards.
 **Requirements:** R5, R6
-**Tasks:**
-- Clone POS-thermal-printer into `apps/pos-server/`
-- Add pnpm scripts (`dev:pos`, `start:pos`) that shell to Python venv
-- Configure printer-bridge `POS_SERVER_URL` to point at POS server
-- Test Supabase Realtime → printer-bridge → POS server → printed card
-- Add health check and error recovery
+**Plans:** 2 plans
+Plans:
+- [ ] 03-01-PLAN.md — POS server monorepo integration (copy files, pnpm scripts, verify health)
+- [ ] 03-02-PLAN.md — Print queue wiring (RLS policy, persistPrintJob, unit tests)
 **Gate:** Insert print_queue row → card prints within 10s.
 
 ### Phase 4: Portrait + End-to-End Polish
