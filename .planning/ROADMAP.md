@@ -5,13 +5,10 @@
 ### Phase 1: Conversation Fix + SDK Migration
 **Goal:** Conversations no longer end prematurely. SDK is on maintained version.
 **Requirements:** R1, R2
-**Tasks:**
-- Remove `end_call` from ElevenLabs dashboard agent tools
-- Migrate `@11labs/react` → `@elevenlabs/react` (update imports, fix types)
-- Update `useConversation.ts` for new SDK API
-- Add disconnect reason logging with close codes
-- Improve system prompt guardrails against premature ending
-- Test: 10+ minute conversation without bot ending it
+**Plans:** 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — SDK migration + useConversation hook update + keep-alive
+- [ ] 01-02-PLAN.md — System prompt guardrails + unit tests
 **Gate:** Conversation runs to natural conclusion (visitor-initiated `save_definition` only)
 
 ### Phase 2: PWA + Fullscreen + Face Detection
