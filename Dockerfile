@@ -21,14 +21,17 @@ ENV VITE_BACKEND_URL=$VITE_BACKEND_URL
 # Install dependencies (layer-cached)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/karaoke-reader/package.json packages/karaoke-reader/
 COPY apps/tablet/package.json apps/tablet/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build
 COPY packages/shared/ packages/shared/
+COPY packages/karaoke-reader/ packages/karaoke-reader/
 COPY apps/tablet/ apps/tablet/
 COPY tsconfig.base.json ./
 RUN pnpm --filter @meinungeheuer/shared build
+RUN pnpm --filter karaoke-reader build
 RUN pnpm --filter @meinungeheuer/tablet build
 
 FROM nginx:alpine
