@@ -1,7 +1,20 @@
 {
   "name": "karaoke-reader",
-  "version": "0.0.1",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Word-by-word karaoke text highlighting synced to audio playback",
+  "license": "MIT",
+  "author": "MeinUngeheuer Contributors",
+  "keywords": [
+    "karaoke",
+    "text-to-speech",
+    "tts",
+    "highlighting",
+    "react",
+    "audio",
+    "elevenlabs",
+    "word-highlighting",
+    "text-reader"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -50,7 +63,9 @@
     "./styles.css": "./dist/styles.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "sideEffects": [
     "*.css"
@@ -72,7 +87,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "biome check src/",
-    "check-exports": "publint && attw --pack --exclude-entrypoints ./styles.css --ignore-rules no-resolution"
+    "check-exports": "publint && attw --pack --exclude-entrypoints ./styles.css --ignore-rules no-resolution",
+    "prepublishOnly": "pnpm build && pnpm test && pnpm run check-exports"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.17.0",
