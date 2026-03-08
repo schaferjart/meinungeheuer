@@ -2,8 +2,7 @@
   "name": "MeinUngeheuer",
   "short_name": "MeinUngeheuer",
   "start_url": "/",
-  "display": "fullscreen",
+  "display": "standalone",
   "background_color": "#000000",
-  "theme_color": "#000000",
-  "orientation": "portrait"
+  "theme_color": "#000000"
 }

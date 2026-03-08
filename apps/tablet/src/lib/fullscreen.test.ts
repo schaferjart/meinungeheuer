@@ -9,13 +9,13 @@ describe('isStandaloneMode', () => {
   let originalMatchMedia: typeof window.matchMedia;
 
   beforeEach(() => {
-    originalStandalone = (navigator as Record<string, unknown>).standalone;
+    originalStandalone = (navigator as unknown as Record<string, unknown>).standalone;
     originalMatchMedia = window.matchMedia;
   });
 
   afterEach(() => {
     if (originalStandalone === undefined) {
-      delete (navigator as Record<string, unknown>).standalone;
+      delete (navigator as unknown as Record<string, unknown>).standalone;
     } else {
       Object.defineProperty(navigator, 'standalone', {
         value: originalStandalone,
@@ -88,13 +88,13 @@ describe('requestFullscreen', () => {
   let originalMatchMedia: typeof window.matchMedia;
 
   beforeEach(() => {
-    originalStandalone = (navigator as Record<string, unknown>).standalone;
+    originalStandalone = (navigator as unknown as Record<string, unknown>).standalone;
     originalMatchMedia = window.matchMedia;
   });
 
   afterEach(() => {
     if (originalStandalone === undefined) {
-      delete (navigator as Record<string, unknown>).standalone;
+      delete (navigator as unknown as Record<string, unknown>).standalone;
     } else {
       Object.defineProperty(navigator, 'standalone', {
         value: originalStandalone,
