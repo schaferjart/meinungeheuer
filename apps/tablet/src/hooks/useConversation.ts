@@ -4,7 +4,7 @@ import {
   type Status,
   type DisconnectionDetails,
   type Role as ElevenLabsRole,
-} from '@11labs/react';
+} from '@elevenlabs/react';
 import type { Mode } from '@meinungeheuer/shared';
 import { buildSystemPrompt } from '../lib/systemPrompt';
 import { buildFirstMessage } from '../lib/firstMessage';
@@ -14,7 +14,7 @@ import { buildFirstMessage } from '../lib/firstMessage';
 // ---------------------------------------------------------------------------
 
 export interface TranscriptEntry {
-  /** "visitor" matches our shared Role type; ElevenLabs uses "user" / "ai" */
+  /** "visitor" matches our shared Role type; ElevenLabs uses "user" / "agent" */
   role: 'visitor' | 'agent';
   content: string;
   timestamp: number;
@@ -57,13 +57,15 @@ export interface UseConversationReturn {
   startConversation: () => Promise<string>;
   /** End the conversation from the client side */
   endConversation: () => Promise<void>;
+  /** Signal user presence to prevent WebSocket inactivity timeout */
+  sendUserActivity: () => void;
 }
 
 // ---------------------------------------------------------------------------
 // Role mapping
 // ---------------------------------------------------------------------------
 
-function mapRole(elevenLabsRole: ElevenLabsRole): TranscriptEntry['role'] {
+export function mapRole(elevenLabsRole: ElevenLabsRole): TranscriptEntry['role'] {
   return elevenLabsRole === 'user' ? 'visitor' : 'agent';
 }
 
@@ -105,11 +107,11 @@ export function useConversation(
       );
     },
 
-    onMessage: ({ message, source }: { message: string; source: ElevenLabsRole }) => {
+    onMessage: ({ message, role }: { message: string; role: ElevenLabsRole }) => {
       setTranscript((prev) => [
         ...prev,
         {
-          role: mapRole(source),
+          role: mapRole(role),
           content: message,
           timestamp: Date.now(),
         },
@@ -117,10 +119,22 @@ export function useConversation(
     },
 
     onDisconnect: (details: DisconnectionDetails) => {
-      console.log(
-        '[MeinUngeheuer] Disconnected, reason:',
-        details.reason,
-      );
+      if (details.reason === 'agent') {
+        console.warn(
+          '[MeinUngeheuer] Agent-initiated disconnect.',
+          'closeCode:', details.closeCode,
+          'closeReason:', details.closeReason,
+        );
+      } else if (details.reason === 'error') {
+        console.error(
+          '[MeinUngeheuer] Error disconnect:',
+          details.message,
+          'closeCode:', details.closeCode,
+          'closeReason:', details.closeReason,
+        );
+      } else {
+        console.log('[MeinUngeheuer] User-initiated disconnect');
+      }
       onConversationEndRef.current?.(details.reason);
     },
 
@@ -175,6 +189,7 @@ export function useConversation(
 
     const conversationId = await conversation.startSession({
       agentId,
+      connectionType: 'websocket',
       overrides: {
         agent: {
           prompt: {
@@ -203,5 +218,6 @@ export function useConversation(
     conversationId: conversation.getId(),
     startConversation,
     endConversation,
+    sendUserActivity: conversation.sendUserActivity,
   };
 }
