@@ -14,6 +14,7 @@ import type { InstallationState, InstallationAction } from './useInstallationMac
 // ---------------------------------------------------------------------------
 
 import type { Mode, Definition } from '@meinungeheuer/shared';
+import type { StageConfig } from '@meinungeheuer/shared';
 import { DEFAULT_MODE, DEFAULT_TERM } from '@meinungeheuer/shared';
 
 const initialState: InstallationState = {
@@ -26,6 +27,7 @@ const initialState: InstallationState = {
   definition: null,
   conversationId: null,
   language: 'de',
+  stages: { textReading: true, termPrompt: false, portrait: true, printing: true },
 };
 
 function reducer(state: InstallationState, action: InstallationAction): InstallationState {
@@ -37,6 +39,7 @@ function reducer(state: InstallationState, action: InstallationAction): Installa
         term: action.term,
         contextText: action.contextText,
         parentSessionId: action.parentSessionId,
+        stages: action.stages,
       };
     case 'SET_SESSION_ID':
       return { ...state, sessionId: action.id };
@@ -51,15 +54,21 @@ function reducer(state: InstallationState, action: InstallationAction): Installa
 
     case 'TIMER_3S': {
       if (state.screen !== 'welcome') return state;
-      if (state.mode === 'text_term' || state.mode === 'chain') {
+      if (state.stages.textReading) {
         return { ...state, screen: 'text_display' };
       }
-      return { ...state, screen: 'term_prompt' };
+      if (state.stages.termPrompt) {
+        return { ...state, screen: 'term_prompt' };
+      }
+      return { ...state, screen: 'conversation' };
     }
 
     case 'READY':
       if (state.screen !== 'text_display') return state;
-      return { ...state, screen: 'term_prompt' };
+      if (state.stages.termPrompt) {
+        return { ...state, screen: 'term_prompt' };
+      }
+      return { ...state, screen: 'conversation' };
 
     case 'TIMER_2S':
       if (state.screen !== 'term_prompt') return state;
@@ -153,20 +162,20 @@ describe('useInstallationMachine reducer', () => {
   describe('WELCOME state', () => {
     const welcome: InstallationState = { ...initialState, screen: 'welcome' };
 
-    it('TIMER_3S with term_only → term_prompt', () => {
-      const s: InstallationState = { ...welcome, mode: 'term_only' as Mode };
+    it('TIMER_3S with term_only stages → term_prompt', () => {
+      const s: InstallationState = { ...welcome, mode: 'term_only' as Mode, stages: { textReading: false, termPrompt: true, portrait: true, printing: true } };
       const next = reducer(s, { type: 'TIMER_3S' });
       expect(next.screen).toBe('term_prompt');
     });
 
-    it('TIMER_3S with text_term → text_display', () => {
-      const s: InstallationState = { ...welcome, mode: 'text_term' as Mode };
+    it('TIMER_3S with text_term stages → text_display', () => {
+      const s: InstallationState = { ...welcome, mode: 'text_term' as Mode, stages: { textReading: true, termPrompt: false, portrait: true, printing: true } };
       const next = reducer(s, { type: 'TIMER_3S' });
       expect(next.screen).toBe('text_display');
     });
 
-    it('TIMER_3S with chain → text_display', () => {
-      const s: InstallationState = { ...welcome, mode: 'chain' as Mode };
+    it('TIMER_3S with chain stages → text_display', () => {
+      const s: InstallationState = { ...welcome, mode: 'chain' as Mode, stages: { textReading: true, termPrompt: true, portrait: true, printing: true } };
       const next = reducer(s, { type: 'TIMER_3S' });
       expect(next.screen).toBe('text_display');
     });
@@ -181,8 +190,14 @@ describe('useInstallationMachine reducer', () => {
   describe('TEXT_DISPLAY state', () => {
     const textDisplay: InstallationState = { ...initialState, screen: 'text_display', mode: 'text_term' };
 
-    it('READY transitions text_display → term_prompt', () => {
+    it('READY transitions text_display → conversation (text_term: termPrompt=false)', () => {
       const next = reducer(textDisplay, { type: 'READY' });
+      expect(next.screen).toBe('conversation');
+    });
+
+    it('READY transitions text_display → term_prompt when termPrompt=true', () => {
+      const s: InstallationState = { ...textDisplay, stages: { textReading: true, termPrompt: true, portrait: true, printing: true } };
+      const next = reducer(s, { type: 'READY' });
       expect(next.screen).toBe('term_prompt');
     });
 
@@ -271,14 +286,13 @@ describe('useInstallationMachine reducer', () => {
 
   // --- Full Mode A flow ---
   describe('Full Mode A (text_term) flow', () => {
-    it('traverses all 9 states', () => {
+    it('traverses states (text_term skips term_prompt)', () => {
       const def = makeDefinition();
       const final = advance(
-        { ...initialState, mode: 'text_term', contextText: 'Some text' },
+        { ...initialState, mode: 'text_term', contextText: 'Some text', stages: { textReading: true, termPrompt: false, portrait: true, printing: true } },
         { type: 'WAKE' },                                                      // → welcome
         { type: 'TIMER_3S' },                                                  // → text_display
-        { type: 'READY' },                                                     // → term_prompt
-        { type: 'TIMER_2S' },                                                  // → conversation
+        { type: 'READY' },                                                     // → conversation (skips term_prompt)
         { type: 'DEFINITION_RECEIVED', definition: def },                     // → synthesizing
         { type: 'DEFINITION_READY' },                                          // → definition
         { type: 'TIMER_10S' },                                                 // → printing
@@ -295,7 +309,7 @@ describe('useInstallationMachine reducer', () => {
   describe('Full Mode B (term_only) flow', () => {
     it('skips text_display', () => {
       const screens: string[] = [];
-      let s: InstallationState = { ...initialState, mode: 'term_only' as Mode };
+      let s: InstallationState = { ...initialState, mode: 'term_only' as Mode, stages: { textReading: false, termPrompt: true, portrait: true, printing: true } };
       const actions: InstallationAction[] = [
         { type: 'WAKE' },
         { type: 'TIMER_3S' },   // should go to term_prompt, not text_display
@@ -311,18 +325,21 @@ describe('useInstallationMachine reducer', () => {
 
   // --- Config actions ---
   describe('Configuration actions', () => {
-    it('SET_CONFIG updates mode, term, contextText, parentSessionId', () => {
+    it('SET_CONFIG updates mode, term, contextText, parentSessionId, stages', () => {
+      const chainStages: StageConfig = { textReading: true, termPrompt: true, portrait: true, printing: true };
       const next = reducer(initialState, {
         type: 'SET_CONFIG',
         mode: 'chain',
         term: 'SPRECHEN',
         contextText: 'A bird is a happy accident.',
         parentSessionId: '00000000-0000-0000-0000-000000000099',
+        stages: chainStages,
       });
       expect(next.mode).toBe('chain');
       expect(next.term).toBe('SPRECHEN');
       expect(next.contextText).toBe('A bird is a happy accident.');
       expect(next.parentSessionId).toBe('00000000-0000-0000-0000-000000000099');
+      expect(next.stages).toEqual(chainStages);
       expect(next.screen).toBe('sleep'); // screen unchanged
     });
 
@@ -351,6 +368,35 @@ describe('useInstallationMachine reducer', () => {
       };
       const next = reducer(dirty, { type: 'RESET' });
       expect(next).toEqual(initialState);
+    });
+  });
+
+  // --- Stage-config-driven routing ---
+  describe('Stage config combinations', () => {
+    const welcome: InstallationState = { ...initialState, screen: 'welcome' };
+
+    it('stages={textReading:false, termPrompt:false}: TIMER_3S from welcome → conversation', () => {
+      const s: InstallationState = { ...welcome, stages: { textReading: false, termPrompt: false, portrait: false, printing: true } };
+      const next = reducer(s, { type: 'TIMER_3S' });
+      expect(next.screen).toBe('conversation');
+    });
+
+    it('stages={textReading:false, termPrompt:true}: TIMER_3S from welcome → term_prompt', () => {
+      const s: InstallationState = { ...welcome, stages: { textReading: false, termPrompt: true, portrait: true, printing: true } };
+      const next = reducer(s, { type: 'TIMER_3S' });
+      expect(next.screen).toBe('term_prompt');
+    });
+
+    it('stages={textReading:true, termPrompt:true}: READY from text_display → term_prompt', () => {
+      const s: InstallationState = { ...initialState, screen: 'text_display', stages: { textReading: true, termPrompt: true, portrait: true, printing: true } };
+      const next = reducer(s, { type: 'READY' });
+      expect(next.screen).toBe('term_prompt');
+    });
+
+    it('stages={textReading:true, termPrompt:false}: READY from text_display → conversation', () => {
+      const s: InstallationState = { ...initialState, screen: 'text_display', stages: { textReading: true, termPrompt: false, portrait: true, printing: true } };
+      const next = reducer(s, { type: 'READY' });
+      expect(next.screen).toBe('conversation');
     });
   });
 

@@ -3,6 +3,9 @@ import type { Mode } from '@meinungeheuer/shared';
 /**
  * Build the system prompt for the ElevenLabs Conversational AI agent.
  *
+ * @deprecated Use program.buildSystemPrompt() instead. Kept for backward compatibility
+ * with existing tests and direct-mode usage during transition.
+ *
  * The prompt is constructed dynamically based on the current mode and
  * injected into the ElevenLabs session via the SDK overrides at session
  * start time. It is NOT stored on the ElevenLabs dashboard — the dashboard

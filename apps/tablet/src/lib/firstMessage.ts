@@ -3,6 +3,9 @@ import type { Mode } from '@meinungeheuer/shared';
 /**
  * Build the first message the AI agent speaks to the visitor.
  *
+ * @deprecated Use program.buildFirstMessage() instead. Kept for backward compatibility
+ * with existing tests and direct-mode usage during transition.
+ *
  * This is injected into the ElevenLabs session via `overrides.agent.firstMessage`
  * at session start time. The agent speaks this message immediately on connect
  * before the visitor says anything.

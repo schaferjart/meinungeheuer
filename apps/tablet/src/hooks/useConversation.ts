@@ -5,9 +5,7 @@ import {
   type DisconnectionDetails,
   type Role as ElevenLabsRole,
 } from '@elevenlabs/react';
-import type { Mode } from '@meinungeheuer/shared';
-import { buildSystemPrompt } from '../lib/systemPrompt';
-import { buildFirstMessage } from '../lib/firstMessage';
+import type { ConversationProgram } from '@meinungeheuer/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -30,8 +28,8 @@ export interface SaveDefinitionResult {
 export interface UseConversationParams {
   /** ElevenLabs agent ID (from env) */
   agentId: string;
-  /** Current installation mode */
-  mode: Mode;
+  /** Active conversation program (replaces mode for prompt building) */
+  program: ConversationProgram;
   /** The term to explore */
   term: string;
   /** Context text for text_term / chain modes */
@@ -78,7 +76,7 @@ export function useConversation(
 ): UseConversationReturn {
   const {
     agentId,
-    mode,
+    program,
     term,
     contextText,
     language = 'de',
@@ -184,8 +182,8 @@ export function useConversation(
     // Reset transcript for new session
     setTranscript([]);
 
-    const systemPrompt = buildSystemPrompt(mode, term, contextText);
-    const firstMessage = buildFirstMessage(mode, term, contextText, language);
+    const systemPrompt = program.buildSystemPrompt({ term, contextText: contextText ?? null, language });
+    const firstMessage = program.buildFirstMessage({ term, contextText: contextText ?? null, language });
 
     const conversationId = await conversation.startSession({
       agentId,
@@ -202,7 +200,7 @@ export function useConversation(
     });
 
     return conversationId;
-  }, [agentId, mode, term, contextText, language, conversation]);
+  }, [agentId, program, term, contextText, language, conversation]);
 
   // -----------------------------------------------------------------------
   // End conversation

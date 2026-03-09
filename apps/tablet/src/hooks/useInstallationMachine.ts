@@ -1,5 +1,6 @@
 import { useReducer, useCallback } from 'react';
 import type { Mode, StateName, Definition } from '@meinungeheuer/shared';
+import type { StageConfig } from '@meinungeheuer/shared';
 import { DEFAULT_MODE, DEFAULT_TERM } from '@meinungeheuer/shared';
 
 // ============================================================
@@ -16,6 +17,7 @@ export interface InstallationState {
   definition: Definition | null;
   conversationId: string | null;
   language: 'de' | 'en';
+  stages: StageConfig;
 }
 
 const initialState: InstallationState = {
@@ -28,6 +30,7 @@ const initialState: InstallationState = {
   definition: null,
   conversationId: null,
   language: 'de',
+  stages: { textReading: true, termPrompt: false, portrait: true, printing: true },
 };
 
 // ============================================================
@@ -45,7 +48,7 @@ export type InstallationAction =
   | { type: 'PRINT_DONE' }
   | { type: 'TIMER_15S' }
   | { type: 'FACE_LOST' }
-  | { type: 'SET_CONFIG'; mode: Mode; term: string; contextText: string | null; parentSessionId: string | null }
+  | { type: 'SET_CONFIG'; mode: Mode; term: string; contextText: string | null; parentSessionId: string | null; stages: StageConfig }
   | { type: 'SET_SESSION_ID'; id: string }
   | { type: 'SET_LANGUAGE'; lang: 'de' | 'en' }
   | { type: 'RESET' };
@@ -67,6 +70,7 @@ function installationReducer(
         term: action.term,
         contextText: action.contextText,
         parentSessionId: action.parentSessionId,
+        stages: action.stages,
       };
 
     case 'SET_SESSION_ID':
@@ -86,20 +90,23 @@ function installationReducer(
 
     case 'TIMER_3S': {
       if (state.screen !== 'welcome') return state;
-      // Mode A or C → show text display. Mode B → skip to term prompt.
-      if (state.mode === 'text_term' || state.mode === 'chain') {
+      // Stage-driven routing: textReading → text_display, termPrompt → term_prompt, else → conversation
+      if (state.stages.textReading) {
         return { ...state, screen: 'text_display' };
       }
-      return { ...state, screen: 'term_prompt' };
+      if (state.stages.termPrompt) {
+        return { ...state, screen: 'term_prompt' };
+      }
+      return { ...state, screen: 'conversation' };
     }
 
     case 'READY': {
       if (state.screen !== 'text_display') return state;
-      // In text_term mode, skip term_prompt — the concept emerges from conversation
-      if (state.mode === 'text_term') {
-        return { ...state, screen: 'conversation' };
+      // After text reading: show term prompt if enabled, otherwise go straight to conversation
+      if (state.stages.termPrompt) {
+        return { ...state, screen: 'term_prompt' };
       }
-      return { ...state, screen: 'term_prompt' };
+      return { ...state, screen: 'conversation' };
     }
 
     case 'TIMER_2S': {
