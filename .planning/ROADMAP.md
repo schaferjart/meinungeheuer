@@ -33,7 +33,7 @@ Plans:
 **Requirements:** R7, R8
 **Plans:** 2 plans
 Plans:
-- [ ] 04-01-PLAN.md — Portrait capture infrastructure (camera upgrade, usePortraitCapture hook, App wiring)
+- [x] 04-01-PLAN.md — Portrait capture infrastructure (camera upgrade, usePortraitCapture hook, App wiring)
 - [x] 04-02-PLAN.md — System prompt citation improvements (paragraph-numbered text, QUOTE move, TEXT ENGAGEMENT)
 **Gate:** Complete autonomous loop with printed card showing definition + visitor portrait.
 
@@ -42,7 +42,7 @@ Plans:
 **Requirements:** R9
 **Plans:** 2 plans
 Plans:
-- [ ] 05-01-PLAN.md — ConversationProgram interface, registry, aphorism + free_association programs, DB migration
+- [x] 05-01-PLAN.md — ConversationProgram interface, registry, aphorism + free_association programs, DB migration
 - [ ] 05-02-PLAN.md — Wire programs through tablet (state machine, useConversation, App.tsx, persistence)
 **Gate:** Two programs switchable via config, both produce correct output.
 
