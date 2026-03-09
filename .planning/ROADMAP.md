@@ -52,7 +52,7 @@ Plans:
 **Gap Closure:** Closes gaps from v2.0 audit
 **Plans:** 1 plan
 Plans:
-- [ ] 06-01-PLAN.md — Backend config program field, printer-bridge template forwarding, stages.printing in state machine
+- [x] 06-01-PLAN.md — Backend config program field, printer-bridge template forwarding, stages.printing in state machine
 **Gate:** `installation_config.program = 'free_association'` → tablet receives it → different stage flow. Template field reaches POS server. `stages.printing=false` skips printing screen.
 
 ## Phase Dependencies
