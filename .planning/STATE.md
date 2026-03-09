@@ -3,11 +3,11 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: — End-to-End Autonomous Installation
 current_plan: Not started
-status: completed
-stopped_at: Completed 05-02-PLAN.md
+status: planning
+stopped_at: Gap closure phases created from audit
 last_updated: "2026-03-09T13:55:27.862Z"
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
   total_plans: 9
   completed_plans: 9
@@ -16,9 +16,9 @@ progress:
 # Project State
 
 ## Current Position
-- **Phase:** 05-program-architecture-post-mvp (COMPLETE)
+- **Phase:** 06-program-integration-wiring (gap closure)
 - **Current Plan:** Not started
-- **Status:** Milestone complete
+- **Status:** Ready to plan
 - **Last session:** 2026-03-09T13:50:43.547Z
 - **Stopped at:** Completed 05-02-PLAN.md
 
@@ -47,7 +47,8 @@ Phase 5: [====================] 2/2 plans complete
 - **Plan 05-02 complete:** Stage-config-driven state machine, program-based prompt building in useConversation, App.tsx program wiring, template-aware print persistence, portrait gating by program.stages.portrait, 204 tests pass
 
 ## What's Next
-- All 5 phases complete. Milestone v2.0 reached.
+- Phase 06: Program Integration Wiring (gap closure) — backend config, printer-bridge template, stages.printing
+- After Phase 06: re-audit milestone, generate missing VERIFICATION.md for Phases 02/03
 
 ## Key Decisions
 - PWA standalone mode instead of Fullscreen API for kiosk

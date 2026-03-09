@@ -72,3 +72,4 @@ One complete autonomous loop runs without human intervention:
 - **What:** Extract `ConversationProgram` interface. Refactor current behavior into `aphorism` program. Wire program selection via `installation_config`.
 - **UAT:** Current behavior works identically through the program interface. `installation_config.program` selects active program.
 - **Dependencies:** R1-R8 (MVP complete first)
+- **Status:** Partial — Phase 05 code complete, Phase 06 gap closure pending (backend config, printer-bridge template, stages.printing)

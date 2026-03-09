@@ -46,6 +46,13 @@ Plans:
 - [x] 05-02-PLAN.md — Wire programs through tablet (state machine, useConversation, App.tsx, persistence)
 **Gate:** Two programs switchable via config, both produce correct output.
 
+### Phase 6: Program Integration Wiring (Gap Closure)
+**Goal:** Complete R9 integration — backend returns program field, printer-bridge forwards template, state machine respects stages.printing.
+**Requirements:** R9
+**Gap Closure:** Closes gaps from v2.0 audit
+**Plans:** 0 plans (pending `/gsd:plan-phase 6`)
+**Gate:** `installation_config.program = 'free_association'` → tablet receives it → different stage flow. Template field reaches POS server. `stages.printing=false` skips printing screen.
+
 ## Phase Dependencies
 
 ```
@@ -53,7 +60,7 @@ Phase 1 ──→ Phase 2 ──→ Phase 4
                 ↘         ↗
          Phase 3 ──────→
                           ↘
-                     Phase 5
+                     Phase 5 ──→ Phase 6
 ```
 
-Phase 1 and Phase 3 can run in parallel. Phase 2 depends on Phase 1 (SDK). Phase 4 depends on both Phase 2 and Phase 3. Phase 5 is post-MVP.
+Phase 1 and Phase 3 can run in parallel. Phase 2 depends on Phase 1 (SDK). Phase 4 depends on both Phase 2 and Phase 3. Phase 5 is post-MVP. Phase 6 closes R9 integration gaps from audit.
