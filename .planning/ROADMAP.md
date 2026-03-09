@@ -50,7 +50,9 @@ Plans:
 **Goal:** Complete R9 integration — backend returns program field, printer-bridge forwards template, state machine respects stages.printing.
 **Requirements:** R9
 **Gap Closure:** Closes gaps from v2.0 audit
-**Plans:** 0 plans (pending `/gsd:plan-phase 6`)
+**Plans:** 1 plan
+Plans:
+- [ ] 06-01-PLAN.md — Backend config program field, printer-bridge template forwarding, stages.printing in state machine
 **Gate:** `installation_config.program = 'free_association'` → tablet receives it → different stage flow. Template field reaches POS server. `stages.printing=false` skips printing screen.
 
 ## Phase Dependencies
