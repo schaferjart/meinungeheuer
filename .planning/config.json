@@ -11,5 +11,8 @@
     "roadmapper": "sonnet",
     "planner": "sonnet",
     "executor": "sonnet"
+  },
+  "workflow": {
+    "_auto_chain_active": false
   }
 }

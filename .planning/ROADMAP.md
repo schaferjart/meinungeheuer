@@ -43,7 +43,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 05-01-PLAN.md — ConversationProgram interface, registry, aphorism + free_association programs, DB migration
-- [ ] 05-02-PLAN.md — Wire programs through tablet (state machine, useConversation, App.tsx, persistence)
+- [x] 05-02-PLAN.md — Wire programs through tablet (state machine, useConversation, App.tsx, persistence)
 **Gate:** Two programs switchable via config, both produce correct output.
 
 ## Phase Dependencies

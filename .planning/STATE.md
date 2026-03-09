@@ -2,32 +2,32 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: — End-to-End Autonomous Installation
-current_plan: Plan 1 of 2 complete
-status: executing
-stopped_at: Completed 05-01-PLAN.md (Program types, registry, aphorism/free_association)
-last_updated: "2026-03-09T13:36:00Z"
+current_plan: Plan 2 of 2 complete
+status: completed
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-09T13:50:43.556Z"
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
 ---
 
 # Project State
 
 ## Current Position
-- **Phase:** 05-program-architecture-post-mvp (IN PROGRESS)
-- **Current Plan:** Plan 1 of 2 complete
-- **Status:** Executing
-- **Last session:** 2026-03-09T13:36:00Z
-- **Stopped at:** Completed 05-01-PLAN.md (Program types, registry, aphorism/free_association)
+- **Phase:** 05-program-architecture-post-mvp (COMPLETE)
+- **Current Plan:** Plan 2 of 2 complete
+- **Status:** Complete
+- **Last session:** 2026-03-09T13:50:43.547Z
+- **Stopped at:** Completed 05-02-PLAN.md
 
 ## Progress
 Phase 1: [====================] 2/2 plans complete
 Phase 2: [====================] 1/1 plans complete
 Phase 3: [====================] 2/2 plans complete
 Phase 4: [====================] 2/2 plans complete
-Phase 5: [==========..........] 1/2 plans complete
+Phase 5: [====================] 2/2 plans complete
 
 ## What's Done
 - Codebase mapped (.planning/codebase/)
@@ -44,9 +44,10 @@ Phase 5: [==========..........] 1/2 plans complete
 - **Plan 04-02 complete:** Paragraph-numbered text injection, QUOTE move citation format, TEXT ENGAGEMENT minimum for text_term mode, 6 new tests
 - **Plan 04-01 complete:** usePortraitCapture hook (Canvas drawImage + toBlob + FormData POST), shared videoRef architecture, camera upgraded to 1280x960, 10 unit tests
 - **Plan 05-01 complete:** ConversationProgram interface, program registry (getProgram/listPrograms), aphorism program (text_term extraction), free_association program, PrintPayload template field, InstallationConfig program field, DB migration 009, 19 tests
+- **Plan 05-02 complete:** Stage-config-driven state machine, program-based prompt building in useConversation, App.tsx program wiring, template-aware print persistence, portrait gating by program.stages.portrait, 204 tests pass
 
 ## What's Next
-- Plan 05-02: Wire programs into tablet app (state machine, useConversation, config fetching)
+- All 5 phases complete. Milestone v2.0 reached.
 
 ## Key Decisions
 - PWA standalone mode instead of Fullscreen API for kiosk
@@ -75,6 +76,10 @@ Phase 5: [==========..........] 1/2 plans complete
 - Aphorism prompt copied verbatim into shared package for self-containment (tablet will delegate in Plan 02)
 - Free association reuses CRITICAL CONSTRAINT anti-ending guardrails for consistency
 - Registry pattern with static imports, fallback to default + console.warn
+- Reducer uses stages booleans only, never references program IDs or mode strings for transition routing
+- programRef pattern in App.tsx for stable ConversationProgram reference across renders
+- ConfigResponseSchema uses z.string().optional() for program field (Zod default() type inference conflict with generic ZodType<T>)
+- systemPrompt.ts and firstMessage.ts kept with @deprecated for regression test stability
 
 ## Blockers
 - Need ElevenLabs dashboard access to remove `end_call` tool
@@ -92,3 +97,4 @@ Phase 5: [==========..........] 1/2 plans complete
 | 04-02      | 3min     | 1     | 2     |
 | 04-01      | 39min    | 2     | 7     |
 | 05-01      | 8min     | 2     | 10    |
+| 05-02      | 7min     | 2     | 9     |
