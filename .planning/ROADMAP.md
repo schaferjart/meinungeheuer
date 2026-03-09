@@ -31,13 +31,10 @@ Plans:
 ### Phase 4: Portrait + End-to-End Polish
 **Goal:** Visitor portrait captured and printed. Full loop works autonomously.
 **Requirements:** R7, R8
-**Tasks:**
-- Create `usePortraitCapture` hook — share camera stream from face detection at higher resolution
-- Capture face frame during conversation (Canvas API → blob)
-- POST captured image to POS server `/portrait/capture` endpoint
-- Coordinate print order: definition card first, then portrait (or combined layout)
-- Improve Mode A system prompt for better text citations
-- Full end-to-end test: approach → read → converse → print (definition + portrait) → reset
+**Plans:** 2 plans
+Plans:
+- [ ] 04-01-PLAN.md — Portrait capture infrastructure (camera upgrade, usePortraitCapture hook, App wiring)
+- [ ] 04-02-PLAN.md — System prompt citation improvements (line-numbered text, QUOTE move)
 **Gate:** Complete autonomous loop with printed card showing definition + visitor portrait.
 
 ### Phase 5: Program Architecture (Post-MVP)
