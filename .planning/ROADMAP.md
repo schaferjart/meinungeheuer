@@ -38,16 +38,12 @@ Plans:
 **Gate:** Complete autonomous loop with printed card showing definition + visitor portrait.
 
 ### Phase 5: Program Architecture (Post-MVP)
-**Goal:** Pluggable conversation programs and print templates.
+**Goal:** Pluggable conversation programs and print templates — modular atoms for text source, conversation mode, print layout, portrait pipeline, and stage toggling.
 **Requirements:** R9
-**Tasks:**
-- Define `ConversationProgram` interface in shared package
-- Extract current behavior into `aphorism` program
-- Add `program` column to `installation_config`
-- Wire program selection through config endpoint
-- Component registry for per-program result display
-- Print template routing to POS server
-- Implement second program to validate architecture
+**Plans:** 2 plans
+Plans:
+- [ ] 05-01-PLAN.md — ConversationProgram interface, registry, aphorism + free_association programs, DB migration
+- [ ] 05-02-PLAN.md — Wire programs through tablet (state machine, useConversation, App.tsx, persistence)
 **Gate:** Two programs switchable via config, both produce correct output.
 
 ## Phase Dependencies
