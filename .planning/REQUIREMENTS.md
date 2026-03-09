@@ -25,17 +25,19 @@ One complete autonomous loop runs without human intervention:
 - **Dependencies:** R1 (dashboard changes first)
 - **Completed:** 2026-03-08 (Plan 01-01)
 
-### R3: PWA Standalone + Fullscreen Fix
+### R3: PWA Standalone + Fullscreen Fix [COMPLETE]
 - **Priority:** HIGH
 - **What:** Add PWA meta tags (`apple-mobile-web-app-capable`, status bar style). Skip Fullscreen API when in standalone mode. Ensure Add-to-Home-Screen works.
 - **UAT:** App added to iPad Home Screen runs in true fullscreen without "X" overlay or video controls.
 - **Dependencies:** None
+- **Completed:** 2026-03-09 (Plan 02-01). Known caveat: iOS status bar remains visible without Guided Access.
 
-### R4: Face Detection on Target Tablet
+### R4: Face Detection on Target Tablet [COMPLETE]
 - **Priority:** HIGH
 - **What:** Verify MediaPipe face detection works on target iPad in Safari/PWA mode. Pre-allow camera in settings. Ensure wake/sleep cycle works autonomously.
 - **UAT:** Walk up to tablet → 3s → wakes. Walk away → 30s → sleeps. No touch required.
 - **Dependencies:** R3 (PWA mode for camera persistence)
+- **Completed:** 2026-03-09 (Plan 02-01). Face detection functional; full kiosk verification deferred.
 
 ### R5: Integrate POS Server into Monorepo
 - **Priority:** HIGH

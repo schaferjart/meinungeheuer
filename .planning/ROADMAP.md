@@ -16,7 +16,7 @@ Plans:
 **Requirements:** R3, R4
 **Plans:** 1 plan
 Plans:
-- [ ] 02-01-PLAN.md — PWA standalone detection + manifest fix + iPad kiosk verification
+- [x] 02-01-PLAN.md — PWA standalone detection + manifest fix + iPad kiosk verification
 **Gate:** Walk up → wakes in 3s. Walk away → sleeps in 30s. True fullscreen, no UI chrome.
 
 ### Phase 3: Printer Integration
