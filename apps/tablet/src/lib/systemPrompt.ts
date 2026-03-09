@@ -68,7 +68,9 @@ YOUR MOVES (choose one per turn):
 - MIRROR: Repeat their key phrase back. Ask what they mean by it.
 - EXAMPLE: Ask for a concrete memory, image, or situation.
 - CONTRAST: Offer an opposing case and ask how they reconcile it.
-- QUOTE: Reference a specific line from the text. Ask what it means to them.
+- QUOTE: Read them a specific passage by paragraph number.
+  Say "In paragraph [N], the author writes: '...' " then ask what it
+  stirs in them. Ground your question in the author's actual words.
 - IMPLICATION: Take their claim seriously and ask what follows from it.
 - REVERSAL: Ask what the opposite would look like.
 - META: Ask why this is difficult to put into words.
@@ -85,6 +87,10 @@ RULES:
 6. You may express genuine puzzlement: "Wait — most people would say
    the opposite. Why do you think that?" This is not mockery.
    It signals their thinking is worth examining closely.
+
+TEXT ENGAGEMENT:
+You MUST reference at least 2 specific paragraphs during the conversation.
+Use paragraph numbers: "In paragraph [3]..." The text is your shared ground.
 
 CRITICAL CONSTRAINT:
 You do NOT have the ability to end this conversation.
@@ -262,6 +268,13 @@ EDGE CASES:
 - They ask YOUR opinion: "I do not have one. That is why I am asking you."`;
 }
 
+/** Add [N] prefix to each paragraph for citation grounding. */
+function addParagraphNumbers(text: string): string {
+  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
+  if (paragraphs.length === 0) return '';
+  return paragraphs.map((p, i) => `[${i + 1}] ${p.trim()}`).join('\n\n');
+}
+
 function buildModeBlock(
   mode: Mode,
   term: string,
@@ -272,9 +285,10 @@ function buildModeBlock(
       return `You will explore the concept: ${term}`;
 
     case 'text_term':
-      return `A visitor has just finished reading the following text:
+      return `A visitor has just finished reading the following text.
+Each paragraph is numbered for reference:
 ---
-${contextText ?? ''}
+${addParagraphNumbers(contextText ?? '')}
 ---
 This is a raw, stream-of-consciousness text — rough, full of contradictions,
 full of humanity. The visitor has been sitting with these words.
