@@ -34,7 +34,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [ ] 04-01-PLAN.md — Portrait capture infrastructure (camera upgrade, usePortraitCapture hook, App wiring)
-- [ ] 04-02-PLAN.md — System prompt citation improvements (line-numbered text, QUOTE move)
+- [x] 04-02-PLAN.md — System prompt citation improvements (paragraph-numbered text, QUOTE move, TEXT ENGAGEMENT)
 **Gate:** Complete autonomous loop with printed card showing definition + visitor portrait.
 
 ### Phase 5: Program Architecture (Post-MVP)

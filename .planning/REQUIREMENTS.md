@@ -59,11 +59,12 @@ One complete autonomous loop runs without human intervention:
 - **UAT:** After conversation, card prints with both definition text and visitor's dithered face portrait.
 - **Dependencies:** R5, R6
 
-### R8: Improve Agent Text Context
+### R8: Improve Agent Text Context [COMPLETE]
 - **Priority:** MEDIUM
 - **What:** Review and improve system prompt for Mode A (text_term). Agent should make specific citations from the text, reference passages, and demonstrate genuine textual understanding — not just respond to keywords.
 - **UAT:** In a Mode A conversation, agent references at least 2 specific passages from the text.
 - **Dependencies:** R1, R2
+- **Completed:** 2026-03-09 (Plan 04-02). Paragraph-numbered text injection, QUOTE move citation format, TEXT ENGAGEMENT minimum requiring 2+ specific paragraphs.
 
 ### R9: Program Architecture Foundation
 - **Priority:** LOW (post-MVP)
