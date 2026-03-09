@@ -25,7 +25,7 @@ Plans:
 **Plans:** 2 plans
 Plans:
 - [x] 03-01-PLAN.md — POS server monorepo integration (copy files, pnpm scripts, verify health)
-- [ ] 03-02-PLAN.md — Print queue wiring (RLS policy, persistPrintJob, unit tests)
+- [x] 03-02-PLAN.md — Print queue wiring (RLS policy, persistPrintJob, unit tests)
 **Gate:** Insert print_queue row → card prints within 10s.
 
 ### Phase 4: Portrait + End-to-End Polish

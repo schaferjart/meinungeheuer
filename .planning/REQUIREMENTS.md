@@ -51,6 +51,7 @@ One complete autonomous loop runs without human intervention:
 - **What:** Configure printer-bridge to point at POS server. Test full flow: insert print_queue row → bridge picks up → POSTs to POS server → card prints.
 - **UAT:** Insert a test print_queue row in Supabase. Thermal card prints within 10 seconds.
 - **Dependencies:** R5
+- **Completed:** 2026-03-09 (Plan 03-02)
 
 ### R7: Portrait Capture and Print
 - **Priority:** MEDIUM
