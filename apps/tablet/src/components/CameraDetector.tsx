@@ -11,16 +11,17 @@
  * the visitor can still tap the SleepScreen to trigger WAKE manually.
  */
 
-import { useRef } from 'react';
 import { useFaceDetection } from '../hooks/useFaceDetection';
 
 interface CameraDetectorProps {
   onWake: () => void;
   onSleep: () => void;
+  /** Shared ref to the hidden <video> element — created by the parent so
+   *  both face detection and portrait capture can read from the same stream. */
+  videoRef: React.RefObject<HTMLVideoElement | null>;
 }
 
-export function CameraDetector({ onWake, onSleep }: CameraDetectorProps) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+export function CameraDetector({ onWake, onSleep, videoRef }: CameraDetectorProps) {
 
   const { error, cameraReady } = useFaceDetection({
     videoRef,

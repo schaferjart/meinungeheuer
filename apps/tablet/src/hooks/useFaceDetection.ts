@@ -84,14 +84,16 @@ export function useFaceDetection({
     mountedRef.current = true;
 
     async function init() {
-      // 1. Request camera — front-facing, low resolution (keeps CPU usage low)
+      // 1. Request camera — front-facing, high resolution for portrait capture.
+      //    MediaPipe internally downscales, so higher input adds negligible CPU.
+      //    Using `ideal` (not `exact`) so iOS Safari returns the closest available.
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'user',
-            width: { ideal: 320 },
-            height: { ideal: 240 },
+            width: { ideal: 1280 },
+            height: { ideal: 960 },
           },
           audio: false,
         });
@@ -127,6 +129,8 @@ export function useFaceDetection({
           void video.play().then(resolve).catch(resolve);
         };
       });
+
+      console.log('[FaceDetection] Camera resolution:', video.videoWidth, 'x', video.videoHeight);
 
       if (!mountedRef.current) return;
 
