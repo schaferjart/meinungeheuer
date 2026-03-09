@@ -98,6 +98,7 @@ export const InstallationConfigSchema = z.object({
   active_term: z.string().nullable(),
   active_text_id: z.string().nullable(),
   updated_at: z.string().datetime({ offset: true }),
+  program: z.string().default('aphorism'),
 });
 export type InstallationConfig = z.infer<typeof InstallationConfigSchema>;
 
@@ -138,6 +139,8 @@ export const PrintPayloadSchema = z.object({
   // For Mode C: reference text of the parent definition that seeded this one
   chain_ref: z.string().nullable(),
   timestamp: z.string().datetime({ offset: true }),
+  // Optional print template override (e.g. 'dictionary_portrait')
+  template: z.string().optional(),
 });
 export type PrintPayload = z.infer<typeof PrintPayloadSchema>;
 
