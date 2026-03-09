@@ -7,3 +7,9 @@ dist/
 .DS_Store
 .entire/
 .planning-karaoke-reader/
+
+# Python (POS server)
+venv/
+__pycache__/
+*.pyc
+*.pyo
