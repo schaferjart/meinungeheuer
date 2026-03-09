@@ -53,11 +53,12 @@ One complete autonomous loop runs without human intervention:
 - **Dependencies:** R5
 - **Completed:** 2026-03-09 (Plan 03-02)
 
-### R7: Portrait Capture and Print
+### R7: Portrait Capture and Print [COMPLETE]
 - **Priority:** MEDIUM
 - **What:** Capture visitor face from tablet camera during conversation (Canvas API → blob). POST to POS server `/portrait/capture`. Print dithered portrait on thermal card alongside definition.
 - **UAT:** After conversation, card prints with both definition text and visitor's dithered face portrait.
 - **Dependencies:** R5, R6
+- **Completed:** 2026-03-09 (Plan 04-01)
 
 ### R8: Improve Agent Text Context [COMPLETE]
 - **Priority:** MEDIUM
