@@ -60,7 +60,7 @@ configRoutes.get('/', async (c) => {
   // Fetch the single installation_config row (there should be exactly one)
   const { data: config, error: configError } = await supabase
     .from('installation_config')
-    .select('id, mode, active_term, active_text_id, updated_at')
+    .select('id, mode, active_term, active_text_id, program, updated_at')
     .limit(1)
     .maybeSingle();
 
@@ -76,6 +76,7 @@ configRoutes.get('/', async (c) => {
   const response: Record<string, unknown> = {
     mode: config.mode,
     term: config.active_term,
+    program: config.program ?? null,
   };
 
   // For text_term mode: fetch the active text content
