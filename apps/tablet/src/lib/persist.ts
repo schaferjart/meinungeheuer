@@ -39,6 +39,53 @@ export async function persistDefinition(definition: {
 }
 
 /**
+ * Enqueue a print job in Supabase print_queue.
+ * Fire-and-forget — errors are logged, never block the UI.
+ */
+export async function persistPrintJob(
+  definition: {
+    term: string;
+    definition_text: string;
+    citations: string[] | null;
+    language: string;
+  },
+  sessionId: string | null,
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+
+    // Count existing sessions for session_number
+    const { count } = await supabase
+      .from('sessions')
+      .select('*', { count: 'exact', head: true });
+
+    const printPayload = {
+      term: definition.term,
+      definition_text: definition.definition_text,
+      citations: definition.citations ?? [],
+      language: definition.language,
+      session_number: count ?? 1,
+      chain_ref: null,
+      timestamp: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from('print_queue').insert({
+      session_id: sessionId,
+      payload: printPayload as unknown as Record<string, unknown>,
+      status: 'pending',
+    });
+
+    if (error) {
+      console.warn('[Persist] Print job insert error:', error.message);
+    } else {
+      console.log('[Persist] Print job enqueued for:', definition.term);
+    }
+  } catch (err) {
+    console.warn('[Persist] Print job error:', err);
+  }
+}
+
+/**
  * Persist conversation transcript turns to Supabase.
  * Fire-and-forget.
  */

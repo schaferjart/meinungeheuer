@@ -25,7 +25,7 @@ function makeClientDefinition(d: {
 import { useInstallationMachine } from './hooks/useInstallationMachine';
 import { useConversation } from './hooks/useConversation';
 import { fetchConfig } from './lib/api';
-import { persistDefinition, persistTranscript } from './lib/persist';
+import { persistDefinition, persistPrintJob, persistTranscript } from './lib/persist';
 import { ScreenTransition } from './components/ScreenTransition';
 import { CameraDetector } from './components/CameraDetector';
 import { Admin } from './pages/Admin';
@@ -121,9 +121,10 @@ function InstallationApp() {
       const def = makeClientDefinition(result);
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
+      void persistPrintJob(result, state.sessionId ?? null);
       setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
     },
-    [dispatch],
+    [dispatch, state.sessionId],
   );
 
   const handleConversationEnd = useCallback(
