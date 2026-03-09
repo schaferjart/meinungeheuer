@@ -11,6 +11,7 @@
  * the visitor can still tap the SleepScreen to trigger WAKE manually.
  */
 
+import { useCallback } from 'react';
 import { useFaceDetection } from '../hooks/useFaceDetection';
 
 interface CameraDetectorProps {
@@ -29,6 +30,15 @@ export function CameraDetector({ onWake, onSleep, videoRef }: CameraDetectorProp
     onSleep,
   });
 
+  // Callback ref bridges the RefObject<T | null> to JSX's LegacyRef<T>.
+  // React 18 @types/react don't accept RefObject<T | null> on intrinsic elements.
+  const setVideoRef = useCallback(
+    (el: HTMLVideoElement | null) => {
+      (videoRef as React.MutableRefObject<HTMLVideoElement | null>).current = el;
+    },
+    [videoRef],
+  );
+
   // Log errors once in dev but don't crash — tap-to-start on SleepScreen is the fallback
   if (error && !cameraReady) {
     console.warn('[CameraDetector]', error);
@@ -38,7 +48,7 @@ export function CameraDetector({ onWake, onSleep, videoRef }: CameraDetectorProp
     // This video element is completely invisible — zero dimensions, no pointer events.
     // MediaPipe reads frames from it via detectForVideo().
     <video
-      ref={videoRef}
+      ref={setVideoRef}
       style={{
         position: 'fixed',
         width: 0,

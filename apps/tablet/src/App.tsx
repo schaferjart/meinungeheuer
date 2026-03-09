@@ -24,6 +24,7 @@ function makeClientDefinition(d: {
 
 import { useInstallationMachine } from './hooks/useInstallationMachine';
 import { useConversation } from './hooks/useConversation';
+import { usePortraitCapture } from './hooks/usePortraitCapture';
 import { fetchConfig } from './lib/api';
 import { persistDefinition, persistPrintJob, persistTranscript } from './lib/persist';
 import { ScreenTransition } from './components/ScreenTransition';
@@ -66,6 +67,23 @@ function InstallationApp() {
     mode: DEFAULT_MODE,
     term: DEFAULT_TERM,
   });
+
+  // Shared video element ref — used by both CameraDetector (face detection)
+  // and usePortraitCapture (frame capture). NEVER call getUserMedia a second time
+  // or iOS Safari will mute the first stream (WebKit bug #179363).
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Portrait capture hook — reads frames from the shared video element
+  const posServerUrl = import.meta.env['VITE_POS_SERVER_URL'] ?? '';
+  const { captureFrame, uploadPortrait } = usePortraitCapture({
+    videoRef,
+    posServerUrl,
+  });
+
+  // Store captured portrait blob for deferred upload (capture during conversation,
+  // upload after definition received — natural timing ensures definition prints first)
+  const portraitBlobRef = useRef<Blob | null>(null);
+  const portraitCapturedRef = useRef(false);
 
   // Track whether config has been fetched to avoid double-fetching
   const configFetchedRef = useRef(false);
@@ -122,9 +140,19 @@ function InstallationApp() {
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
       void persistPrintJob(result, state.sessionId ?? null);
+
+      // Fire-and-forget portrait upload to POS server.
+      // Definition card prints via Supabase print_queue (fast, ~2s).
+      // Portrait prints via POS pipeline (slow, 30-180s style transfer).
+      // Natural timing ensures definition card prints first.
+      if (portraitBlobRef.current) {
+        void uploadPortrait(portraitBlobRef.current);
+        portraitBlobRef.current = null;
+      }
+
       setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
     },
-    [dispatch, state.sessionId],
+    [dispatch, state.sessionId, uploadPortrait],
   );
 
   const handleConversationEnd = useCallback(
@@ -229,6 +257,30 @@ function InstallationApp() {
     console.log('[App] Screen:', screen, '| Mode:', mode, '| Term:', term, '| EL status:', conversationStatus);
   }, [screen, mode, term, conversationStatus]);
 
+  // Capture a portrait frame 5s into the conversation screen.
+  // The visitor is facing the tablet and face detection confirms presence.
+  // Store the blob in portraitBlobRef — upload is deferred to handleDefinitionReceived.
+  useEffect(() => {
+    if (screen === 'conversation' && !portraitCapturedRef.current) {
+      const timer = setTimeout(() => {
+        captureFrame()
+          .then((blob) => {
+            if (blob) {
+              portraitBlobRef.current = blob;
+              portraitCapturedRef.current = true;
+              console.log('[App] Portrait frame captured:', blob.size, 'bytes');
+            }
+          })
+          .catch(() => {});
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+    if (screen !== 'conversation') {
+      portraitCapturedRef.current = false;
+      portraitBlobRef.current = null;
+    }
+  }, [screen, captureFrame]);
+
   function renderScreen() {
     switch (screen) {
       case 'sleep':
@@ -301,7 +353,7 @@ function InstallationApp() {
         a zero-size hidden video element; nothing is shown to the visitor.
         Tap-to-start on SleepScreen remains the fallback if camera is denied.
       */}
-      <CameraDetector onWake={handleWake} onSleep={handleFaceLost} />
+      <CameraDetector onWake={handleWake} onSleep={handleFaceLost} videoRef={videoRef} />
 
       <ScreenTransition screenKey={screen}>
         {renderScreen()}
