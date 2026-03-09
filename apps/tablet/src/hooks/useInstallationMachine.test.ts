@@ -84,6 +84,9 @@ function reducer(state: InstallationState, action: InstallationAction): Installa
 
     case 'TIMER_10S':
       if (state.screen !== 'definition') return state;
+      if (!state.stages.printing) {
+        return { ...state, screen: 'farewell' };
+      }
       return { ...state, screen: 'printing' };
 
     case 'PRINT_DONE':

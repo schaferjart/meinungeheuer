@@ -41,6 +41,7 @@ export async function printCard(
     session_number: payload.session_number,
     chain_ref: payload.chain_ref,
     timestamp: payload.timestamp,
+    template: payload.template ?? 'dictionary',
   };
 
   const url = `${posServerUrl.replace(/\/+$/, '')}/print/dictionary`;
