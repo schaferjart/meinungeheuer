@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { requestFullscreen } from '../../lib/fullscreen';
+import { unlockAudio } from '../../lib/audioUnlock';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface SleepScreenProps {
@@ -8,6 +9,7 @@ interface SleepScreenProps {
 
 export function SleepScreen({ dispatch }: SleepScreenProps) {
   const handleInteraction = useCallback(() => {
+    unlockAudio();
     requestFullscreen();
     dispatch({ type: 'WAKE' });
   }, [dispatch]);
