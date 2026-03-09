@@ -50,6 +50,21 @@ describe('printCard', () => {
     expect(body).not.toHaveProperty('term');
     expect(body['definition']).toBe(payload.definition_text);
     expect(body).not.toHaveProperty('definition_text');
+    expect(body['template']).toBe('dictionary');
+  });
+
+  it('forwards template field from payload to POST body', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(''),
+    });
+    vi.stubGlobal('fetch', mockFetch);
+
+    const payload = { ...buildTestPayload(), template: 'dictionary_portrait' };
+    await printCard('http://test:9100', payload);
+
+    const body = JSON.parse((mockFetch.mock.calls[0] as [string, RequestInit])[1].body as string) as Record<string, unknown>;
+    expect(body['template']).toBe('dictionary_portrait');
   });
 
   it('retries once on network error then succeeds', async () => {

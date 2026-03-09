@@ -248,9 +248,15 @@ describe('useInstallationMachine reducer', () => {
   describe('DEFINITION state', () => {
     const definition: InstallationState = { ...initialState, screen: 'definition', definition: makeDefinition() };
 
-    it('TIMER_10S transitions definition → printing', () => {
+    it('TIMER_10S transitions definition -> printing when stages.printing=true', () => {
       const next = reducer(definition, { type: 'TIMER_10S' });
       expect(next.screen).toBe('printing');
+    });
+
+    it('TIMER_10S transitions definition -> farewell when stages.printing=false', () => {
+      const s: InstallationState = { ...definition, stages: { textReading: true, termPrompt: false, portrait: true, printing: false } };
+      const next = reducer(s, { type: 'TIMER_10S' });
+      expect(next.screen).toBe('farewell');
     });
   });
 
@@ -398,6 +404,17 @@ describe('useInstallationMachine reducer', () => {
       const s: InstallationState = { ...initialState, screen: 'text_display', stages: { textReading: true, termPrompt: false, portrait: true, printing: true } };
       const next = reducer(s, { type: 'READY' });
       expect(next.screen).toBe('conversation');
+    });
+
+    it('stages={printing:false}: definition -> farewell (skips printing)', () => {
+      const s: InstallationState = {
+        ...initialState,
+        screen: 'definition',
+        definition: makeDefinition(),
+        stages: { textReading: false, termPrompt: false, portrait: false, printing: false },
+      };
+      const result = advance(s, { type: 'TIMER_10S' }, { type: 'TIMER_15S' });
+      expect(result.screen).toBe('sleep');
     });
   });
 
