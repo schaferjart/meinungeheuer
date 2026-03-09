@@ -24,7 +24,7 @@ Plans:
 **Requirements:** R5, R6
 **Plans:** 2 plans
 Plans:
-- [ ] 03-01-PLAN.md — POS server monorepo integration (copy files, pnpm scripts, verify health)
+- [x] 03-01-PLAN.md — POS server monorepo integration (copy files, pnpm scripts, verify health)
 - [ ] 03-02-PLAN.md — Print queue wiring (RLS policy, persistPrintJob, unit tests)
 **Gate:** Insert print_queue row → card prints within 10s.
 

@@ -39,11 +39,12 @@ One complete autonomous loop runs without human intervention:
 - **Dependencies:** R3 (PWA mode for camera persistence)
 - **Completed:** 2026-03-09 (Plan 02-01). Face detection functional; full kiosk verification deferred.
 
-### R5: Integrate POS Server into Monorepo
+### R5: Integrate POS Server into Monorepo [COMPLETE]
 - **Priority:** HIGH
 - **What:** Clone POS-thermal-printer repo into `apps/pos-server/`. Add pnpm convenience scripts. Verify Flask server starts and `/health` endpoint responds.
 - **UAT:** `pnpm dev:pos` starts the Python Flask server. `/health` returns 200.
 - **Dependencies:** None
+- **Completed:** 2026-03-09 (Plan 03-01)
 
 ### R6: Printer Bridge End-to-End
 - **Priority:** HIGH
