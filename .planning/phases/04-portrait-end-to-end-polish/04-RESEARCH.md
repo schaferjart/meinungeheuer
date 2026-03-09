@@ -1,26 +1,26 @@
 # Phase 4: Portrait + End-to-End Polish - Research
 
-**Researched:** 2026-03-09
+**Researched:** 2026-03-09 (forced re-research, code-grounded)
 **Domain:** Browser camera capture, Canvas API, POS server portrait pipeline, system prompt engineering
 **Confidence:** HIGH
 
 ## Summary
 
-Phase 4 has two distinct workstreams: (1) portrait capture from the tablet camera and delivery to the POS server for dithered thermal printing, and (2) improving the Mode A system prompt for better text citations. Both are well-supported by existing infrastructure.
+Phase 4 has two distinct workstreams: (1) portrait capture from the tablet camera and delivery to the POS server for dithered thermal printing (R7), and (2) improving the Mode A system prompt for better text citations (R8). Both are well-supported by existing infrastructure.
 
-The portrait capture is the more technically nuanced task. The POS server already has a fully implemented `/portrait/capture` endpoint with a sophisticated pipeline (AI-based photo selection, n8n style transfer to wax-statue aesthetic, face-landmark zoom crops, dithered printing). The missing piece is the tablet-side: capturing a high-resolution frame from the camera during conversation and POSTing it. The critical constraint is that **iOS Safari does not support multiple getUserMedia() calls** -- the second call mutes the first stream. The solution is to request a single higher-resolution stream at init and share it between face detection (which only needs 320x240) and portrait capture (which needs the highest resolution available). The current `useFaceDetection` hook requests 320x240; this must be upgraded to request higher resolution, with face detection receiving downscaled frames and portrait capture drawing from the full-resolution stream.
+The portrait capture is the more technically nuanced task. The POS server (`apps/pos-server/`) already has a fully implemented `/portrait/capture` endpoint with a sophisticated pipeline: AI-based photo selection (`select_best_photo` via OpenRouter), style transfer via n8n webhook (`transform_to_statue` via Gemini 2.5 Flash Image), face-landmark zoom crops (`detect_face_landmarks` + `compute_zoom_crops`), and multi-zoom dithered printing (`print_portrait`). The missing piece is entirely tablet-side: capturing a high-resolution frame from the camera during conversation and POSTing it. The critical iOS Safari constraint is that **a second `getUserMedia()` call mutes the first stream's tracks** (WebKit bug #179363, confirmed still present). The solution is to request a single higher-resolution stream at init and share it between face detection and portrait capture. The current `useFaceDetection` hook (line 90-94) requests `320x240`; this must be upgraded. The hook stores the stream in `streamRef` (line 112) but only exposes `{ isPresent, isAwake, isSleeping, error, cameraReady }` -- the `videoRef` is already passed in from the parent, so portrait capture can use the same ref.
 
-The system prompt improvement (R8) is primarily a prompt engineering task. The current text_term prompt already has a QUOTE move and instructions to reference the text, but lacks explicit instruction to cite specific lines with enough precision. Adding numbered lines or paragraph markers to the injected text, plus explicit instructions to quote with line references, will significantly improve citation specificity.
+The system prompt improvement (R8) is a prompt engineering task. The current `buildTextTermPrompt` in `systemPrompt.ts` already has a QUOTE move (line 71) and instructions to "reference the text" (lines 56-58). However, the context text is injected as raw text in `buildModeBlock` (lines 275-285) with no line numbers, no paragraph markers, and no explicit citation format instructions. The QUOTE move merely says "Reference a specific line from the text. Ask what it means to them." -- too vague for reliable citation. The fix is: (1) add paragraph numbers to the injected text, (2) strengthen the QUOTE move with explicit citation format instructions, and (3) add TEXT ENGAGEMENT rules requiring at least 2 specific text references per conversation.
 
-**Primary recommendation:** Share a single high-resolution camera stream between face detection and portrait capture. Use Canvas drawImage + toBlob for frame capture. POST as multipart/form-data to the existing POS `/portrait/capture` endpoint.
+**Primary recommendation:** Upgrade camera resolution in `useFaceDetection`, create `usePortraitCapture` hook that reads frames from the same `videoRef`, POST as multipart/form-data to POS `/portrait/capture`. For prompts, add numbered paragraphs to injected text and strengthen citation instructions in QUOTE move.
 
 <phase_requirements>
 ## Phase Requirements
 
 | ID | Description | Research Support |
 |----|-------------|-----------------|
-| R7 | Portrait Capture and Print: Capture visitor face from tablet camera during conversation (Canvas API to blob). POST to POS server `/portrait/capture`. Print dithered portrait on thermal card alongside definition. | Camera stream sharing pattern, Canvas drawImage + toBlob approach, existing POS `/portrait/capture` endpoint, print coordination via state machine |
-| R8 | Improve Agent Text Context: Review and improve system prompt for Mode A (text_term). Agent should make specific citations from the text, reference passages, and demonstrate genuine textual understanding. | Prompt engineering patterns for citation grounding, numbered-line injection technique, QUOTE move reinforcement |
+| R7 | Portrait Capture and Print: Capture visitor face from tablet camera during conversation (Canvas API to blob). POST to POS server `/portrait/capture`. Print dithered portrait on thermal card alongside definition. | Camera stream sharing via shared `videoRef` (already passed into `useFaceDetection`), Canvas `drawImage` + `toBlob` for frame capture, existing POS `/portrait/capture` endpoint accepts multipart files with `skip_selection` and `mode` params, `run_pipeline` handles full style-transfer-to-print flow, print coordination via timing (definition via print_queue is fast, portrait via direct POST + style transfer takes 30-180s) |
+| R8 | Improve Agent Text Context: Review and improve system prompt for Mode A (text_term). Agent should make specific citations from the text, reference passages, and demonstrate genuine textual understanding. | Current `buildModeBlock` injects raw text without line numbers (systemPrompt.ts:275-285), QUOTE move exists but is vague (line 71), numbered-paragraph injection technique proven effective for LLM citation grounding, need to strengthen citation instructions without bloating prompt |
 </phase_requirements>
 
 ## Standard Stack
@@ -29,51 +29,82 @@ The system prompt improvement (R8) is primarily a prompt engineering task. The c
 | Library | Version | Purpose | Why Standard |
 |---------|---------|---------|--------------|
 | React | 19.x | UI framework | Already in apps/tablet |
-| Canvas API | native | Frame capture from video | Only cross-browser approach for still capture from getUserMedia on Safari |
+| Canvas API | native | Frame capture from video | Only cross-browser approach for still capture from getUserMedia on iOS Safari -- ImageCapture API is NOT supported in any Safari version |
 | Fetch API | native | POST image to POS server | Standard browser HTTP client |
-| FormData | native | Multipart file upload | Required for `/portrait/capture` endpoint |
-| MediaPipe | 0.10.32 | Face detection | Already used in useFaceDetection |
+| FormData | native | Multipart file upload | Required by `/portrait/capture` endpoint (uses `request.files.getlist("file")`) |
+| MediaPipe tasks-vision | 0.10.32 | Face detection | Already used in useFaceDetection, loaded from CDN |
 
 ### Supporting
 | Library | Version | Purpose | When to Use |
 |---------|---------|---------|-------------|
-| @mediapipe/tasks-vision | 0.10.32 | Face detection WASM runtime | Already installed, used for wake/sleep detection |
+| @mediapipe/tasks-vision | 0.10.32 | Face detection WASM runtime | Already installed, CDN-loaded in useFaceDetection.ts |
 
 ### Alternatives Considered
 | Instead of | Could Use | Tradeoff |
 |------------|-----------|----------|
-| Canvas drawImage + toBlob | ImageCapture API (takePhoto) | NOT viable -- Safari/iOS does not support ImageCapture API at all (verified via caniuse.com). Canvas is the only option. |
-| Single shared stream | Two getUserMedia() calls | NOT viable -- iOS Safari mutes the first stream when a second getUserMedia() is called. Must share one stream. |
-| MediaStream.clone() | Second getUserMedia() | clone() is the correct iOS workaround for multiple consumers of the same camera |
+| Canvas drawImage + toBlob | ImageCapture API (takePhoto) | NOT viable -- Safari/iOS does not support ImageCapture API at all. Canvas is the only option. |
+| Single shared stream | Two getUserMedia() calls | NOT viable -- iOS Safari mutes the first stream's tracks when a second getUserMedia() is called (WebKit bug #179363). Must share one stream. |
+| Direct videoRef sharing | MediaStream.clone() | clone() is an option but unnecessary here -- CameraDetector already creates the videoRef and passes it to useFaceDetection. usePortraitCapture can receive the same videoRef. |
 
 **Installation:** No new packages needed. All required APIs are browser-native.
 
 ## Architecture Patterns
 
-### Recommended Approach: Shared Camera Stream
+### Current Camera Architecture (As-Is)
 
 ```
-                    getUserMedia (1280x960)
-                            |
-                    Single MediaStream
-                     /              \
-            clone() for           Original for
-          face detection         portrait capture
-         (320x240 via           (full resolution
-          detectForVideo)        drawImage to canvas)
+App.tsx
+  └── CameraDetector (creates videoRef, renders hidden <video>)
+        └── useFaceDetection (gets videoRef as prop)
+              ├── getUserMedia({ width: 320, height: 240 })
+              ├── stream → video.srcObject
+              ├── FaceDetector.detectForVideo(video, ...) at 500ms interval
+              └── Returns { isPresent, isAwake, isSleeping, error, cameraReady }
 ```
 
-### Pattern 1: Camera Stream Upgrade and Sharing
+Key observations from actual code:
+- `CameraDetector` creates its own `videoRef` internally (line 23 of CameraDetector.tsx)
+- The `<video>` element is rendered with `width: 0, height: 0, opacity: 0` but NOT `display: none` (so MediaPipe can still read frames)
+- `useFaceDetection` stores the stream in `streamRef` but does not expose it
+- Detection runs at 2fps via `setInterval(..., 500)` with `detector.detectForVideo(video, now)`
+- The hook uses `delegate: 'CPU'` for the MediaPipe model (not GPU)
 
-**What:** Request a single camera stream at higher resolution (1280x960 ideal), share it between face detection (which processes at whatever resolution the video provides -- MediaPipe handles downscaling internally) and portrait capture (which draws the full frame to a canvas).
+### Target Camera Architecture (To-Be)
 
-**When to use:** Always -- this is the only approach that works on iOS Safari.
+```
+App.tsx
+  ├── videoRef (created at App level, shared down)
+  ├── CameraDetector (receives videoRef as prop)
+  │     └── useFaceDetection (gets videoRef, upgraded to 1280x960)
+  └── usePortraitCapture (receives same videoRef)
+        ├── captureFrame(): Canvas drawImage → toBlob → JPEG
+        └── uploadPortrait(): FormData POST to POS /portrait/capture
+```
 
-**Key insight:** The current `useFaceDetection` requests `{ width: { ideal: 320 }, height: { ideal: 240 } }`. Upgrading to `{ width: { ideal: 1280 }, height: { ideal: 960 } }` will get a higher-res stream. MediaPipe face detection handles arbitrary input sizes (it internally resizes). The increased resolution is needed for portrait quality but should NOT noticeably impact face detection performance since detection runs at 2fps (500ms interval) and MediaPipe's blaze_face_short_range model is optimized for variable input.
+Changes required:
+1. **Move videoRef creation up to `App.tsx`** (or `InstallationApp`). Currently `CameraDetector` creates its own ref (line 23). The ref needs to be passed in so `usePortraitCapture` can also use it.
+2. **Upgrade resolution** in `useFaceDetection` from `320x240` to `1280x960` ideal. MediaPipe handles arbitrary input sizes internally.
+3. **New `usePortraitCapture` hook** that takes `videoRef` and POS server URL.
+4. **Wire capture trigger** in App.tsx -- fire during or after conversation screen.
 
-**Implementation approach:**
+### Pattern 1: Camera Stream Resolution Upgrade
+
+**What:** Change the `getUserMedia` constraints in `useFaceDetection.ts` (lines 90-94).
+
+**Current code (line 90-94):**
 ```typescript
-// In useFaceDetection.ts -- upgrade resolution request
+stream = await navigator.mediaDevices.getUserMedia({
+  video: {
+    facingMode: 'user',
+    width: { ideal: 320 },
+    height: { ideal: 240 },
+  },
+  audio: false,
+});
+```
+
+**Target code:**
+```typescript
 stream = await navigator.mediaDevices.getUserMedia({
   video: {
     facingMode: 'user',
@@ -84,22 +115,62 @@ stream = await navigator.mediaDevices.getUserMedia({
 });
 ```
 
-**Expose the stream:** The hook currently stores the stream in `streamRef` but does not expose it. Add the stream to the return value or expose the videoRef so that the portrait capture hook can read frames from the same video element.
+**Why `ideal` not `exact`:** iOS Safari returns the closest available resolution. iPad front cameras typically support up to 720p or 1080p via getUserMedia. Using `ideal` ensures the constraint never fails. Even 640x480 is sufficient for the thermal printer's 576px paper width.
 
-### Pattern 2: Canvas Frame Capture (Safari-Compatible)
+**Performance impact:** MediaPipe face detection runs at 2fps (500ms interval) with `delegate: 'CPU'`. The blaze_face_short_range model handles arbitrary input sizes. The increased resolution adds negligible CPU overhead because the model internally downscales. Verified: the detection loop (line 164-221) already guards with `video.readyState < 2` before calling `detectForVideo`.
 
-**What:** Draw a video frame to an offscreen canvas, convert to Blob, wrap in FormData, POST to POS server.
+### Pattern 2: VideoRef Sharing
 
-**When to use:** For capturing portrait snapshot during conversation.
+**What:** Lift `videoRef` out of `CameraDetector` into `App.tsx`.
 
-**Example:**
+**Current `CameraDetector` (CameraDetector.tsx:22-23):**
 ```typescript
-// Source: MDN Taking still photos with getUserMedia()
+export function CameraDetector({ onWake, onSleep }: CameraDetectorProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+```
+
+**Target `CameraDetector`:**
+```typescript
+interface CameraDetectorProps {
+  onWake: () => void;
+  onSleep: () => void;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+}
+
+export function CameraDetector({ onWake, onSleep, videoRef }: CameraDetectorProps) {
+  // No longer creates its own ref — uses the one from parent
+```
+
+**Target `App.tsx` (in InstallationApp):**
+```typescript
+const videoRef = useRef<HTMLVideoElement | null>(null);
+
+// Pass to CameraDetector
+<CameraDetector onWake={handleWake} onSleep={handleFaceLost} videoRef={videoRef} />
+
+// Also use in portrait capture
+const { captureAndUpload, isCapturing } = usePortraitCapture({
+  videoRef,
+  posServerUrl: import.meta.env['VITE_POS_SERVER_URL'] ?? '',
+});
+```
+
+### Pattern 3: Canvas Frame Capture (Safari-Compatible)
+
+**What:** Draw a video frame to an offscreen canvas, convert to Blob.
+
+```typescript
 async function captureFrame(video: HTMLVideoElement): Promise<Blob> {
+  if (video.readyState < 2 || video.videoWidth === 0) {
+    throw new Error('Video not ready for capture');
+  }
+
   const canvas = document.createElement('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d')!;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Cannot get 2d context');
+
   ctx.drawImage(video, 0, 0);
 
   return new Promise<Blob>((resolve, reject) => {
@@ -109,19 +180,21 @@ async function captureFrame(video: HTMLVideoElement): Promise<Blob> {
         else reject(new Error('Canvas toBlob returned null'));
       },
       'image/jpeg',
-      0.92, // High quality JPEG
+      0.92,
     );
   });
 }
 ```
 
-### Pattern 3: Portrait Upload to POS Server
+**iOS black frame defense:** Check `video.readyState >= 2` AND `video.videoWidth > 0` before drawing. The `useFaceDetection` detection loop already uses this guard (line 166: `if (!video || video.readyState < 2) return;`). For portrait capture, add a retry mechanism: if the first capture produces a tiny blob (< 1KB), retry after 100ms.
 
-**What:** POST the captured frame as multipart/form-data to `/portrait/capture`.
+### Pattern 4: Portrait Upload to POS Server
 
-**Example:**
+**What:** POST the captured frame to the existing `/portrait/capture` endpoint.
+
+**From `print_server.py` (lines 270-315):** The endpoint accepts multipart `file` fields, optional `skip_selection` (string "true"/"1"), optional `mode` (dither mode), optional `blur`. It calls `run_pipeline()` which runs the full A->B->C pipeline: photo selection -> style transfer via n8n -> face-landmark zoom crops -> dithered printing at 4 zoom levels.
+
 ```typescript
-// Source: POS server print_server.py /portrait/capture endpoint
 async function uploadPortrait(
   posServerUrl: string,
   imageBlob: Blob,
@@ -129,7 +202,7 @@ async function uploadPortrait(
   const formData = new FormData();
   formData.append('file', imageBlob, 'portrait.jpg');
   formData.append('skip_selection', 'true'); // Single image, no AI selection needed
-  formData.append('mode', 'bayer'); // Match config.yaml portrait.dither_mode
+  // mode and blur default to config.yaml values (bayer, blur=10)
 
   const url = `${posServerUrl.replace(/\/+$/, '')}/portrait/capture`;
 
@@ -137,7 +210,7 @@ async function uploadPortrait(
     method: 'POST',
     body: formData,
     // Do NOT set Content-Type -- browser sets multipart boundary automatically
-    signal: AbortSignal.timeout(180_000), // Style transfer can take up to 3 minutes
+    signal: AbortSignal.timeout(300_000), // 5 min: style transfer can take 30-180s
   });
 
   if (!res.ok) {
@@ -147,151 +220,312 @@ async function uploadPortrait(
 }
 ```
 
-### Pattern 4: Print Coordination (Definition First, Then Portrait)
+**Critical detail from POS server code:** The `run_pipeline` function (portrait_pipeline.py:389-420) runs synchronously on the Flask thread. The endpoint does NOT return until the entire pipeline completes (style transfer 30-180s + printing). This means the tablet's fetch call will hang for minutes. The tablet MUST fire-and-forget (catch errors, don't block UI).
 
-**What:** The current flow already enqueues a print job via `persistPrintJob` when `DEFINITION_RECEIVED` fires. Portrait printing needs to happen after or alongside. The POS server's `/portrait/capture` endpoint handles its own printing (it calls `print_portrait` which sends directly to the printer, not through the print_queue). So the coordination is: tablet enqueues definition print job (via Supabase print_queue) -> bridge prints definition card -> tablet POSTs portrait to POS server -> POS server prints portrait directly.
+### Pattern 5: Print Coordination
 
-**When to use:** Always. The portrait printing is independent of the Supabase print_queue -- it goes directly to the POS server.
+**What:** Definition card prints first, portrait prints second. Two independent paths.
 
-**Timing:** Capture the portrait frame during conversation (any time a face is detected). Upload after definition is saved but while the user sees the definition/printing screens. This gives the style transfer pipeline time to process (~30-180 seconds).
+**Current print flow (from App.tsx lines 119-128):**
+1. `handleDefinitionReceived` fires -> calls `persistPrintJob(result, sessionId)` -> inserts into Supabase `print_queue`
+2. Printer bridge picks up the job (Realtime subscription) -> POSTs to POS `/print/dictionary` -> card prints
+3. Tablet dispatches `DEFINITION_READY` after 2s timeout -> transitions to `definition` screen -> `TIMER_10S` -> `printing` screen -> `PRINT_DONE` (after 30s `TIMERS.PRINT_TIMEOUT_MS`) -> `farewell`
 
-### Pattern 5: System Prompt Citation Improvement
+**Portrait timing strategy:**
+- Capture a frame during `conversation` screen (visitor is facing tablet, face is detected)
+- Fire portrait upload AFTER `persistPrintJob` succeeds in `handleDefinitionReceived`
+- The definition card prints almost immediately (bridge picks up in seconds, POS prints in seconds)
+- The portrait upload takes 30-180s for style transfer -- definition card is already printed by then
+- Natural timing ensures correct print order without explicit coordination
 
-**What:** Improve the text_term system prompt so the agent makes specific text citations.
+**Where to trigger:** Inside `handleDefinitionReceived` callback (App.tsx line 119-128), after `persistPrintJob`:
+```typescript
+// After persistPrintJob...
+void captureAndUpload(); // Fire-and-forget portrait upload
+```
 
-**Implementation approach:**
-1. Add line numbers to injected text (split by sentences/paragraphs, prefix with `[1]`, `[2]`, etc.)
-2. Strengthen the QUOTE move with explicit instruction: "When you quote, cite by line number: 'In line [3], the author writes...' "
-3. Add a new section: "TEXT ENGAGEMENT RULES: You must reference at least 2 specific lines from the text during the conversation. Do not paraphrase -- quote directly."
-4. Add example quotes from the actual text to show the model what good citations look like.
+Actually, capture should happen DURING conversation (better face framing), upload can be deferred to definition received. Store the captured blob in a ref.
+
+**Better approach:** Capture frame ~5s into conversation (face is engaged), store as blob ref. Upload after definition is received. This separates capture timing from upload timing.
+
+### Pattern 6: System Prompt Citation Improvement
+
+**What:** Improve `buildTextTermPrompt` and `buildModeBlock` in `systemPrompt.ts` for better text citations.
+
+**Current issues identified in actual code:**
+
+1. **No line numbers in injected text** (`buildModeBlock`, lines 275-285): Text is injected raw between `---` markers. The LLM has no way to reference specific passages precisely.
+
+2. **QUOTE move is vague** (line 71): `"QUOTE: Reference a specific line from the text. Ask what it means to them."` -- no format instruction, no example.
+
+3. **No citation requirement** -- there's no explicit instruction to cite a minimum number of passages.
+
+4. **Context text description is good** (lines 278-280): "This is a raw, stream-of-consciousness text -- rough, full of contradictions, full of humanity." -- keep this.
+
+**Improvement approach:**
+
+1. **Add paragraph numbers to injected text.** Create a helper function:
+```typescript
+function addParagraphNumbers(text: string): string {
+  return text
+    .split(/\n\n+/)
+    .filter(p => p.trim().length > 0)
+    .map((p, i) => `[${i + 1}] ${p.trim()}`)
+    .join('\n\n');
+}
+```
+Use in `buildModeBlock` for `text_term` case.
+
+2. **Strengthen QUOTE move** (replace line 71):
+```
+- QUOTE: Read them a specific passage from the text by paragraph number.
+  Say "In paragraph [N], the author writes: '...' " and then ask what
+  it makes them think. Ground your question in the actual words.
+```
+
+3. **Add TEXT ENGAGEMENT minimum** -- add after the MOVES section:
+```
+TEXT ENGAGEMENT:
+You MUST reference at least 2 specific paragraphs from the text during
+the conversation. Use their paragraph numbers: "In paragraph [3], they
+write..." This is not optional. The text is your shared ground with the
+visitor. Use it.
+```
+
+4. **Keep prompt length manageable.** The current text_term prompt is ~158 lines (lines 30-158 of `buildTextTermPrompt`). The additions are roughly 8-10 lines net (replacing 1 QUOTE line with 3, adding 5 TEXT ENGAGEMENT lines). This stays well under any concerning length threshold.
 
 ### Anti-Patterns to Avoid
+
 - **Multiple getUserMedia() calls on iOS:** iOS Safari mutes the previous stream. NEVER call getUserMedia a second time.
 - **Setting Content-Type for FormData:** The browser must set the multipart boundary automatically. Manually setting Content-Type will break the upload.
-- **Blocking the UI during portrait upload:** The style transfer takes 30-180 seconds. Upload must be fire-and-forget from the tablet's perspective.
-- **Requesting getUserMedia with exact constraints:** Use `{ ideal: X }` not `{ exact: X }` -- exact constraints will fail if the device cannot match exactly.
-- **Capturing portrait too early (during sleep/welcome):** Camera may not have a clear face yet. Capture during the `conversation` screen when the visitor is actively engaged and facing the tablet.
+- **Blocking the UI during portrait upload:** The POS server's `run_pipeline` runs synchronously (30-180s). The tablet MUST fire-and-forget.
+- **Requesting getUserMedia with exact constraints:** Use `{ ideal: X }` not `{ exact: X }`.
+- **Capturing portrait during sleep/welcome screens:** Camera may not have a clear face. Capture during `conversation` screen.
+- **Adding too many prompt instructions:** Keep citation improvements concise. Replace vague with specific rather than adding entirely new sections.
+- **Creating videoRef inside CameraDetector if it needs sharing:** Must lift to parent.
 
 ## Don't Hand-Roll
 
 | Problem | Don't Build | Use Instead | Why |
 |---------|-------------|-------------|-----|
-| Image dithering for thermal print | Custom dithering in JS | POS server's `portrait_pipeline.py` | Already implements bayer, floyd, halftone dithering with proper blur and contrast |
-| Face detection for crop | JS face landmark detection | POS server's `detect_face_landmarks()` | Already uses MediaPipe FaceMesh on the server side for zoom crops |
-| Style transfer | Custom image processing | POS server's n8n webhook pipeline | Already configured with Gemini 2.5 Flash Image via n8n |
-| Photo selection from multiple shots | Custom comparison logic | POS server's `select_best_photo()` | Already uses OpenRouter vision model |
+| Image dithering | Custom JS dithering | POS server `portrait_pipeline.py` `_dither_image()` | Already implements bayer, floyd, halftone with proper blur and contrast |
+| Face detection for crop | JS face landmark detection | POS server `detect_face_landmarks()` | Uses MediaPipe FaceMesh server-side for precise zoom crops |
+| Style transfer | Custom image processing | POS server n8n webhook (`transform_to_statue()`) | Configured with Gemini 2.5 Flash Image, prompt in config.yaml |
+| Photo selection | Custom comparison | POS server `select_best_photo()` | Uses OpenRouter vision model, not needed for single-shot |
+| Zoom crop computation | Manual crop math | POS server `compute_zoom_crops()` | 4-level zoom (shoulders, face, eyes, strip) from landmarks |
 
-**Key insight:** The POS server already has the entire portrait pipeline implemented. The tablet's only job is: (1) capture a high-quality frame, (2) POST it. Everything else (style transfer, dithering, face-landmark zoom crops, printing at multiple zoom levels) is handled server-side.
+**Key insight:** The POS server has the ENTIRE portrait pipeline (`portrait_pipeline.py`, 451 lines). The tablet's only job is: (1) capture a high-quality JPEG frame, (2) POST it. Everything else -- selection, style transfer, dithering, face-landmark zoom crops, multi-zoom printing -- is handled server-side.
 
 ## Common Pitfalls
 
 ### Pitfall 1: iOS Safari Stream Muting
 **What goes wrong:** Calling getUserMedia() a second time mutes the first stream's tracks. Face detection stops working.
-**Why it happens:** iOS Safari enforces single-stream-per-device. Second call auto-mutes the first.
-**How to avoid:** Use a single getUserMedia() call. Share the stream (or its video element) between face detection and portrait capture. Use `stream.clone()` if needed.
-**Warning signs:** Face detection suddenly stops working after portrait capture is added.
+**Why it happens:** iOS Safari enforces single-stream-per-device. Second call auto-mutes the first (WebKit bug #179363).
+**How to avoid:** Use a single getUserMedia() call. Share the videoRef between face detection and portrait capture. The current architecture already passes videoRef into useFaceDetection -- just need to also share it with usePortraitCapture.
+**Warning signs:** Face detection suddenly stops detecting after portrait capture code is added.
 
 ### Pitfall 2: Black Image from Canvas on iOS
 **What goes wrong:** `canvas.drawImage(video, ...)` produces a solid black image.
-**Why it happens:** Known iOS bug where GPU rendering can cause black frames. Also happens if video has not started playing or readyState < HAVE_CURRENT_DATA.
-**How to avoid:** Ensure `video.readyState >= 2` before drawing. Use `video.videoWidth > 0` as additional check. Consider a small delay or retry if first capture is blank.
-**Warning signs:** Portrait shows up as solid black on the printed card.
+**Why it happens:** WebKit bug #237424 -- GPU Process canvas rendering can cause black frames. Also happens if video has not started playing or `readyState < HAVE_CURRENT_DATA`.
+**How to avoid:** Check `video.readyState >= 2` AND `video.videoWidth > 0` before drawing. Add a size check on the resulting blob -- if < 1KB, it's likely black. Implement a retry with 100ms delay.
+**Warning signs:** Portrait shows up as solid black on the printed card. Blob size is suspiciously small.
 
-### Pitfall 3: Portrait Upload Timeout
-**What goes wrong:** The n8n style transfer pipeline takes 30-180 seconds. If the tablet waits synchronously, it blocks the UI.
-**Why it happens:** Gemini 2.5 Flash Image generation is slow.
-**How to avoid:** Fire-and-forget from the tablet. The POS server handles the entire pipeline and prints directly. The tablet should not wait for a response (or use a long timeout with no UI blocking).
-**Warning signs:** User staring at a frozen "printing" screen for minutes.
+### Pitfall 3: Portrait Upload Timeout / UI Blocking
+**What goes wrong:** The POS server `run_pipeline` (portrait_pipeline.py:389-420) is synchronous. The n8n style transfer takes 30-180s. If the tablet waits synchronously, it blocks screen transitions.
+**Why it happens:** `transform_to_statue` calls `requests.post(webhook_url, ..., timeout=180)` (portrait_pipeline.py:116-124). The Flask endpoint returns only after the full pipeline completes.
+**How to avoid:** Fire-and-forget from the tablet. Catch errors, log them, but never await the response in a way that blocks UI transitions. Use a long timeout (5 minutes) on the fetch but wrap in a void promise.
+**Warning signs:** Visitor staring at a frozen printing screen. State machine not advancing.
 
 ### Pitfall 4: Camera Resolution Not Available
 **What goes wrong:** Requesting 1280x960 on a device that only supports lower resolution.
-**Why it happens:** Not all iPad cameras provide that resolution via getUserMedia.
-**How to avoid:** Use `{ ideal: 1280 }` not `{ exact: 1280 }`. The browser will pick the closest available resolution. Even 640x480 is usable for a thermal portrait (576px paper width).
-**Warning signs:** getUserMedia rejects the constraint.
+**Why it happens:** Not all iPad cameras provide that resolution via getUserMedia. Some iOS devices cap at 720p.
+**How to avoid:** Use `{ ideal: 1280 }` not `{ exact: 1280 }`. The browser picks the closest available. Even 640x480 is usable -- the thermal printer's paper width is 576px.
+**Warning signs:** getUserMedia rejects the constraint (would only happen with `exact`).
 
-### Pitfall 5: System Prompt Too Long
-**What goes wrong:** Adding too many citation instructions bloats the prompt beyond the context window or dilutes other instructions.
-**Why it happens:** The text_term prompt is already ~180 lines. Adding more risks instruction following degradation.
-**How to avoid:** Keep citation improvements concise. Replace existing vague instructions with specific ones rather than adding new sections. The QUOTE move already exists -- strengthen it rather than adding a new move.
-**Warning signs:** Agent ignores other instructions (like one-question-per-turn) after prompt changes.
+### Pitfall 5: Missing VITE_POS_SERVER_URL Env Var
+**What goes wrong:** The tablet has no configured POS server URL. Current `.env.example` has: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ELEVENLABS_API_KEY`, `VITE_ELEVENLABS_AGENT_ID`, `VITE_ELEVENLABS_VOICE_ID`, `VITE_BACKEND_URL`. No POS server URL.
+**Why it happens:** The tablet previously never needed to talk to the POS server directly -- the printer-bridge handled everything.
+**How to avoid:** Add `VITE_POS_SERVER_URL` to `.env.example` and `.env`. Default to empty string (portrait capture disabled). In `usePortraitCapture`, skip upload if URL is empty.
+**Warning signs:** Portrait upload fails silently because URL is undefined.
+
+### Pitfall 6: System Prompt Bloat
+**What goes wrong:** Adding too many citation instructions dilutes other instructions.
+**Why it happens:** The text_term prompt is already ~158 lines. LLMs degrade instruction following with excessive length.
+**How to avoid:** Keep changes to ~10 lines net. Replace vague QUOTE move with specific one (same line count). Add TEXT ENGAGEMENT as a compact 3-line block. Do not add examples of good citations -- the model will figure it out from the numbered text.
+**Warning signs:** Agent ignores one-question-per-turn rule or CRITICAL CONSTRAINT after prompt changes.
+
+### Pitfall 7: CameraDetector Video Element Size
+**What goes wrong:** Portrait capture produces usable frames but they're tiny.
+**Why it happens:** The `<video>` element in CameraDetector has `width: 0, height: 0` styling. Canvas drawImage uses `video.videoWidth` and `video.videoHeight` (the stream's intrinsic dimensions), NOT the CSS dimensions. This is actually fine -- `video.videoWidth` reflects the actual camera resolution regardless of CSS sizing.
+**How to avoid:** This is NOT actually a pitfall. Just verify by checking `video.videoWidth` and `video.videoHeight` are the expected resolution before capture.
 
 ## Code Examples
 
-### Complete usePortraitCapture Hook Shape
+### Complete usePortraitCapture Hook
 
 ```typescript
 // Source: project conventions (hooks/use{Name}.ts pattern)
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 interface UsePortraitCaptureOptions {
-  /** The same video element used by face detection */
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  /** POS server base URL */
   posServerUrl: string;
 }
 
 interface UsePortraitCaptureReturn {
-  /** Capture a frame and upload it. Fire-and-forget. */
+  /** Capture a frame from the video. Returns the blob for deferred upload. */
+  captureFrame: () => Promise<Blob | null>;
+  /** Upload a previously captured blob to POS server. Fire-and-forget. */
+  uploadPortrait: (blob: Blob) => Promise<void>;
+  /** Convenience: capture + upload in one call. */
   captureAndUpload: () => Promise<void>;
-  /** Whether a capture/upload is in progress */
   isCapturing: boolean;
-  /** Last error, or null */
-  error: string | null;
+  lastError: string | null;
 }
 
-export function usePortraitCapture(opts: UsePortraitCaptureOptions): UsePortraitCaptureReturn {
-  // Implementation:
-  // 1. Check video.readyState >= 2 && video.videoWidth > 0
-  // 2. Create offscreen canvas at video.videoWidth x video.videoHeight
-  // 3. ctx.drawImage(video, 0, 0)
-  // 4. canvas.toBlob(cb, 'image/jpeg', 0.92)
-  // 5. FormData.append('file', blob, 'portrait.jpg')
-  // 6. FormData.append('skip_selection', 'true')
-  // 7. fetch(posServerUrl + '/portrait/capture', { method: 'POST', body: formData })
-  // 8. Log result, do not throw (fire-and-forget)
+export function usePortraitCapture({
+  videoRef,
+  posServerUrl,
+}: UsePortraitCaptureOptions): UsePortraitCaptureReturn {
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  const captureFrame = useCallback(async (): Promise<Blob | null> => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || video.videoWidth === 0) {
+      console.warn('[Portrait] Video not ready for capture');
+      return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.drawImage(video, 0, 0);
+
+    return new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(
+        (blob) => {
+          if (blob && blob.size > 1024) {
+            resolve(blob);
+          } else {
+            console.warn('[Portrait] Captured blob too small, likely black frame');
+            resolve(null);
+          }
+        },
+        'image/jpeg',
+        0.92,
+      );
+    });
+  }, [videoRef]);
+
+  const uploadPortrait = useCallback(async (blob: Blob): Promise<void> => {
+    if (!posServerUrl) {
+      console.warn('[Portrait] No POS server URL configured, skipping upload');
+      return;
+    }
+
+    setIsCapturing(true);
+    setLastError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', blob, 'portrait.jpg');
+      formData.append('skip_selection', 'true');
+
+      const url = `${posServerUrl.replace(/\/+$/, '')}/portrait/capture`;
+
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(300_000),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`Portrait upload failed ${res.status}: ${text}`);
+      }
+
+      console.log('[Portrait] Upload successful');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn('[Portrait] Upload error:', msg);
+      setLastError(msg);
+    } finally {
+      setIsCapturing(false);
+    }
+  }, [posServerUrl]);
+
+  const captureAndUpload = useCallback(async (): Promise<void> => {
+    const blob = await captureFrame();
+    if (blob) {
+      await uploadPortrait(blob);
+    }
+  }, [captureFrame, uploadPortrait]);
+
+  return { captureFrame, uploadPortrait, captureAndUpload, isCapturing, lastError };
 }
 ```
 
-### Camera Resolution Upgrade in useFaceDetection
+### CameraDetector with Shared VideoRef
 
 ```typescript
-// Source: existing useFaceDetection.ts, line 90-95
-// Change from:
-video: {
-  facingMode: 'user',
-  width: { ideal: 320 },
-  height: { ideal: 240 },
-}
-// To:
-video: {
-  facingMode: 'user',
-  width: { ideal: 1280 },
-  height: { ideal: 960 },
-}
-```
-
-### CameraDetector Exposing Video Ref for Portrait Capture
-
-```typescript
-// Source: project pattern (CameraDetector.tsx)
-// Option A: Pass videoRef from parent
+// Source: existing CameraDetector.tsx, modified
 interface CameraDetectorProps {
   onWake: () => void;
   onSleep: () => void;
   videoRef: React.RefObject<HTMLVideoElement | null>; // NEW: shared ref
 }
+
+export function CameraDetector({ onWake, onSleep, videoRef }: CameraDetectorProps) {
+  // Remove: const videoRef = useRef<HTMLVideoElement | null>(null);
+  const { error, cameraReady } = useFaceDetection({ videoRef, onWake, onSleep });
+  // ... rest unchanged
+}
 ```
 
-### Text Injection with Line Numbers
+### Text Injection with Paragraph Numbers
 
 ```typescript
 // Source: prompt engineering best practice for citation grounding
-function addLineNumbers(text: string): string {
-  const paragraphs = text.split(/\n\n+/);
-  return paragraphs
+function addParagraphNumbers(text: string): string {
+  return text
+    .split(/\n\n+/)
+    .filter(p => p.trim().length > 0)
     .map((p, i) => `[${i + 1}] ${p.trim()}`)
     .join('\n\n');
 }
+```
+
+Used in `buildModeBlock` for the `text_term` case:
+```typescript
+case 'text_term':
+  return `A visitor has just finished reading the following text.
+Each paragraph is numbered for reference:
+---
+${addParagraphNumbers(contextText ?? '')}
+---
+This is a raw, stream-of-consciousness text -- rough, full of contradictions,
+full of humanity. The visitor has been sitting with these words.
+...`;
+```
+
+### Strengthened QUOTE Move
+
+```
+- QUOTE: Read them a specific passage by paragraph number.
+  Say "In paragraph [N], the author writes: '...' " then ask what it
+  stirs in them. Ground your question in the author's actual words.
+```
+
+### TEXT ENGAGEMENT Addition
+
+```
+TEXT ENGAGEMENT:
+You MUST reference at least 2 specific paragraphs during the conversation.
+Use paragraph numbers: "In paragraph [3]..." The text is your shared ground.
 ```
 
 ## State of the Art
@@ -299,20 +533,20 @@ function addLineNumbers(text: string): string {
 | Old Approach | Current Approach | When Changed | Impact |
 |--------------|------------------|--------------|--------|
 | ImageCapture API (takePhoto) | Canvas drawImage + toBlob | Safari never supported ImageCapture | Must use canvas approach for iOS compatibility |
-| Multiple getUserMedia() calls | Single stream, shared or cloned | iOS constraint since early Safari WebRTC | One stream for all camera consumers |
-| Vague "reference the text" prompts | Numbered-line injection + explicit citation instructions | LLM citation research 2024-2025 | Dramatically improves citation specificity |
+| Multiple getUserMedia() calls | Single stream, shared via videoRef | iOS constraint since early Safari WebRTC | One stream for all camera consumers |
+| Vague "reference the text" prompts | Numbered-paragraph injection + explicit citation format | LLM citation research 2024-2025 | Dramatically improves citation specificity |
 
 **Deprecated/outdated:**
-- ImageCapture API: Not available on Safari/iOS as of Safari 26.4 (March 2026). Do not attempt to use it.
-- HTMLMediaElement.captureStream(): Also not supported on Safari. Irrelevant for still capture anyway.
+- ImageCapture API: Not available on Safari/iOS Safari as of March 2026. Do not attempt to use it.
+- HTMLMediaElement.captureStream(): Not supported on Safari. Irrelevant for still capture anyway.
 
 ## Validation Architecture
 
 ### Test Framework
 | Property | Value |
 |----------|-------|
-| Framework | Vitest 3.0.5 |
-| Config file | apps/tablet/vite.config.ts (Vitest uses Vite config) |
+| Framework | Vitest (in vite.config.ts) |
+| Config file | apps/tablet/vite.config.ts |
 | Quick run command | `pnpm --filter @meinungeheuer/tablet exec vitest run` |
 | Full suite command | `pnpm test` |
 
@@ -320,11 +554,14 @@ function addLineNumbers(text: string): string {
 | Req ID | Behavior | Test Type | Automated Command | File Exists? |
 |--------|----------|-----------|-------------------|-------------|
 | R7-a | captureFrame returns Blob from video element | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/usePortraitCapture.test.ts -x` | Wave 0 |
-| R7-b | uploadPortrait sends FormData to POS server | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/usePortraitCapture.test.ts -x` | Wave 0 |
-| R7-c | Portrait capture skips if video not ready | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/usePortraitCapture.test.ts -x` | Wave 0 |
-| R7-d | CameraDetector shares videoRef for portrait | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/components/CameraDetector.test.ts -x` | Wave 0 |
-| R8-a | text_term prompt includes line-numbered text | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/lib/systemPrompt.test.ts -x` | Exists (extend) |
-| R8-b | text_term prompt contains citation instructions | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/lib/systemPrompt.test.ts -x` | Exists (extend) |
+| R7-b | captureFrame returns null if video not ready | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/usePortraitCapture.test.ts -x` | Wave 0 |
+| R7-c | uploadPortrait sends FormData to POS server | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/usePortraitCapture.test.ts -x` | Wave 0 |
+| R7-d | uploadPortrait skips if no POS URL configured | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/usePortraitCapture.test.ts -x` | Wave 0 |
+| R7-e | CameraDetector accepts external videoRef | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/components/CameraDetector.test.ts -x` | Wave 0 |
+| R8-a | text_term prompt includes numbered paragraphs | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/lib/systemPrompt.test.ts -x` | Exists (extend) |
+| R8-b | text_term prompt contains citation format instructions | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/lib/systemPrompt.test.ts -x` | Exists (extend) |
+| R8-c | QUOTE move references paragraph numbers | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/lib/systemPrompt.test.ts -x` | Exists (extend) |
+| R8-d | addParagraphNumbers correctly numbers paragraphs | unit | `pnpm --filter @meinungeheuer/tablet exec vitest run src/lib/systemPrompt.test.ts -x` | Exists (extend) |
 
 ### Sampling Rate
 - **Per task commit:** `pnpm --filter @meinungeheuer/tablet exec vitest run`
@@ -332,55 +569,61 @@ function addLineNumbers(text: string): string {
 - **Phase gate:** Full suite green before `/gsd:verify-work`
 
 ### Wave 0 Gaps
-- [ ] `apps/tablet/src/hooks/usePortraitCapture.test.ts` -- covers R7-a, R7-b, R7-c
-- [ ] Extend `apps/tablet/src/lib/systemPrompt.test.ts` -- covers R8-a, R8-b (file exists, needs new tests)
+- [ ] `apps/tablet/src/hooks/usePortraitCapture.test.ts` -- covers R7-a, R7-b, R7-c, R7-d
+- [ ] Extend `apps/tablet/src/lib/systemPrompt.test.ts` -- covers R8-a through R8-d (file exists, needs new tests)
+- [ ] `VITE_POS_SERVER_URL` in `.env.example` -- needed for portrait upload
 
 ## Open Questions
 
 1. **iPad Camera Resolution via getUserMedia**
-   - What we know: iPad front cameras typically support up to 1920x1080 via getUserMedia, but the actual resolution depends on the device model and iOS version.
-   - What's unclear: Whether upgrading from 320x240 to 1280x960 will cause any noticeable performance impact on the specific target iPad (face detection runs at 2fps).
-   - Recommendation: Use `{ ideal: 1280 }` and measure. If performance degrades, cap at 640x480 which is still sufficient for 576px-wide thermal prints.
+   - What we know: iPad front cameras typically support up to 720p or 1080p via getUserMedia, but Safari may cap at 720p for some devices. Using `ideal` constraints always succeeds.
+   - What's unclear: Exact resolution the target iPad will provide when requesting 1280x960.
+   - Recommendation: Use `{ ideal: 1280, ideal: 960 }` and log the actual `video.videoWidth` x `video.videoHeight` obtained. Even 640x480 produces a usable thermal portrait (576px paper width).
 
-2. **POS Server URL from Tablet**
-   - What we know: The tablet currently has no POS server URL configured. The printer-bridge connects to POS via `POS_SERVER_URL` env var, but the tablet has no direct connection to the POS server.
-   - What's unclear: Whether to add a `VITE_POS_SERVER_URL` env var to the tablet, or route portrait uploads through the printer bridge, or through Supabase storage.
-   - Recommendation: Add `VITE_POS_SERVER_URL` to the tablet env. The tablet and POS server run on the same local network during installation. This is the simplest path -- direct POST from tablet to POS server, matching how the printer-bridge already works.
+2. **Portrait Capture Timing**
+   - What we know: Face is most reliably facing the tablet during `conversation` screen. Style transfer takes 30-180s.
+   - What's unclear: Whether to capture once early or multiple times.
+   - Recommendation: Capture a single frame ~5-10 seconds into the conversation screen (after initial face detection confirms presence). Store the blob in a ref. Upload after definition is received. This gives the best face framing without complexity.
 
-3. **Portrait Capture Timing**
-   - What we know: The portrait should be captured during conversation when the visitor is facing the tablet. The style transfer takes 30-180 seconds.
-   - What's unclear: Whether to capture once early in the conversation or take multiple shots and let the POS server's AI select the best one.
-   - Recommendation: Capture a single good frame during the conversation screen (after a few seconds of stable face detection). The POS server supports multiple files but single-shot with `skip_selection=true` is simpler and avoids unnecessary API costs. A single high-quality JPEG capture is sufficient.
+3. **Print Order Coordination**
+   - What we know: Definition prints via Supabase print_queue -> bridge -> POS `/print/dictionary`. Portrait prints via direct POST -> POS `/portrait/capture`. These are independent paths.
+   - What's unclear: Whether the POS server can handle concurrent print jobs (definition printing while portrait pipeline runs).
+   - Recommendation: The POS server uses a `_print_lock` mutex (print_server.py:65). The definition card will finish printing before the portrait pipeline completes its style transfer (30-180s vs ~2s). The lock ensures they don't overlap on the printer hardware. Natural timing handles this.
 
-4. **Print Order Coordination**
-   - What we know: Definition prints via Supabase print_queue -> bridge -> POS `/print/dictionary`. Portrait prints via direct POST to POS `/portrait/capture`.
-   - What's unclear: How to ensure definition card prints before portrait. The two paths are independent.
-   - Recommendation: Fire portrait upload AFTER `persistPrintJob` call succeeds. The print_queue flow is fast (bridge picks up within seconds), while portrait style transfer takes 30+ seconds. Natural timing ensures definition prints first.
+4. **VITE_POS_SERVER_URL Discovery**
+   - What we know: In the installation, tablet and POS server are on the same local network. The POS server registers mDNS (print_server.py:390-415) as `POS Thermal Printer._http._tcp.local.`.
+   - What's unclear: Whether to use mDNS discovery from the browser or just hardcode the URL in env.
+   - Recommendation: Use `VITE_POS_SERVER_URL` env var (e.g., `http://192.168.1.50:9100`). mDNS discovery from browser JS is not straightforward. The env var approach matches how `VITE_BACKEND_URL` already works. If the URL is empty/unset, portrait capture is silently disabled.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- POS server source code (`apps/pos-server/print_server.py`, `portrait_pipeline.py`) -- verified `/portrait/capture` endpoint accepts multipart files, supports `skip_selection` and `mode` params
-- Existing codebase (`useFaceDetection.ts`, `CameraDetector.tsx`, `App.tsx`, `persist.ts`) -- verified current camera stream setup, state machine flow, print job persistence
-- MDN HTMLCanvasElement.toBlob() -- verified browser support
+- `apps/pos-server/print_server.py` (lines 270-315) -- verified `/portrait/capture` endpoint: accepts multipart files, optional `skip_selection`/`mode`/`blur` params, calls `run_pipeline()`, returns synchronously after full pipeline
+- `apps/pos-server/portrait_pipeline.py` (451 lines) -- verified full pipeline: `select_best_photo` -> `transform_to_statue` (n8n webhook, 180s timeout) -> `detect_face_landmarks` -> `compute_zoom_crops` (4 levels) -> `print_portrait`
+- `apps/tablet/src/hooks/useFaceDetection.ts` (245 lines) -- verified: requests 320x240 (line 93-94), stores stream in `streamRef` (line 112), does not expose stream, detection at 2fps via setInterval (line 164), CPU delegate (line 140)
+- `apps/tablet/src/components/CameraDetector.tsx` (56 lines) -- verified: creates own `videoRef` (line 23), renders hidden video element with zero dimensions
+- `apps/tablet/src/lib/systemPrompt.ts` (302 lines) -- verified: text injected raw without numbering (lines 275-285), QUOTE move vague (line 71), no citation minimum
+- `apps/tablet/src/App.tsx` (311 lines) -- verified: `handleDefinitionReceived` calls `persistPrintJob` then `DEFINITION_READY` after 2s, CameraDetector at root with `onWake`/`onSleep`
+- `apps/pos-server/config.yaml` -- verified: portrait.n8n_webhook_url, portrait.blur=10, portrait.dither_mode=bayer, portrait.style_prompt (full wax-statue prompt)
 
 ### Secondary (MEDIUM confidence)
-- [caniuse.com/imagecapture](https://caniuse.com/imagecapture) -- ImageCapture NOT supported in Safari/iOS Safari (verified as of Safari 26.4)
-- [MDN Taking still photos with getUserMedia()](https://developer.mozilla.org/en-US/docs/Web/API/Media_Capture_and_Streams_API/Taking_still_photos) -- Canvas drawImage approach is the standard
-- [webrtcHacks: 5 ways to save an image from webcam](https://webrtchacks.com/still-image-from-webcam-stream-approaches/) -- Canvas toBlob is universally supported
-- [Getting Started With getUserMedia in 2026](https://blog.addpipe.com/getusermedia-getting-started/) -- iOS stream muting behavior confirmed
-- [Exploring LLM Citation Generation In 2025](https://medium.com/@prestonblckbrn/exploring-llm-citation-generation-in-2025-4ac7c8980794) -- Citation grounding techniques
+- [WebKit Bug #179363](https://bugs.webkit.org/show_bug.cgi?id=179363) -- iOS getUserMedia() muting confirmed
+- [WebKit Bug #237424](https://bugs.webkit.org/show_bug.cgi?id=237424) -- Canvas drawImage black frame on GPU Process
+- [caniuse.com/imagecapture](https://caniuse.com/imagecapture) -- ImageCapture NOT supported in any Safari version
+- [MDN Taking still photos with getUserMedia()](https://developer.mozilla.org/en-US/docs/Web/API/Media_Capture_and_Streams_API/Taking_still_photos) -- Canvas drawImage is the standard approach
+- [Getting Started With getUserMedia in 2026](https://blog.addpipe.com/getusermedia-getting-started/) -- iOS resolution caps and stream muting behavior
 
 ### Tertiary (LOW confidence)
-- [Apple Developer Forums iOS 16 black image issue](https://developer.apple.com/forums/thread/708348) -- Canvas drawImage can produce black frames on iOS; may be fixed in recent versions but worth defensive coding
+- [Apple Developer Forums iOS 16 black image issue](https://developer.apple.com/forums/thread/708348) -- Canvas drawImage can produce black frames; may be resolved in recent iOS versions but worth defensive coding
+- [Exploring LLM Citation Generation In 2025](https://medium.com/@prestonblckbrn/exploring-llm-citation-generation-in-2025-4ac7c8980794) -- Citation grounding techniques with numbered references
 
 ## Metadata
 
 **Confidence breakdown:**
-- Standard stack: HIGH - all browser-native APIs, well-documented, verified compatibility
-- Architecture: HIGH - POS server endpoint already exists and is tested; camera sharing pattern is well-established for iOS
-- Pitfalls: HIGH - iOS Safari constraints are well-documented; black frame issue confirmed by Apple forums
-- System prompt: MEDIUM - prompt engineering is inherently empirical; citation improvement patterns are based on general LLM research
+- Standard stack: HIGH - all browser-native APIs, well-documented, verified compatibility. No new packages needed.
+- Architecture: HIGH - POS server endpoint verified in source code. Camera sharing pattern confirmed necessary by iOS Safari constraints. Current code structure analyzed line-by-line.
+- Pitfalls: HIGH - iOS Safari constraints well-documented in WebKit bug tracker. Black frame issue has known detection/retry strategy. POS server synchronous behavior verified in source code.
+- System prompt: MEDIUM - prompt engineering is inherently empirical. Numbered-paragraph technique is well-supported in LLM research but actual citation quality improvement must be tested with real conversations.
 
 **Research date:** 2026-03-09
 **Valid until:** 2026-04-09 (stable domain, browser APIs change slowly)
