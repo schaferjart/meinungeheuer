@@ -50,6 +50,7 @@ export async function persistPrintJob(
     language: string;
   },
   sessionId: string | null,
+  template?: string,
 ): Promise<void> {
   try {
     const supabase = getSupabaseClient();
@@ -67,6 +68,7 @@ export async function persistPrintJob(
       session_number: count ?? 1,
       chain_ref: null,
       timestamp: new Date().toISOString(),
+      template: template ?? 'dictionary',
     };
 
     const { error } = await supabase.from('print_queue').insert({

@@ -189,6 +189,7 @@ export interface Database {
           mode: 'text_term' | 'term_only' | 'chain';
           active_term: string | null;
           active_text_id: string | null;
+          program: string;
           updated_at: string;
         };
         Insert: {
@@ -196,6 +197,7 @@ export interface Database {
           mode?: 'text_term' | 'term_only' | 'chain';
           active_term?: string | null;
           active_text_id?: string | null;
+          program?: string;
           updated_at?: string;
         };
         Update: {
@@ -203,6 +205,7 @@ export interface Database {
           mode?: 'text_term' | 'term_only' | 'chain';
           active_term?: string | null;
           active_text_id?: string | null;
+          program?: string;
           updated_at?: string;
         };
         Relationships: [];

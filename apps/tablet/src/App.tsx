@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { DEFAULT_MODE, DEFAULT_TERM } from '@meinungeheuer/shared';
-import type { Definition } from '@meinungeheuer/shared';
+import { DEFAULT_MODE, DEFAULT_TERM, getProgram } from '@meinungeheuer/shared';
+import type { Definition, ConversationProgram } from '@meinungeheuer/shared';
 
 /** Build a partial Definition object from conversation results (client-side only). */
 function makeClientDefinition(d: {
@@ -68,6 +68,10 @@ function InstallationApp() {
     term: DEFAULT_TERM,
   });
 
+  // Active conversation program — resolved from config, drives prompt building,
+  // stage routing, and print layout selection.
+  const programRef = useRef<ConversationProgram>(getProgram('aphorism'));
+
   // Shared video element ref — used by both CameraDetector (face detection)
   // and usePortraitCapture (frame capture). NEVER call getUserMedia a second time
   // or iOS Safari will mute the first stream (WebKit bug #179363).
@@ -106,12 +110,17 @@ function InstallationApp() {
           contextText = config.chain_context.definition_text;
         }
 
+        // Resolve the conversation program from config
+        const program = getProgram(config.program ?? 'aphorism');
+        programRef.current = program;
+
         dispatch({
           type: 'SET_CONFIG',
           mode: config.mode,
           term: config.term,
           contextText,
           parentSessionId: config.parentSessionId ?? null,
+          stages: program.stages,
         });
       })
       .catch((err: unknown) => {
@@ -139,13 +148,13 @@ function InstallationApp() {
       const def = makeClientDefinition(result);
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
-      void persistPrintJob(result, state.sessionId ?? null);
+      void persistPrintJob(result, state.sessionId ?? null, programRef.current.printLayout);
 
-      // Fire-and-forget portrait upload to POS server.
+      // Fire-and-forget portrait upload to POS server (only if program uses portraits).
       // Definition card prints via Supabase print_queue (fast, ~2s).
       // Portrait prints via POS pipeline (slow, 30-180s style transfer).
       // Natural timing ensures definition card prints first.
-      if (portraitBlobRef.current) {
+      if (portraitBlobRef.current && programRef.current.stages.portrait) {
         void uploadPortrait(portraitBlobRef.current);
         portraitBlobRef.current = null;
       }
@@ -188,7 +197,7 @@ function InstallationApp() {
     sendUserActivity,
   } = useConversation({
     agentId: ELEVENLABS_AGENT_ID,
-    mode,
+    program: programRef.current,
     term,
     contextText,
     language,
@@ -261,7 +270,7 @@ function InstallationApp() {
   // The visitor is facing the tablet and face detection confirms presence.
   // Store the blob in portraitBlobRef — upload is deferred to handleDefinitionReceived.
   useEffect(() => {
-    if (screen === 'conversation' && !portraitCapturedRef.current) {
+    if (screen === 'conversation' && !portraitCapturedRef.current && programRef.current.stages.portrait) {
       const timer = setTimeout(() => {
         captureFrame()
           .then((blob) => {

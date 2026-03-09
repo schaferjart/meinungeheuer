@@ -365,6 +365,7 @@ describe('useInstallationMachine reducer', () => {
         definition: makeDefinition(),
         conversationId: 'conv-123',
         language: 'en',
+        stages: { textReading: true, termPrompt: true, portrait: true, printing: true },
       };
       const next = reducer(dirty, { type: 'RESET' });
       expect(next).toEqual(initialState);
