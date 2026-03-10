@@ -3,13 +3,13 @@ import type { ConceptNode, ConceptEdge } from './useConceptMap';
 
 // --- Constants ---
 
-const REPULSION_STRENGTH = 5000;    // Coulomb constant
-const ATTRACTION_STRENGTH = 0.008;  // Spring constant
-const CENTERING_STRENGTH = 0.002;   // Pull toward center
-const DAMPING = 0.92;               // Velocity decay per step
-const MIN_DISTANCE = 40;            // Minimum distance between nodes (prevents division by zero)
+const REPULSION_STRENGTH = 12000;   // Coulomb constant — high to keep labels apart
+const ATTRACTION_STRENGTH = 0.005;  // Spring constant — gentler pull
+const CENTERING_STRENGTH = 0.001;   // Pull toward center — gentle, let graph spread
+const DAMPING = 0.90;               // Velocity decay per step
+const MIN_DISTANCE = 80;            // Minimum distance between nodes (prevents label overlap)
 const PERTURBATION = 0.3;           // Random perturbation for organic feel
-const PADDING = 60;                 // Boundary padding for labels
+const PADDING = 80;                 // Boundary padding for labels
 const THROTTLE_FRAMES = 3;          // Update React state every N frames
 
 // --- Types ---

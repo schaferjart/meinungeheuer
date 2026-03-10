@@ -65,8 +65,10 @@ export function ConceptMapCanvas({ edges, nodes }: ConceptMapCanvasProps) {
 
       const positions = getPositionMap();
 
-      // Draw edges
+      // Draw edges — only show edges mentioned 2+ times to reduce visual noise
       for (const edge of edges) {
+        if (edge.weight < 2) continue;
+
         const source = positions.get(edge.source);
         const target = positions.get(edge.target);
         if (!source || !target) continue;
@@ -75,9 +77,9 @@ export function ConceptMapCanvas({ edges, nodes }: ConceptMapCanvasProps) {
         const minOpacity = Math.min(source.opacity, target.opacity);
         if (minOpacity <= 0) continue;
 
-        // Weight-based styling
-        const alpha = Math.min(0.6, edge.weight * 0.15) * minOpacity;
-        const lineWidth = Math.min(4, 1 + edge.weight * 0.5);
+        // Weight-based styling (subtract 1 since we start at weight 2)
+        const alpha = Math.min(0.5, (edge.weight - 1) * 0.12) * minOpacity;
+        const lineWidth = Math.min(3, 0.5 + (edge.weight - 1) * 0.5);
 
         ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
         ctx.lineWidth = lineWidth;
