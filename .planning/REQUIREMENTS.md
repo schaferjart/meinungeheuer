@@ -74,3 +74,10 @@ One complete autonomous loop runs without human intervention:
 - **Dependencies:** R1-R8 (MVP complete first)
 - **Status:** Complete
 - **Completed:** 2026-03-09 (Plans 05-01, 05-02, 06-01). ConversationProgram interface, program registry, stage-driven state machine, backend config program field, printer-bridge template forwarding, stages.printing skip logic.
+
+### R10: Live Concept Map Visualization
+- **Priority:** MEDIUM
+- **What:** Replace the chat transcript UI in `ConversationScreen` with a dynamic concept map that evolves in real-time during the AI conversation. Concepts are extracted client-side from transcript text. A force-directed graph layout positions concept nodes on screen. Connection lines link co-occurring concepts. An evolving definition text updates as the conversation deepens. Old concepts fade out; new ones emerge. The visualization must feel alive, organic, and generative.
+- **UAT:** During a live conversation, the ConversationScreen shows concept nodes, connection lines, and an evolving definition — not chat transcript bubbles. Animation is smooth (30fps+) on iPad Safari. All existing functionality (mic indicator, term badge, state transitions) is preserved.
+- **Dependencies:** None (only modifies tablet UI; conversation pipeline is unchanged)
+- **Status:** Planned

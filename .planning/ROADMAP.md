@@ -55,6 +55,14 @@ Plans:
 - [x] 06-01-PLAN.md — Backend config program field, printer-bridge template forwarding, stages.printing in state machine
 **Gate:** `installation_config.program = 'free_association'` → tablet receives it → different stage flow. Template field reaches POS server. `stages.printing=false` skips printing screen.
 
+### Phase 7: Live Concept Map
+**Goal:** Replace chat transcript in ConversationScreen with a dynamic, generative concept map visualization that evolves in real-time during conversation.
+**Requirements:** R10
+**Plans:** 1 plan
+Plans:
+- [ ] 07-01-PLAN.md — Concept extractor, concept map hook, force layout, Canvas+DOM hybrid rendering, evolving definition
+**Gate:** During conversation, visitor sees concept nodes appearing/fading, connection lines between related concepts, and an evolving definition — not chat bubbles. 30fps+ on iPad Safari.
+
 ## Phase Dependencies
 
 ```
@@ -63,6 +71,8 @@ Phase 1 ──→ Phase 2 ──→ Phase 4
          Phase 3 ──────→
                           ↘
                      Phase 5 ──→ Phase 6
+                                    ↘
+                               Phase 7
 ```
 
-Phase 1 and Phase 3 can run in parallel. Phase 2 depends on Phase 1 (SDK). Phase 4 depends on both Phase 2 and Phase 3. Phase 5 is post-MVP. Phase 6 closes R9 integration gaps from audit.
+Phase 1 and Phase 3 can run in parallel. Phase 2 depends on Phase 1 (SDK). Phase 4 depends on both Phase 2 and Phase 3. Phase 5 is post-MVP. Phase 6 closes R9 integration gaps from audit. Phase 7 is independent of Phases 5-6 (only touches tablet UI) but logically follows them.
