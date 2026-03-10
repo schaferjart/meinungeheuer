@@ -19,7 +19,7 @@ progress:
 - **Phase:** 07-live-concept-map
 - **Current Plan:** Not started
 - **Status:** Milestone complete
-- **Last session:** 2026-03-11T00:10:00Z
+- **Last session:** 2026-03-11T00:58:00Z
 - **Stopped at:** Completed 07-01-PLAN.md
 
 ## Progress
@@ -61,8 +61,8 @@ Phase 7: [====================] 1/1 plans complete
 - POS-thermal-printer moved to apps/pos-server/ in monorepo
 - Programs as TypeScript code, not DB records (Phase 5)
 - One ElevenLabs agent, programs differentiated via prompt overrides
-- CRITICAL CONSTRAINT block placed after RULES section in prompts for maximum LLM attention
-- Guardrail text explicitly states agent cannot end conversation and save_definition is the only tool
+- KNOWING WHEN TO STOP block replaces CRITICAL CONSTRAINT — AI proactively calls save_definition after 6-10 exchanges when something crystallizes, instead of waiting for visitor to explicitly end
+- Conversation arc includes CRYSTALLIZE phase instead of "no time limit"
 - Import Role from @elevenlabs/react (MessagePayload not exported from @elevenlabs/client, only from transitive @elevenlabs/types)
 - Added connectionType: 'websocket' to startSession -- required by new SDK's PublicSessionConfig type
 - Standalone detection via navigator.standalone + matchMedia (not Fullscreen API)
@@ -80,7 +80,7 @@ Phase 7: [====================] 1/1 plans complete
 - Callback ref in CameraDetector bridges React 18 RefObject<T|null> typing
 - ConversationProgram as plain TS interface (not Zod) -- code-authored, not runtime-validated
 - Aphorism prompt copied verbatim into shared package for self-containment (tablet will delegate in Plan 02)
-- Free association reuses CRITICAL CONSTRAINT anti-ending guardrails for consistency
+- Free association reuses KNOWING WHEN TO STOP guardrails for consistency
 - Registry pattern with static imports, fallback to default + console.warn
 - Reducer uses stages booleans only, never references program IDs or mode strings for transition routing
 - programRef pattern in App.tsx for stable ConversationProgram reference across renders
@@ -93,6 +93,12 @@ Phase 7: [====================] 1/1 plans complete
 - Canvas+DOM hybrid: Canvas for connection lines, DOM for text labels
 - React.memo on ConceptNodeElement and EvolvingDefinition for animation performance
 - Force layout throttled to update React state every 3 frames (~20/sec)
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Fix conversation never ending - AI keeps talking indefinitely without calling save_definition | 2026-03-10 | 2c3b2ef | [1-fix-conversation-never-ending-ai-keeps-t](./quick/1-fix-conversation-never-ending-ai-keeps-t/) |
 
 ## Blockers
 - Need ElevenLabs dashboard access to remove `end_call` tool
