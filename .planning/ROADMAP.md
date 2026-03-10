@@ -60,7 +60,7 @@ Plans:
 **Requirements:** R10
 **Plans:** 1 plan
 Plans:
-- [ ] 07-01-PLAN.md — Concept extractor, concept map hook, force layout, Canvas+DOM hybrid rendering, evolving definition
+- [x] 07-01-PLAN.md — Concept extractor, concept map hook, force layout, Canvas+DOM hybrid rendering, evolving definition
 **Gate:** During conversation, visitor sees concept nodes appearing/fading, connection lines between related concepts, and an evolving definition — not chat bubbles. 30fps+ on iPad Safari.
 
 ## Phase Dependencies
