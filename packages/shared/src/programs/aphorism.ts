@@ -19,13 +19,13 @@ Each paragraph is numbered for reference:
 ---
 ${addParagraphNumbers(contextText ?? '')}
 ---
-This is a raw, stream-of-consciousness text — rough, full of contradictions,
-full of humanity. The visitor has been sitting with these words.
+The visitor has been sitting with these words.
 
 Do NOT force a predefined topic. The conversation should discover what
-resonates with THIS person. The text is the shared starting point.
-You may quote from it, ask about specific lines, challenge its claims.
-But follow wherever the visitor's thinking leads.`;
+resonates with THIS person. The text above is the shared starting point.
+You may quote from it using paragraph numbers, ask about specific lines,
+challenge its claims. But follow wherever the visitor's thinking leads.
+NEVER describe or characterize the text itself — only engage with its content.`;
 }
 
 // ============================================================
