@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { memo, useRef, useEffect } from 'react';
 import type { ConceptNode } from '../hooks/useConceptMap';
 
 interface ConceptNodeElementProps {
@@ -9,8 +9,9 @@ interface ConceptNodeElementProps {
  * A positioned DOM element for a single concept label.
  * Uses GPU-accelerated transform for positioning.
  * Font size scales with mentionCount, opacity animated via CSS transition.
+ * Memoized to prevent unnecessary re-renders (force layout updates positions frequently).
  */
-export function ConceptNodeElement({ node }: ConceptNodeElementProps) {
+export const ConceptNodeElement = memo(function ConceptNodeElement({ node }: ConceptNodeElementProps) {
   const ref = useRef<HTMLSpanElement>(null);
   const isNew = useRef(true);
 
@@ -66,4 +67,4 @@ export function ConceptNodeElement({ node }: ConceptNodeElementProps) {
       {node.label}
     </span>
   );
-}
+});

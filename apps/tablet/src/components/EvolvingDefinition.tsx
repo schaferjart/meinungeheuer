@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 
 interface EvolvingDefinitionProps {
   text: string;
@@ -7,8 +7,9 @@ interface EvolvingDefinitionProps {
 /**
  * Bottom-anchored definition text that crossfades when updated.
  * Shows the evolving definition draft from the conversation.
+ * Memoized to avoid re-renders from parent force layout updates.
  */
-export function EvolvingDefinition({ text }: EvolvingDefinitionProps) {
+export const EvolvingDefinition = memo(function EvolvingDefinition({ text }: EvolvingDefinitionProps) {
   const [displayText, setDisplayText] = useState(text);
   const [opacity, setOpacity] = useState(1);
   const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
@@ -76,4 +77,4 @@ export function EvolvingDefinition({ text }: EvolvingDefinitionProps) {
       </p>
     </div>
   );
-}
+});
