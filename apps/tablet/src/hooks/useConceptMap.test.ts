@@ -102,7 +102,7 @@ describe('useConceptMap logic', () => {
       for (let i = 0; i < words.length; i++) {
         state = processTranscriptEntry(
           state,
-          makeEntry('visitor', words[i]),
+          makeEntry('visitor', words[i]!),
           now + i * 100
         );
       }
@@ -182,12 +182,12 @@ describe('useConceptMap logic', () => {
       );
 
       expect(state.nodes.length).toBeGreaterThan(0);
-      const opacityBefore = state.nodes[0].opacity;
+      const opacityBefore = state.nodes[0]!.opacity;
 
       const now = Date.now();
       const next = applyLifecycleTick(state, now);
 
-      expect(next.nodes[0].opacity).toBeLessThan(opacityBefore);
+      expect(next.nodes[0]!.opacity).toBeLessThan(opacityBefore);
     });
 
     it('does not fade recent nodes', () => {
@@ -198,12 +198,12 @@ describe('useConceptMap logic', () => {
         makeEntry('visitor', 'Philosophy explores existence deeply'),
         now
       );
-      const opacityBefore = state.nodes[0].opacity;
+      const opacityBefore = state.nodes[0]!.opacity;
 
       const next = applyLifecycleTick(state, now);
       // Should be the same reference (no change)
       expect(next).toBe(state);
-      expect(next.nodes[0].opacity).toBe(opacityBefore);
+      expect(next.nodes[0]!.opacity).toBe(opacityBefore);
     });
 
     it('removes fully faded nodes (opacity reaches 0)', () => {

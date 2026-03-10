@@ -1,6 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import type { Role } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
+import { useConceptMap } from '../../hooks/useConceptMap';
+import { useForceLayout } from '../../hooks/useForceLayout';
+import { ConceptMapCanvas } from '../ConceptMapCanvas';
+import { ConceptNodeElement } from '../ConceptNode';
+import { EvolvingDefinition } from '../EvolvingDefinition';
 
 export interface TranscriptEntry {
   role: Role;
@@ -21,13 +26,34 @@ export function ConversationScreen({
   transcript,
   micState,
 }: ConversationScreenProps) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const mapAreaRef = useRef<HTMLDivElement>(null);
+  const [bounds, setBounds] = useState({ width: 800, height: 600 });
 
-  // Auto-scroll to the newest turn
+  // Observe container size for force layout bounds
+  const updateBounds = useCallback(() => {
+    const el = mapAreaRef.current;
+    if (el) {
+      setBounds({ width: el.clientWidth, height: el.clientHeight });
+    }
+  }, []);
+
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [transcript]);
+    updateBounds();
+    const el = mapAreaRef.current;
+    if (!el) return;
 
+    const observer = new ResizeObserver(() => updateBounds());
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [updateBounds]);
+
+  // Concept map state from transcript
+  const { nodes, edges, definitionDraft } = useConceptMap(transcript);
+
+  // Force-directed layout for positioning
+  const positionedNodes = useForceLayout(nodes, edges, bounds);
+
+  // Mic indicator styling
   const micColor =
     micState === 'listening'
       ? '#4ade80' // green
@@ -40,11 +66,13 @@ export function ConversationScreen({
 
   return (
     <div className="flex flex-col w-full h-full bg-black">
-      {/* Term badge — top-left */}
+      {/* Term badge -- top-left */}
       <div
         style={{
           padding: 'clamp(1rem, 2.5vw, 1.5rem) clamp(1.5rem, 3vw, 2rem)',
           flexShrink: 0,
+          position: 'relative',
+          zIndex: 10,
         }}
       >
         <span
@@ -61,60 +89,28 @@ export function ConversationScreen({
         </span>
       </div>
 
-      {/* Transcript */}
+      {/* Concept map area */}
       <div
-        className="flex-1 overflow-y-auto"
+        ref={mapAreaRef}
+        className="flex-1"
         style={{
-          padding: '0 clamp(1.5rem, 5vw, 4rem)',
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
+          position: 'relative',
+          overflow: 'hidden',
         }}
       >
-        {transcript.length === 0 && (
-          <p
-            style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
-              fontSize: 'clamp(1.2rem, 2.6vw, 1.6rem)',
-              color: 'rgba(255,255,255,0.25)',
-              textAlign: 'center',
-              marginTop: '4rem',
-            }}
-          />
-        )}
-        {transcript.map((entry, i) => (
-          <div
-            key={i}
-            style={{
-              marginBottom: 'clamp(1rem, 2vw, 1.5rem)',
-              textAlign: entry.role === 'visitor' ? 'right' : 'left',
-            }}
-          >
-            <p
-              style={{
-                display: 'inline-block',
-                maxWidth: '80%',
-                fontFamily: "Georgia, 'Times New Roman', serif",
-                fontSize: 'clamp(1.1rem, 2.8vw, 1.6rem)',
-                fontWeight: 400,
-                fontStyle: entry.role === 'visitor' ? 'italic' : 'normal',
-                color: entry.role === 'agent' ? '#ffffff' : 'rgba(255,255,255,0.55)',
-                lineHeight: '1.8',
-                letterSpacing: '0.02em',
-                margin: 0,
-                textAlign: entry.role === 'visitor' ? 'right' : 'left',
-              }}
-            >
-              {entry.content}
-            </p>
-          </div>
+        {/* Canvas layer: connection lines */}
+        <ConceptMapCanvas edges={edges} nodes={positionedNodes} />
+
+        {/* DOM layer: concept node labels */}
+        {positionedNodes.map((node) => (
+          <ConceptNodeElement key={node.id} node={node} />
         ))}
-        <div ref={bottomRef} />
-        <style>{`
-          ::-webkit-scrollbar { display: none; }
-        `}</style>
+
+        {/* Evolving definition anchored at bottom */}
+        <EvolvingDefinition text={definitionDraft} />
       </div>
 
-      {/* Mic indicator */}
+      {/* Mic indicator -- bottom */}
       <div
         className="flex items-center justify-center gap-3"
         style={{

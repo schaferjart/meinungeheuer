@@ -1,4 +1,4 @@
-import { useRef, useMemo, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useSyncExternalStore } from 'react';
 import { extractConcepts } from '../lib/conceptExtractor';
 import type { TranscriptEntry } from '../components/screens/ConversationScreen';
@@ -64,10 +64,10 @@ export function processTranscriptEntry(
 
   for (const concept of concepts) {
     const existingIndex = nodes.findIndex((n) => n.id === concept.normalized);
+    const existing = existingIndex >= 0 ? nodes[existingIndex] : undefined;
 
-    if (existingIndex >= 0) {
+    if (existingIndex >= 0 && existing) {
       // Update existing node
-      const existing = nodes[existingIndex];
       nodes[existingIndex] = {
         ...existing,
         lastSeen: now,
@@ -101,17 +101,18 @@ export function processTranscriptEntry(
   // Create/strengthen edges for co-occurring concepts in this turn
   for (let i = 0; i < turnConceptIds.length; i++) {
     for (let j = i + 1; j < turnConceptIds.length; j++) {
-      const source = turnConceptIds[i];
-      const target = turnConceptIds[j];
+      const source = turnConceptIds[i]!;
+      const target = turnConceptIds[j]!;
       const edgeIndex = edges.findIndex(
         (e) =>
           (e.source === source && e.target === target) ||
           (e.source === target && e.target === source)
       );
-      if (edgeIndex >= 0) {
+      const existingEdge = edgeIndex >= 0 ? edges[edgeIndex] : undefined;
+      if (edgeIndex >= 0 && existingEdge) {
         edges[edgeIndex] = {
-          ...edges[edgeIndex],
-          weight: edges[edgeIndex].weight + 1,
+          ...existingEdge,
+          weight: existingEdge.weight + 1,
         };
       } else {
         edges.push({ source, target, weight: 1 });
@@ -247,9 +248,11 @@ export function useConceptMap(transcript: TranscriptEntry[]): ConceptMapState {
     let updated = false;
 
     for (let i = processedCountRef.current; i < transcript.length; i++) {
+      const entry = transcript[i];
+      if (!entry) continue;
       stateRef.current = processTranscriptEntry(
         stateRef.current,
-        transcript[i],
+        entry,
         now
       );
       updated = true;

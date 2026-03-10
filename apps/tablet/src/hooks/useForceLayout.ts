@@ -46,14 +46,14 @@ export function simulateStep(
 
   // Accumulate forces
   for (let i = 0; i < n; i++) {
-    const node = layoutNodes[i];
+    const node = layoutNodes[i]!;
     let fx = 0;
     let fy = 0;
 
     // Repulsion from other nodes (Coulomb's law)
     for (let j = 0; j < n; j++) {
       if (i === j) continue;
-      const other = layoutNodes[j];
+      const other = layoutNodes[j]!;
       let dx = node.x - other.x;
       let dy = node.y - other.y;
       let dist = Math.sqrt(dx * dx + dy * dy);

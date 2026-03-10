@@ -25,14 +25,14 @@ describe('simulateStep', () => {
     ];
     const edges: ConceptEdge[] = [];
 
-    const initialDistance = Math.abs(nodes[0].x - nodes[1].x);
+    const initialDistance = Math.abs(nodes[0]!.x - nodes[1]!.x);
 
     // Run multiple steps to let forces accumulate
     for (let i = 0; i < 50; i++) {
       simulateStep(nodes, edges, BOUNDS);
     }
 
-    const finalDistance = Math.abs(nodes[0].x - nodes[1].x);
+    const finalDistance = Math.abs(nodes[0]!.x - nodes[1]!.x);
     expect(finalDistance).toBeGreaterThan(initialDistance);
   });
 
@@ -44,13 +44,13 @@ describe('simulateStep', () => {
     ];
     const edges: ConceptEdge[] = [{ source: 'a', target: 'b', weight: 5 }];
 
-    const initialDistance = Math.abs(nodes[0].x - nodes[1].x);
+    const initialDistance = Math.abs(nodes[0]!.x - nodes[1]!.x);
 
     for (let i = 0; i < 100; i++) {
       simulateStep(nodes, edges, BOUNDS);
     }
 
-    const finalDistance = Math.abs(nodes[0].x - nodes[1].x);
+    const finalDistance = Math.abs(nodes[0]!.x - nodes[1]!.x);
     expect(finalDistance).toBeLessThan(initialDistance);
   });
 
@@ -88,11 +88,11 @@ describe('simulateStep', () => {
     nodes.push(makeNode('b', 405, 305));
 
     // Position should change
-    const xBefore = nodes[1].x;
+    const xBefore = nodes[1]!.x;
     for (let i = 0; i < 20; i++) {
       simulateStep(nodes, edges, BOUNDS);
     }
-    expect(nodes[1].x).not.toBe(xBefore);
+    expect(nodes[1]!.x).not.toBe(xBefore);
   });
 
   it('empty node list is handled gracefully', () => {
