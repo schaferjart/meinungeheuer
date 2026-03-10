@@ -17,7 +17,9 @@ Monorepo (pnpm workspaces):
 - `apps/printer-bridge` — Local Node.js service, runs on Pi/laptop near printer
 - `packages/shared` — Types, Supabase client, constants
 
-No separate backend server — `save_definition` is a client tool handled in-browser, writing directly to Supabase. `apps/backend/` exists but is unused legacy.
+`apps/backend/` — Hono API server. Serves `/api/config` (tablet fetches mode, text, program on startup). If the backend is broken, the tablet falls back to defaults with NO text context — the AI will have nothing to reference.
+
+`save_definition` is a **client tool** handled in-browser, writing directly to Supabase.
 
 ## Three Modes
 
@@ -119,9 +121,16 @@ When a task spans multiple domains, break it into subtasks and delegate. Prefer 
 ## Deployment
 
 - **Tablet**: Docker (2-stage: node build → nginx SPA). Accepts `VITE_*` build args. Deployed via Coolify from GitHub `main` branch.
-- **Printer bridge**: Runs locally on Pi/laptop near the printer. Not deployed to cloud.
-- **Supabase**: Managed cloud. Schema via migrations.
+- **Printer bridge**: Runs locally on Pi/laptop near the printer. Not deployed to cloud. **Must be manually started** with `pnpm dev:printer`. POS server at `192.168.1.65:9100` must also be reachable. If nothing prints, check: (1) is the bridge running? (2) is the POS server up? (`curl http://192.168.1.65:9100/health`) (3) are there `pending` rows in `print_queue`?
+- **Supabase**: Managed cloud. Schema via migrations. **Migrations are NOT auto-applied.** After creating a new migration file, apply it to production via `mcp__supabase__apply_migration` or the Supabase dashboard. Always verify with `mcp__supabase__execute_sql` that the schema matches what the code expects.
 - **ElevenLabs**: Agent configured via API/MCP. No separate deployment needed.
+
+## Debugging Gotchas
+
+- **System prompt = quotable content.** Any prose in the system prompt WILL be quoted by the AI back to visitors. Write instructions as imperatives ("Do X"), never descriptions ("This is a raw text..."). If the AI quotes something weird, check `packages/shared/src/programs/aphorism.ts`.
+- **Persistence is fire-and-forget.** `persistPrintJob()` and `persistDefinition()` swallow all errors silently. When debugging, check Supabase directly with `mcp__supabase__execute_sql` — don't trust the absence of error logs.
+- **RLS blocks are silent.** If a Supabase INSERT has no RLS policy for `anon`, it fails with no visible error in the browser. Always verify RLS policies match what the tablet code expects.
+- **Config fetch failure is silent.** If `/api/config` returns an error, the tablet falls back to defaults with `contextText: null`. The AI then has no text to reference. Check the backend logs and the `installation_config` schema.
 
 ## Quality Gates
 
