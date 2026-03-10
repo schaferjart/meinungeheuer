@@ -52,7 +52,7 @@ describe('program registry', () => {
       });
       expect(prompt).toContain('[1] First para');
       expect(prompt).toContain('[2] Second para');
-      expect(prompt).toContain('CRITICAL CONSTRAINT');
+      expect(prompt).toContain('KNOWING WHEN TO STOP');
       expect(prompt).toContain('save_definition');
     });
 
