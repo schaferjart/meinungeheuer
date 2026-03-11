@@ -116,7 +116,8 @@ export function useConversation(
 
     onMessage: ({ message, role }: { message: string; role: ElevenLabsRole }) => {
       const mappedRole = mapRole(role);
-      if (mappedRole === 'visitor') {
+      // Only reset silence timer for real speech, not silence markers like "..."
+      if (mappedRole === 'visitor' && message.replace(/\./g, '').trim().length > 0) {
         lastVisitorMessageRef.current = Date.now();
       }
       setTranscript((prev) => [
