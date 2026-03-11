@@ -99,9 +99,10 @@ export function useConversation(
   const onConversationEndRef = useRef(onConversationEnd);
   onConversationEndRef.current = onConversationEnd;
 
-  // Track when the visitor last spoke, for silence-based auto-end.
-  const lastVisitorMessageRef = useRef<number>(0);
-  const silenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Track when the visitor last spoke (or conversation started), for silence-based auto-end.
+  const lastActivityRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const endSessionRef = useRef<(() => Promise<void>) | null>(null);
 
   // -----------------------------------------------------------------------
   // ElevenLabs SDK hook
@@ -118,7 +119,9 @@ export function useConversation(
       const mappedRole = mapRole(role);
       // Only reset silence timer for real speech, not silence markers like "..."
       if (mappedRole === 'visitor' && message.replace(/\./g, '').trim().length > 0) {
-        lastVisitorMessageRef.current = Date.now();
+        lastActivityRef.current = Date.now();
+        // Reschedule the silence timeout from now
+        scheduleSilenceTimeout();
       }
       setTranscript((prev) => [
         ...prev,
@@ -190,47 +193,47 @@ export function useConversation(
   });
 
   // -----------------------------------------------------------------------
-  // Silence timeout: if visitor hasn't spoken for 30s, auto-end.
-  // This prevents the AI from babbling to itself when nobody is there.
+  // Silence timeout: simple setTimeout that fires 30s after last visitor
+  // speech. Rescheduled on each real visitor message. Uses refs to avoid
+  // stale closures with the ElevenLabs SDK.
   // -----------------------------------------------------------------------
+  const scheduleSilenceTimeout = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(() => {
+      console.log('[MeinUngeheuer] Visitor silent for 30s — auto-ending conversation');
+      endSessionRef.current?.().catch(() => {});
+    }, VISITOR_SILENCE_TIMEOUT_MS);
+  }, []);
+
+  // Keep endSessionRef current
+  endSessionRef.current = conversation.endSession;
+
+  // Start silence timer when connected, clear when disconnected
   useEffect(() => {
-    if (conversation.status !== 'connected') {
-      // Clear timer when not connected
+    if (conversation.status === 'connected') {
+      lastActivityRef.current = Date.now();
+      scheduleSilenceTimeout();
+    } else {
       if (silenceTimerRef.current) {
-        clearInterval(silenceTimerRef.current);
+        clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
       }
-      return;
     }
-
-    silenceTimerRef.current = setInterval(() => {
-      const lastSpoke = lastVisitorMessageRef.current;
-      if (lastSpoke === 0) return; // No visitor message yet — still in opening
-
-      const silenceMs = Date.now() - lastSpoke;
-      if (silenceMs >= VISITOR_SILENCE_TIMEOUT_MS) {
-        console.log(
-          `[MeinUngeheuer] Visitor silent for ${Math.round(silenceMs / 1000)}s — auto-ending conversation`,
-        );
-        conversation.endSession().catch(() => {});
-      }
-    }, 5_000); // Check every 5s
-
     return () => {
       if (silenceTimerRef.current) {
-        clearInterval(silenceTimerRef.current);
+        clearTimeout(silenceTimerRef.current);
         silenceTimerRef.current = null;
       }
     };
-  }, [conversation]);
+  }, [conversation.status, scheduleSilenceTimeout]);
 
   // -----------------------------------------------------------------------
   // Start conversation
   // -----------------------------------------------------------------------
   const startConversation = useCallback(async (): Promise<string> => {
-    // Reset transcript and silence tracker for new session
+    // Reset transcript for new session
     setTranscript([]);
-    lastVisitorMessageRef.current = 0;
+    lastActivityRef.current = 0;
 
     const systemPrompt = program.buildSystemPrompt({ term, contextText: contextText ?? null, language });
     const firstMessage = program.buildFirstMessage({ term, contextText: contextText ?? null, language });
