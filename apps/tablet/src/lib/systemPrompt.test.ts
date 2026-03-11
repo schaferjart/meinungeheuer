@@ -2,28 +2,29 @@ import { describe, it, expect } from 'vitest';
 import { buildSystemPrompt } from './systemPrompt';
 
 describe('buildSystemPrompt', () => {
-  describe('conversation ending guardrails', () => {
-    it('includes KNOWING WHEN TO STOP in text_term mode', () => {
+  describe('anti-ending guardrails', () => {
+    it('includes CRITICAL CONSTRAINT in text_term mode', () => {
       const prompt = buildSystemPrompt('text_term', 'creativity', 'some text');
-      expect(prompt).toContain('KNOWING WHEN TO STOP');
+      expect(prompt).toContain('CRITICAL CONSTRAINT');
+      expect(prompt).toContain('You do NOT have the ability to end this conversation');
       expect(prompt).toContain('save_definition');
     });
 
-    it('includes KNOWING WHEN TO STOP in term_only mode', () => {
+    it('includes CRITICAL CONSTRAINT in term_only mode', () => {
       const prompt = buildSystemPrompt('term_only', 'BIRD');
-      expect(prompt).toContain('KNOWING WHEN TO STOP');
-      expect(prompt).toContain('CRYSTALLIZED');
+      expect(prompt).toContain('CRITICAL CONSTRAINT');
+      expect(prompt).toContain('You do NOT have the ability to end this conversation');
     });
 
-    it('includes KNOWING WHEN TO STOP in chain mode', () => {
+    it('includes CRITICAL CONSTRAINT in chain mode', () => {
       const prompt = buildSystemPrompt('chain', 'BIRD', 'previous def');
-      expect(prompt).toContain('KNOWING WHEN TO STOP');
-      expect(prompt).toContain('CRYSTALLIZED');
+      expect(prompt).toContain('CRITICAL CONSTRAINT');
+      expect(prompt).toContain('You do NOT have the ability to end this conversation');
     });
 
-    it('instructs to stop after 10+ exchanges without crystallization', () => {
+    it('states save_definition is the ONLY tool', () => {
       const prompt = buildSystemPrompt('text_term', 'test', 'text');
-      expect(prompt).toContain('10+ exchanges without crystallization');
+      expect(prompt).toContain('That is the ONLY tool you have');
     });
   });
 
