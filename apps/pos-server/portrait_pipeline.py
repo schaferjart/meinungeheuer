@@ -212,6 +212,33 @@ def detect_face_landmarks(image: Image.Image) -> dict:
     return landmarks
 
 
+def compute_head_crop(image_w: int, image_h: int, landmarks: dict, config: dict) -> tuple:
+    """
+    Compute a tight vertical crop around the face, matching reference proportions.
+
+    The crop is forehead-to-chin with configurable padding. Full width is preserved
+    (the subsequent duration-based width crop handles horizontal narrowing).
+
+    Config (portrait.head_crop):
+        pad_top:    padding above forehead as fraction of face height (default 0.20)
+        pad_bottom: padding below chin as fraction of face height (default 0.25)
+
+    Returns (left, top, right, bottom) crop box.
+    """
+    hc_cfg = config.get("portrait", {}).get("head_crop", {})
+    pad_top_frac = hc_cfg.get("pad_top", 0.20)
+    pad_bottom_frac = hc_cfg.get("pad_bottom", 0.25)
+
+    forehead_y = landmarks["forehead_top"][1]
+    chin_y = landmarks["chin"][1]
+    face_h = chin_y - forehead_y
+
+    top = max(0, forehead_y - int(face_h * pad_top_frac))
+    bottom = min(image_h, chin_y + int(face_h * pad_bottom_frac))
+
+    return (0, top, image_w, bottom)
+
+
 def compute_zoom_crops(image: Image.Image, landmarks: dict) -> list[dict]:
     """
     Compute 4 zoom crop regions from face landmarks.
@@ -489,16 +516,17 @@ def print_portrait_duration(image: Image.Image, duration_seconds: float,
                             config: dict, printer,
                             dummy: bool = False, save_dir: str = None) -> float:
     """
-    Stage C (duration-aware): print a single portrait with width-only crop.
+    Stage C (duration-aware): print a single portrait with head crop + width crop.
 
-    The crop is centered on the face. Height is always full.
-    Longer conversation → narrower strip → more intimate/precise.
-    Blur and dither are applied to the full image before cropping,
-    so blur bleeds naturally at crop edges.
+    Pipeline order:
+      1. Prepare (resize to paper width, greyscale, enhance)
+      2. Vertical head crop (tight forehead-to-chin matching reference proportions)
+      3. Width crop based on conversation duration (centered on face)
+      4. Blur + dither ONLY on the final cropped strip
 
     When save_dir is set, saves ALL intermediates:
-        03_greyscale.png, 04_blurred.png, 05_cropped.png,
-        06_dithered.png, 07_final_canvas.png
+        03_greyscale.png, 04_head_crop.png, 05_width_crop.png,
+        06_blurred.png, 07_dithered.png
 
     Returns the width_percent used.
     """
@@ -518,7 +546,7 @@ def print_portrait_duration(image: Image.Image, duration_seconds: float,
     # Detect face landmarks on full-res image (better accuracy)
     landmarks = detect_face_landmarks(image)
 
-    # Resize to paper width, greyscale, enhance
+    # Step 1: Resize to paper width, greyscale, enhance
     grey = _prepare(image, paper_px, contrast, brightness, sharpness)
     pw, ph = grey.size
 
@@ -537,27 +565,48 @@ def print_portrait_duration(image: Image.Image, duration_seconds: float,
                 scaled[k] = int(v * sx)
         landmarks = scaled
 
-    # Apply blur to full image BEFORE crop (avoids edge artifacts)
-    grey = _apply_blur(grey, blur)
+    # Step 2: Vertical head crop (tight forehead-to-chin)
+    if landmarks:
+        head_box = compute_head_crop(pw, ph, landmarks, config)
+        head_cropped = grey.crop(head_box)
+
+        # Shift landmark y-coordinates for the cropped coordinate system
+        head_top = head_box[1]
+        shifted = {}
+        for k, v in landmarks.items():
+            if isinstance(v, tuple):
+                shifted[k] = (v[0], v[1] - head_top)
+            else:
+                shifted[k] = v  # face_center_x is x-only, stays the same
+        landmarks = shifted
+    else:
+        head_cropped = grey
+
+    hcw, hch = head_cropped.size
 
     if save_dir:
-        grey.save(os.path.join(save_dir, "04_blurred.png"))
+        head_cropped.save(os.path.join(save_dir, "04_head_crop.png"))
 
-    # Compute width-only crop based on duration
-    crop_box, width_pct = compute_duration_crop(pw, ph, landmarks, duration_seconds, config)
-    cropped = grey.crop(crop_box)
+    # Step 3: Width crop based on duration (centered on face)
+    crop_box, width_pct = compute_duration_crop(hcw, hch, landmarks, duration_seconds, config)
+    strip = head_cropped.crop(crop_box)
 
     if save_dir:
-        cropped.save(os.path.join(save_dir, "05_cropped.png"))
+        strip.save(os.path.join(save_dir, "05_width_crop.png"))
 
     print(f"[PORTRAIT] Duration {duration_seconds}s → {width_pct:.0f}% width "
-          f"({cropped.size[0]}x{cropped.size[1]} from {pw}x{ph})")
+          f"({strip.size[0]}x{strip.size[1]} from {pw}x{ph})")
 
-    # Dither the cropped strip
-    dithered = _dither_image(cropped, dither_mode, dot_size)
+    # Step 4: Blur + dither ONLY on the final cropped strip
+    strip = _apply_blur(strip, blur)
 
     if save_dir:
-        dithered.save(os.path.join(save_dir, "06_dithered.png"))
+        strip.save(os.path.join(save_dir, "06_blurred.png"))
+
+    dithered = _dither_image(strip, dither_mode, dot_size)
+
+    if save_dir:
+        dithered.save(os.path.join(save_dir, "07_dithered.png"))
 
     # Print or save — the strip IS the output, no padding
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")

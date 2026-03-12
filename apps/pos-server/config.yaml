@@ -187,6 +187,13 @@ portrait:
   blur: 10                    # Gaussian blur radius (always applied)
   dither_mode: bayer          # bayer | floyd | halftone
 
+  # ── Vertical head crop (applied before width crop) ──
+  # Tight forehead-to-chin framing matching reference proportions.
+  # Padding is a fraction of face height (forehead landmark to chin landmark).
+  head_crop:
+    pad_top: 0.20             # above forehead (hairline visible)
+    pad_bottom: 0.25          # below chin (small amount of neck)
+
   # ── Duration-based width crop ──
   # Longer conversation → narrower strip → more "precise" portrait.
   # Height is always full. Width narrows linearly from max to min.
