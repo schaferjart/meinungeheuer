@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Raster Painter</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; background: #111; color: #ccc; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 13px; }
+body { display: flex; }
+
+#panel {
+  width: 280px; min-width: 280px; height: 100vh; overflow-y: auto;
+  padding: 1rem; border-right: 1px solid #333;
+  display: flex; flex-direction: column; gap: 0.25rem;
+}
+#panel h1 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: #fff; }
+#panel h2 { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #888; margin-bottom: 0.4rem; }
+#panel section { padding-bottom: 0.75rem; margin-bottom: 0.5rem; border-bottom: 1px solid #222; }
+
+#panel label {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-bottom: 0.35rem; font-size: 0.8rem; white-space: nowrap;
+}
+#panel label input[type='number'] { width: 5.5rem; }
+#panel label input[type='range'] { flex: 1; min-width: 0; }
+#panel label span { width: 3.5rem; text-align: right; font-variant-numeric: tabular-nums; font-size: 0.75rem; color: #888; }
+
+input[type='number'], input[type='text'] {
+  background: #222; border: 1px solid #444; color: #eee;
+  padding: 0.25rem 0.4rem; border-radius: 3px; font-size: 0.8rem;
+}
+input[type='range'] { accent-color: #fff; }
+button {
+  background: #333; border: 1px solid #555; color: #eee;
+  padding: 0.35rem 0.75rem; border-radius: 3px; cursor: pointer; font-size: 0.8rem;
+}
+button:hover { background: #444; }
+button:active { background: #555; }
+.btn-row { display: flex; gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+.info { font-size: 0.75rem; color: #888; margin: 0.3rem 0; line-height: 1.4; }
+.info.valid { color: #6f6; }
+.info.invalid { color: #f66; }
+.info.small { font-size: 0.7rem; }
+
+#viewport {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: 1rem; overflow: auto; gap: 1rem;
+}
+#preview {
+  max-width: 100%; max-height: 60vh;
+  image-rendering: pixelated; background: #000; border: 1px solid #333;
+}
+#sliceContainer {
+  display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; max-width: 100%;
+}
+#sliceContainer canvas {
+  image-rendering: pixelated; background: #000; border: 1px solid #444; max-height: 40vh;
+}
+</style>
+</head>
+<body>
+
+<aside id="panel">
+  <h1>Raster Painter</h1>
+
+  <section>
+    <h2>Grid</h2>
+    <label>Cols <input id="cols" type="number" value="500" min="10" step="10" /></label>
+    <label>Rows <input id="rows" type="number" value="250" min="10" step="10" /></label>
+    <label>Cell size <input id="cellSize" type="number" value="6" min="1" max="20" /></label>
+    <button id="btnInit">Initialize</button>
+    <div id="gridInfo" class="info"></div>
+  </section>
+
+  <section>
+    <h2>Simulation</h2>
+    <label>Wind dir <input id="windDir" type="range" min="0" max="360" value="27" step="1" /><span id="windDirVal">27</span></label>
+    <label>Noise <input id="noise" type="range" min="0" max="1" value="0.2" step="0.01" /><span id="noiseVal">0.20</span></label>
+    <label>Turbulence <input id="turb" type="range" min="0.001" max="0.1" value="0.01" step="0.001" /><span id="turbVal">0.010</span></label>
+    <label>Strength <input id="strength" type="range" min="10" max="10000" value="600" step="10" /><span id="strengthVal">600</span></label>
+    <label>Transfer <input id="transfer" type="range" min="0.001" max="0.1" value="0.003" step="0.001" /><span id="transferVal">0.003</span></label>
+    <label>Smooth <input id="smooth" type="range" min="0.01" max="0.5" value="0.1" step="0.01" /><span id="smoothVal">0.10</span></label>
+    <div class="btn-row">
+      <button id="btnRun">Run</button>
+      <button id="btnStep">Step</button>
+      <button id="btnStepN">Step &times;</button>
+      <input id="stepN" type="number" value="100" min="1" max="10000" style="width:5rem" />
+    </div>
+    <div id="simInfo" class="info"></div>
+  </section>
+
+  <section>
+    <h2>Post</h2>
+    <label>Blur radius <input id="blur" type="range" min="0" max="30" value="0" step="1" /><span id="blurVal">0</span></label>
+    <button id="btnBlur">Apply blur</button>
+  </section>
+
+  <section>
+    <h2>Slicing</h2>
+    <label>Vertical slices <input id="numSlices" type="number" value="10" min="1" /></label>
+    <div id="sliceInfo" class="info"></div>
+    <div id="sliceSuggestions" class="info small"></div>
+    <button id="btnSlice">Slice</button>
+  </section>
+
+  <section>
+    <h2>Export</h2>
+    <label>Dot size (px) <input id="dotSize" type="number" value="4" min="1" max="20" /></label>
+    <button id="btnExportFull">Export full PNG</button>
+    <button id="btnExportSlices">Export all slices (ZIP)</button>
+    <div id="exportInfo" class="info"></div>
+  </section>
+</aside>
+
+<main id="viewport">
+  <canvas id="preview"></canvas>
+  <div id="sliceContainer"></div>
+</main>
+
+<script>
+// ============================================================
+// ENGINE
+// ============================================================
+var RasterEngine = (function () {
+  'use strict';
+
+  var TWO_PI = Math.PI * 2;
+
+  function fade(t) { return t * t * (3 - 2 * t); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function hash3(ix, iy, iz) {
+    var s = Math.sin(ix * 127.1 + iy * 311.7 + iz * 74.7) * 43758.5453123;
+    return s - Math.floor(s);
+  }
+
+  function noise3(x, y, z) {
+    var x0 = Math.floor(x), y0 = Math.floor(y), z0 = Math.floor(z);
+    var tx = fade(x - x0), ty = fade(y - y0), tz = fade(z - z0);
+    var n000 = hash3(x0, y0, z0), n100 = hash3(x0+1, y0, z0);
+    var n010 = hash3(x0, y0+1, z0), n110 = hash3(x0+1, y0+1, z0);
+    var n001 = hash3(x0, y0, z0+1), n101 = hash3(x0+1, y0, z0+1);
+    var n011 = hash3(x0, y0+1, z0+1), n111 = hash3(x0+1, y0+1, z0+1);
+    return lerp(
+      lerp(lerp(n000, n100, tx), lerp(n010, n110, tx), ty),
+      lerp(lerp(n001, n101, tx), lerp(n011, n111, tx), ty),
+      tz
+    );
+  }
+
+  function wrapI(i, n) { return ((i % n) + n) % n; }
+
+  function create(opts) {
+    var cols = opts.cols;
+    var rows = opts.rows;
+    var cell = opts.cellSize || 6;
+    var totalPixels = cols * rows;
+
+    // Parameters
+    var dir = { x: 1, y: 0.5 };
+    var noiseInf = 0.2;
+    var turb = 0.01;
+    var smooth = 1.0;
+    var windStrength = 600;
+    var coherenceFactor = 0.5;
+    var noiseScale = 0.05;
+    var transferRate = 0.003;
+    var pixelSmoothVal = 0.1;
+    var vecOff = 0.5 * cell;
+    var vecStep = 14 * cell;
+    var simTime = 0;
+    var stepCount = 0;
+
+    // Pixel brightness
+    var pixels = new Float32Array(totalPixels);
+
+    // Pre-allocated simulation buffers
+    var vxBuf = new Float32Array(totalPixels);
+    var vyBuf = new Float32Array(totalPixels);
+    var qBuf = new Float32Array(totalPixels);
+    var tBuf = new Uint32Array(totalPixels);
+    var sBuf = new Float32Array(totalPixels);
+    var nextH = new Float32Array(totalPixels);
+
+    // Vector field
+    var vecDirX, vecDirY, vecPosX, vecPosY, tempVecX, tempVecY;
+    var vecColCount = 0, vecRowCount = 0, vecGridW = 0, vecGridH = 0;
+
+    function initPixels() {
+      for (var i = 0; i < totalPixels; i++) {
+        pixels[i] = 0.1 + Math.random() * 0.8;
+      }
+    }
+
+    function initVecGrid() {
+      var ledMaxX = cols * cell, ledMaxY = rows * cell;
+      var maxNeedX = ledMaxX + vecOff, maxNeedY = ledMaxY + vecOff;
+
+      var xs = [], ys = [];
+      var vx = -vecOff;
+      while (vx < maxNeedX) { xs.push(vx); vx += vecStep; }
+      xs.push(maxNeedX);
+      var vy = -vecOff;
+      while (vy < maxNeedY) { ys.push(vy); vy += vecStep; }
+      ys.push(maxNeedY);
+
+      vecColCount = xs.length;
+      vecRowCount = ys.length;
+      vecGridW = Math.max(1, vecColCount - 1);
+      vecGridH = Math.max(1, vecRowCount - 1);
+
+      var totalVec = vecColCount * vecRowCount;
+      vecDirX = new Float32Array(totalVec);
+      vecDirY = new Float32Array(totalVec);
+      vecPosX = new Float32Array(totalVec);
+      vecPosY = new Float32Array(totalVec);
+      tempVecX = new Float32Array(totalVec);
+      tempVecY = new Float32Array(totalVec);
+
+      for (var yi = 0; yi < vecRowCount; yi++) {
+        for (var xi = 0; xi < vecColCount; xi++) {
+          var idx = yi * vecColCount + xi;
+          vecPosX[idx] = xs[xi];
+          vecPosY[idx] = ys[yi];
+          vecDirX[idx] = dir.x * windStrength;
+          vecDirY[idx] = dir.y * windStrength;
+        }
+      }
+    }
+
+    function stepLed() {
+      var i, x, y, px, py, fx, fy, ix0f, iy0f, tx, ty, ix0, iy0, ix1, iy1;
+      var vi00, vi10, vi01, vi11, vx0, vx1, vy0, vy1;
+
+      // Phase 1: interpolate vector at each pixel
+      for (y = 0; y < rows; y++) {
+        for (x = 0; x < cols; x++) {
+          i = y * cols + x;
+          px = x * cell; py = y * cell;
+          fx = (px + vecOff) / vecStep;
+          fy = (py + vecOff) / vecStep;
+          ix0f = Math.floor(fx); iy0f = Math.floor(fy);
+          tx = fx - ix0f; ty = fy - iy0f;
+          ix0 = wrapI(ix0f, vecGridW); iy0 = wrapI(iy0f, vecGridH);
+          ix1 = (ix0 + 1) % vecGridW; iy1 = (iy0 + 1) % vecGridH;
+          vi00 = iy0 * vecColCount + ix0;
+          vi10 = iy0 * vecColCount + ix1;
+          vi01 = iy1 * vecColCount + ix0;
+          vi11 = iy1 * vecColCount + ix1;
+          vx0 = vecDirX[vi00] + (vecDirX[vi10] - vecDirX[vi00]) * tx;
+          vx1 = vecDirX[vi01] + (vecDirX[vi11] - vecDirX[vi01]) * tx;
+          vy0 = vecDirY[vi00] + (vecDirY[vi10] - vecDirY[vi00]) * tx;
+          vy1 = vecDirY[vi01] + (vecDirY[vi11] - vecDirY[vi01]) * tx;
+          vxBuf[i] = vx0 + (vx1 - vx0) * ty;
+          vyBuf[i] = vy0 + (vy1 - vy0) * ty;
+        }
+      }
+
+      // Phase 2: transfer amounts
+      for (i = 0; i < totalPixels; i++) {
+        qBuf[i] = transferRate * pixels[i];
+      }
+
+      // Phase 3: landing positions
+      var cvx, cvy, m, nx, ny, L, landX, landY, tc, tr;
+      for (y = 0; y < rows; y++) {
+        for (x = 0; x < cols; x++) {
+          i = y * cols + x;
+          px = x * cell; py = y * cell;
+          cvx = vxBuf[i]; cvy = vyBuf[i];
+          m = Math.hypot(cvx, cvy);
+          nx = m ? cvx / m : 0;
+          ny = m ? cvy / m : 0;
+          L = m + transferRate * pixels[i];
+          landX = px + nx * L;
+          landY = py + ny * L;
+          tc = wrapI(Math.round(landX / cell), cols);
+          tr = wrapI(Math.round(landY / cell), rows);
+          tBuf[i] = tr * cols + tc;
+        }
+      }
+
+      // Phase 4: apply transfers
+      nextH.set(pixels);
+      for (i = 0; i < totalPixels; i++) {
+        var q = qBuf[i];
+        nextH[i] -= q;
+        nextH[tBuf[i]] += q;
+      }
+
+      // Phase 4.5: pixel smoothing
+      var l, r, u, d, hSelf, hMean;
+      for (y = 0; y < rows; y++) {
+        for (x = 0; x < cols; x++) {
+          i = y * cols + x;
+          l = y * cols + wrapI(x - 1, cols);
+          r = y * cols + wrapI(x + 1, cols);
+          u = wrapI(y - 1, rows) * cols + x;
+          d = wrapI(y + 1, rows) * cols + x;
+          hSelf = nextH[i];
+          hMean = (nextH[l] + nextH[r] + nextH[u] + nextH[d]) * 0.25;
+          sBuf[i] = (1 - pixelSmoothVal) * hSelf + pixelSmoothVal * hMean;
+        }
+      }
+      pixels.set(sBuf);
+    }
+
+    function stepSim() {
+      simTime += turb;
+      stepCount++;
+
+      tempVecX.set(vecDirX);
+      tempVecY.set(vecDirY);
+
+      var yi, xi, idx, nAng, nvx, nvy, m;
+
+      // First pass: noise
+      for (yi = 1; yi < vecRowCount - 1; yi++) {
+        for (xi = 1; xi < vecColCount - 1; xi++) {
+          idx = yi * vecColCount + xi;
+          nAng = noise3(vecPosX[idx] * noiseScale, vecPosY[idx] * noiseScale, simTime) * TWO_PI;
+          nvx = Math.cos(nAng); nvy = Math.sin(nAng);
+          var vx = dir.x * (1 - noiseInf) + nvx * noiseInf;
+          var vy = dir.y * (1 - noiseInf) + nvy * noiseInf;
+          m = Math.hypot(vx, vy) || 1;
+          tempVecX[idx] = (vx / m) * windStrength;
+          tempVecY[idx] = (vy / m) * windStrength;
+        }
+      }
+
+      // Second pass: smoothing + coherence
+      var i, lx, ly, rx, ry, ux, uy, dx, dy, ax, ay, svx, svy, vm, vnx, vny;
+      var lm, rm, um, dm, align, strength, sm;
+      for (yi = 1; yi < vecRowCount - 1; yi++) {
+        for (xi = 1; xi < vecColCount - 1; xi++) {
+          i = yi * vecColCount + xi;
+          lx = tempVecX[i-1]; ly = tempVecY[i-1];
+          rx = tempVecX[i+1]; ry = tempVecY[i+1];
+          ux = tempVecX[(yi-1)*vecColCount+xi]; uy = tempVecY[(yi-1)*vecColCount+xi];
+          dx = tempVecX[(yi+1)*vecColCount+xi]; dy = tempVecY[(yi+1)*vecColCount+xi];
+
+          ax = (lx + rx + ux + dx) * 0.25;
+          ay = (ly + ry + uy + dy) * 0.25;
+          svx = (1 - smooth) * tempVecX[i] + smooth * ax;
+          svy = (1 - smooth) * tempVecY[i] + smooth * ay;
+
+          vm = Math.hypot(svx, svy) || 1;
+          vnx = svx / vm; vny = svy / vm;
+          lm = Math.hypot(lx, ly) || 1;
+          rm = Math.hypot(rx, ry) || 1;
+          um = Math.hypot(ux, uy) || 1;
+          dm = Math.hypot(dx, dy) || 1;
+          align = (vnx*(lx/lm) + vny*(ly/lm) + vnx*(rx/rm) + vny*(ry/rm) +
+                   vnx*(ux/um) + vny*(uy/um) + vnx*(dx/dm) + vny*(dy/dm)) * 0.25;
+
+          strength = windStrength * (1 + coherenceFactor * align);
+          strength = Math.max(0.1, strength);
+          sm = Math.hypot(svx, svy) || 1;
+          tempVecX[i] = (svx / sm) * strength;
+          tempVecY[i] = (svy / sm) * strength;
+        }
+      }
+
+      // Boundary wrapping
+      for (yi = 1; yi < vecRowCount - 1; yi++) {
+        var row = yi * vecColCount;
+        tempVecX[row] = tempVecX[row + vecColCount - 2];
+        tempVecY[row] = tempVecY[row + vecColCount - 2];
+        tempVecX[row + vecColCount - 1] = tempVecX[row + 1];
+        tempVecY[row + vecColCount - 1] = tempVecY[row + 1];
+      }
+      for (xi = 0; xi < vecColCount; xi++) {
+        tempVecX[xi] = tempVecX[(vecRowCount-2)*vecColCount+xi];
+        tempVecY[xi] = tempVecY[(vecRowCount-2)*vecColCount+xi];
+        tempVecX[(vecRowCount-1)*vecColCount+xi] = tempVecX[vecColCount+xi];
+        tempVecY[(vecRowCount-1)*vecColCount+xi] = tempVecY[vecColCount+xi];
+      }
+
+      vecDirX.set(tempVecX);
+      vecDirY.set(tempVecY);
+      stepLed();
+    }
+
+    function blur(radius) {
+      if (radius < 1) return;
+      var r = Math.round(radius);
+      var temp = new Float32Array(totalPixels);
+      var x, y, dx2, dy2, nx2, ny2, sum, count;
+      for (y = 0; y < rows; y++) {
+        for (x = 0; x < cols; x++) {
+          sum = 0; count = 0;
+          for (dx2 = -r; dx2 <= r; dx2++) {
+            nx2 = x + dx2;
+            if (nx2 >= 0 && nx2 < cols) { sum += pixels[y * cols + nx2]; count++; }
+          }
+          temp[y * cols + x] = sum / count;
+        }
+      }
+      for (x = 0; x < cols; x++) {
+        for (y = 0; y < rows; y++) {
+          sum = 0; count = 0;
+          for (dy2 = -r; dy2 <= r; dy2++) {
+            ny2 = y + dy2;
+            if (ny2 >= 0 && ny2 < rows) { sum += temp[ny2 * cols + x]; count++; }
+          }
+          pixels[y * cols + x] = sum / count;
+        }
+      }
+    }
+
+    // Init
+    initPixels();
+    initVecGrid();
+
+    return {
+      step: function () { stepSim(); },
+      stepN: function (n) { for (var j = 0; j < n; j++) stepSim(); },
+      getPixels: function () { return pixels; },
+      getCols: function () { return cols; },
+      getRows: function () { return rows; },
+      getStepCount: function () { return stepCount; },
+      setWindDirection: function (deg) {
+        if (!Number.isFinite(deg)) return;
+        var rad = (deg * Math.PI) / 180;
+        dir = { x: Math.cos(rad), y: Math.sin(rad) };
+      },
+      setNoiseInfluence: function (v) { if (Number.isFinite(v)) noiseInf = v; },
+      setTurbulence: function (v) { if (Number.isFinite(v)) turb = v; },
+      setWindStrength: function (v) { if (Number.isFinite(v)) windStrength = v; },
+      setTransferRate: function (v) { if (Number.isFinite(v)) transferRate = v; },
+      setPixelSmooth: function (v) { if (Number.isFinite(v)) pixelSmoothVal = v; },
+      blur: blur,
+      reset: function () { initPixels(); initVecGrid(); simTime = 0; stepCount = 0; }
+    };
+  }
+
+  return { create: create };
+})();
+
+// ============================================================
+// SLICER
+// ============================================================
+var Slicer = (function () {
+  'use strict';
+
+  function validate(totalDots, numSlices) {
+    var remainder = totalDots % numSlices;
+    return { valid: remainder === 0, sliceDots: Math.floor(totalDots / numSlices), remainder: remainder };
+  }
+
+  function getDivisors(n) {
+    var divs = [];
+    for (var i = 1; i <= n; i++) { if (n % i === 0) divs.push(i); }
+    return divs;
+  }
+
+  function slice(pixels, cols, rows, numSlices) {
+    if (cols % numSlices !== 0) throw new Error('Cannot slice cleanly');
+    var sliceCols = cols / numSlices;
+    var slices = [];
+    for (var s = 0; s < numSlices; s++) {
+      var startCol = s * sliceCols;
+      var data = new Float32Array(sliceCols * rows);
+      for (var y = 0; y < rows; y++) {
+        for (var x = 0; x < sliceCols; x++) {
+          data[y * sliceCols + x] = pixels[y * cols + startCol + x];
+        }
+      }
+      slices.push({ pixels: data, cols: sliceCols, rows: rows, index: s });
+    }
+    return slices;
+  }
+
+  return { validate: validate, getDivisors: getDivisors, slice: slice };
+})();
+
+// ============================================================
+// APP
+// ============================================================
+(function () {
+  'use strict';
+
+  var engine = null;
+  var running = false;
+  var animFrameId = null;
+  var currentSlices = null;
+
+  function $(id) { return document.getElementById(id); }
+
+  var colsInput = $('cols'), rowsInput = $('rows'), cellSizeInput = $('cellSize');
+  var btnInit = $('btnInit'), gridInfo = $('gridInfo');
+  var windDirInput = $('windDir'), noiseInput = $('noise'), turbInput = $('turb');
+  var strengthInput = $('strength'), transferInput = $('transfer'), smoothInput = $('smooth');
+  var windDirVal = $('windDirVal'), noiseVal = $('noiseVal'), turbVal = $('turbVal');
+  var strengthVal = $('strengthVal'), transferVal = $('transferVal'), smoothVal = $('smoothVal');
+  var btnRun = $('btnRun'), btnStep = $('btnStep'), btnStepN = $('btnStepN');
+  var stepNInput = $('stepN'), simInfo = $('simInfo');
+  var blurInput = $('blur'), blurVal = $('blurVal'), btnBlur = $('btnBlur');
+  var numSlicesInput = $('numSlices'), sliceInfo = $('sliceInfo');
+  var sliceSuggestions = $('sliceSuggestions'), btnSlice = $('btnSlice');
+  var dotSizeInput = $('dotSize'), btnExportFull = $('btnExportFull'), btnExportSlices = $('btnExportSlices');
+  var previewCanvas = $('preview'), previewCtx = previewCanvas.getContext('2d');
+  var sliceContainer = $('sliceContainer');
+
+  var imageData = null, imageBuffer = null;
+
+  function renderPreview() {
+    if (!engine) return;
+    var cols = engine.getCols(), rows = engine.getRows();
+    var pixels = engine.getPixels();
+
+    if (previewCanvas.width !== cols || previewCanvas.height !== rows) {
+      previewCanvas.width = cols;
+      previewCanvas.height = rows;
+      imageData = previewCtx.createImageData(cols, rows);
+      imageBuffer = new Uint32Array(imageData.data.buffer);
+    }
+
+    for (var i = 0; i < pixels.length; i++) {
+      var h = pixels[i];
+      if (h < 0) h = 0; else if (h > 1) h = 1;
+      var g = (h * 255 + 0.5) | 0;
+      imageBuffer[i] = 0xFF000000 | (g << 16) | (g << 8) | g;
+    }
+    previewCtx.putImageData(imageData, 0, 0);
+  }
+
+  function tick() {
+    if (!running || !engine) return;
+    engine.step();
+    renderPreview();
+    updateSimInfo();
+    animFrameId = requestAnimationFrame(tick);
+  }
+
+  function startSim() {
+    if (!engine) return;
+    running = true;
+    btnRun.textContent = 'Pause';
+    tick();
+  }
+
+  function pauseSim() {
+    running = false;
+    btnRun.textContent = 'Run';
+    if (animFrameId !== null) { cancelAnimationFrame(animFrameId); animFrameId = null; }
+  }
+
+  function updateGridInfo() {
+    if (!engine) { gridInfo.textContent = ''; return; }
+    var c = engine.getCols(), r = engine.getRows();
+    gridInfo.textContent = c + ' \u00d7 ' + r + ' = ' + (c * r).toLocaleString() + ' dots';
+  }
+
+  function updateSimInfo() {
+    if (!engine) { simInfo.textContent = ''; return; }
+    simInfo.textContent = 'Step: ' + engine.getStepCount();
+  }
+
+  function updateSliceValidation() {
+    var cols = parseInt(colsInput.value, 10) || 0;
+    var rows = parseInt(rowsInput.value, 10) || 0;
+    var n = parseInt(numSlicesInput.value, 10) || 0;
+    if (n < 1 || cols < 1) { sliceInfo.textContent = ''; sliceInfo.className = 'info'; sliceSuggestions.textContent = ''; return; }
+    var result = Slicer.validate(cols, n);
+    if (result.valid) {
+      sliceInfo.textContent = n + ' slices \u2192 ' + result.sliceDots + ' \u00d7 ' + rows + ' dots each';
+      sliceInfo.className = 'info valid';
+      sliceSuggestions.textContent = '';
+    } else {
+      sliceInfo.textContent = 'Uneven: ' + cols + ' / ' + n + ' = ' + (cols / n).toFixed(1) + ' (remainder ' + result.remainder + ')';
+      sliceInfo.className = 'info invalid';
+      var divs = Slicer.getDivisors(cols).filter(function (d) { return d > 1 && d <= cols / 2; });
+      var show = divs.length > 20 ? divs.slice(0, 20) : divs;
+      sliceSuggestions.textContent = 'Valid: ' + show.join(', ') + (divs.length > 20 ? '...' : '');
+    }
+  }
+
+  function wireSlider(input, display, setter, fmt) {
+    function update() {
+      var v = parseFloat(input.value);
+      display.textContent = fmt(v);
+      if (engine) setter(v);
+    }
+    input.addEventListener('input', update);
+    update();
+  }
+
+  function renderToExportCanvas(pixels, cols, rows) {
+    var dotSize = parseInt(dotSizeInput.value, 10) || 4;
+    var radius = dotSize * 0.35;
+    var w = cols * dotSize, h = rows * dotSize;
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var ctx = c.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, w, h);
+    for (var y = 0; y < rows; y++) {
+      for (var x = 0; x < cols; x++) {
+        var b = pixels[y * cols + x];
+        if (b < 0) b = 0; else if (b > 1) b = 1;
+        var g = Math.round(b * 255);
+        ctx.fillStyle = 'rgb(' + g + ',' + g + ',' + g + ')';
+        ctx.beginPath();
+        ctx.arc(x * dotSize + dotSize * 0.5, y * dotSize + dotSize * 0.5, radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    return c;
+  }
+
+  function downloadCanvas(canvas, filename) {
+    var link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.download = filename;
+    link.href = url;
+    link.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // Minimal ZIP builder — no dependencies. Builds a valid ZIP in memory.
+  function buildZip(files) {
+    // files: [{name: string, data: Uint8Array}]
+    var localHeaders = [];
+    var centralHeaders = [];
+    var offset = 0;
+
+    function strToBytes(s) {
+      var a = new Uint8Array(s.length);
+      for (var i = 0; i < s.length; i++) a[i] = s.charCodeAt(i);
+      return a;
+    }
+
+    function u16(v) { return [v & 0xFF, (v >> 8) & 0xFF]; }
+    function u32(v) { return [v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF]; }
+
+    function crc32(data) {
+      var table = crc32.table;
+      if (!table) {
+        table = crc32.table = new Uint32Array(256);
+        for (var i = 0; i < 256; i++) {
+          var c = i;
+          for (var j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+          table[i] = c;
+        }
+      }
+      var crc = 0xFFFFFFFF;
+      for (var k = 0; k < data.length; k++) crc = table[(crc ^ data[k]) & 0xFF] ^ (crc >>> 8);
+      return (crc ^ 0xFFFFFFFF) >>> 0;
+    }
+
+    files.forEach(function (file) {
+      var nameBytes = strToBytes(file.name);
+      var crc = crc32(file.data);
+      var size = file.data.length;
+
+      // Local file header (30 + name)
+      var local = new Uint8Array([
+        0x50,0x4B,0x03,0x04,  // sig
+        0x14,0x00,             // version needed (2.0)
+        0x00,0x00,             // flags
+        0x00,0x00,             // compression: store
+        0x00,0x00,0x00,0x00,   // mod time/date
+      ].concat(u32(crc), u32(size), u32(size), u16(nameBytes.length), u16(0)));
+
+      var localFull = new Uint8Array(local.length + nameBytes.length + size);
+      localFull.set(local, 0);
+      localFull.set(nameBytes, local.length);
+      localFull.set(file.data, local.length + nameBytes.length);
+      localHeaders.push(localFull);
+
+      // Central directory header (46 + name)
+      var central = new Uint8Array([
+        0x50,0x4B,0x01,0x02,  // sig
+        0x14,0x00,             // version made by
+        0x14,0x00,             // version needed
+        0x00,0x00,             // flags
+        0x00,0x00,             // compression: store
+        0x00,0x00,0x00,0x00,   // mod time/date
+      ].concat(u32(crc), u32(size), u32(size), u16(nameBytes.length),
+        u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)));
+
+      var centralFull = new Uint8Array(central.length + nameBytes.length);
+      centralFull.set(central, 0);
+      centralFull.set(nameBytes, central.length);
+      centralHeaders.push(centralFull);
+
+      offset += localFull.length;
+    });
+
+    var centralOffset = offset;
+    var centralSize = centralHeaders.reduce(function (s, h) { return s + h.length; }, 0);
+
+    // End of central directory
+    var eocd = new Uint8Array([
+      0x50,0x4B,0x05,0x06,
+      0x00,0x00, 0x00,0x00,
+    ].concat(u16(files.length), u16(files.length), u32(centralSize), u32(centralOffset), u16(0)));
+
+    var totalSize = offset + centralSize + eocd.length;
+    var zip = new Uint8Array(totalSize);
+    var pos = 0;
+    localHeaders.forEach(function (h) { zip.set(h, pos); pos += h.length; });
+    centralHeaders.forEach(function (h) { zip.set(h, pos); pos += h.length; });
+    zip.set(eocd, pos);
+
+    return new Blob([zip], { type: 'application/zip' });
+  }
+
+  function canvasToUint8Array(canvas, callback) {
+    canvas.toBlob(function (blob) {
+      var reader = new FileReader();
+      reader.onload = function () { callback(new Uint8Array(reader.result)); };
+      reader.readAsArrayBuffer(blob);
+    }, 'image/png');
+  }
+
+  function initEngine() {
+    pauseSim();
+    var cols = parseInt(colsInput.value, 10) || 500;
+    var rows = parseInt(rowsInput.value, 10) || 250;
+    var cellSize = parseInt(cellSizeInput.value, 10) || 6;
+
+    try {
+      engine = RasterEngine.create({ cols: cols, rows: rows, cellSize: cellSize });
+    } catch (e) {
+      gridInfo.textContent = 'Error: ' + e.message;
+      gridInfo.className = 'info invalid';
+      engine = null;
+      return;
+    }
+
+    currentSlices = null;
+    sliceContainer.innerHTML = '';
+    renderPreview();
+    updateGridInfo();
+    updateSimInfo();
+    updateSliceValidation();
+
+    engine.setWindDirection(parseFloat(windDirInput.value));
+    engine.setNoiseInfluence(parseFloat(noiseInput.value));
+    engine.setTurbulence(parseFloat(turbInput.value));
+    engine.setWindStrength(parseFloat(strengthInput.value));
+    engine.setTransferRate(parseFloat(transferInput.value));
+    engine.setPixelSmooth(parseFloat(smoothInput.value));
+  }
+
+  // Events
+  btnInit.addEventListener('click', initEngine);
+  btnRun.addEventListener('click', function () { running ? pauseSim() : startSim(); });
+  btnStep.addEventListener('click', function () {
+    if (!engine) return; pauseSim(); engine.step(); renderPreview(); updateSimInfo();
+  });
+  btnStepN.addEventListener('click', function () {
+    if (!engine) return; pauseSim();
+    var n = parseInt(stepNInput.value, 10) || 100;
+    engine.stepN(n); renderPreview(); updateSimInfo();
+  });
+  btnBlur.addEventListener('click', function () {
+    if (!engine) return;
+    var r = parseInt(blurInput.value, 10) || 0;
+    if (r > 0) { engine.blur(r); renderPreview(); }
+  });
+  btnSlice.addEventListener('click', function () {
+    if (!engine) return;
+    var n = parseInt(numSlicesInput.value, 10) || 1;
+    var cols = engine.getCols(), rows = engine.getRows();
+    var result = Slicer.validate(cols, n);
+    if (!result.valid) {
+      alert('Cannot slice cleanly: ' + cols + ' / ' + n + ' has remainder ' + result.remainder + '.\nPick a divisor of ' + cols + '.');
+      return;
+    }
+    currentSlices = Slicer.slice(engine.getPixels(), cols, rows, n);
+    sliceContainer.innerHTML = '';
+    currentSlices.forEach(function (s) {
+      var c = document.createElement('canvas');
+      c.width = s.cols; c.height = s.rows;
+      c.title = 'Slice ' + s.index + ': ' + s.cols + ' \u00d7 ' + s.rows;
+      var ctx = c.getContext('2d');
+      var id = ctx.createImageData(s.cols, s.rows);
+      var buf = new Uint32Array(id.data.buffer);
+      for (var i = 0; i < s.pixels.length; i++) {
+        var h = s.pixels[i];
+        if (h < 0) h = 0; else if (h > 1) h = 1;
+        var g = (h * 255 + 0.5) | 0;
+        buf[i] = 0xFF000000 | (g << 16) | (g << 8) | g;
+      }
+      ctx.putImageData(id, 0, 0);
+      sliceContainer.appendChild(c);
+    });
+  });
+  btnExportFull.addEventListener('click', function () {
+    if (!engine) return;
+    downloadCanvas(renderToExportCanvas(engine.getPixels(), engine.getCols(), engine.getRows()), 'raster-full.png');
+  });
+  var exportInfo = $('exportInfo');
+  btnExportSlices.addEventListener('click', function () {
+    if (!currentSlices || !currentSlices.length) { alert('Slice first.'); return; }
+    exportInfo.textContent = 'Rendering slices...';
+    exportInfo.className = 'info';
+
+    var total = currentSlices.length;
+    var files = [];
+    var done = 0;
+
+    currentSlices.forEach(function (s) {
+      var padded = String(s.index).padStart(3, '0');
+      var canvas = renderToExportCanvas(s.pixels, s.cols, s.rows);
+      canvasToUint8Array(canvas, function (data) {
+        files.push({ name: 'slice-' + padded + '.png', data: data });
+        done++;
+        exportInfo.textContent = 'Rendered ' + done + ' / ' + total + '...';
+        if (done === total) {
+          // Sort by name to ensure order
+          files.sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+          exportInfo.textContent = 'Building ZIP...';
+          var zip = buildZip(files);
+          downloadBlob(zip, 'raster-slices.zip');
+          var sizeMB = (zip.size / (1024 * 1024)).toFixed(1);
+          exportInfo.textContent = total + ' slices exported (' + sizeMB + ' MB)';
+          exportInfo.className = 'info valid';
+        }
+      });
+    });
+  });
+
+  wireSlider(windDirInput, windDirVal, function (v) { if (engine) engine.setWindDirection(v); }, function (v) { return String(Math.round(v)); });
+  wireSlider(noiseInput, noiseVal, function (v) { if (engine) engine.setNoiseInfluence(v); }, function (v) { return v.toFixed(2); });
+  wireSlider(turbInput, turbVal, function (v) { if (engine) engine.setTurbulence(v); }, function (v) { return v.toFixed(3); });
+  wireSlider(strengthInput, strengthVal, function (v) { if (engine) engine.setWindStrength(v); }, function (v) { return String(Math.round(v)); });
+  wireSlider(transferInput, transferVal, function (v) { if (engine) engine.setTransferRate(v); }, function (v) { return v.toFixed(3); });
+  wireSlider(smoothInput, smoothVal, function (v) { if (engine) engine.setPixelSmooth(v); }, function (v) { return v.toFixed(2); });
+  wireSlider(blurInput, blurVal, function () {}, function (v) { return String(Math.round(v)); });
+
+  colsInput.addEventListener('input', updateSliceValidation);
+  numSlicesInput.addEventListener('input', updateSliceValidation);
+
+  // Auto-init
+  initEngine();
+})();
+</script>
+</body>
+</html>
