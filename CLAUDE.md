@@ -137,6 +137,20 @@ When a task spans multiple domains, break it into subtasks and delegate. Prefer 
 - **Supabase**: Managed cloud. Schema via migrations. **Migrations are NOT auto-applied.** After creating a new migration file, apply it to production via `mcp__supabase__apply_migration` or the Supabase dashboard. Always verify with `mcp__supabase__execute_sql` that the schema matches what the code expects.
 - **ElevenLabs**: Agent configured via API/MCP. No separate deployment needed.
 
+## Portrait Pipeline
+
+`apps/pos-server/portrait_pipeline.py` — AI-driven portrait-to-statue transformation + thermal print.
+
+Pipeline order: **image → filter → head crop → width crop → blur → dither → print**. Do NOT rearrange.
+
+- **Head crop** uses MediaPipe FaceMesh landmarks (#10 forehead, #152 chin) + configurable padding + aspect ratio. Crops BOTH dimensions.
+- Landmark #10 is at the **hairline**, NOT top of skull — `pad_top` compensates for this.
+- MediaPipe is less accurate on stylized images (wax sculpture) than real photos. Consider detecting on original photo before style transfer.
+- **Blur radius is relative to image size.** Blur 10 on a 576px image is subtle; blur 10 on a 200px strip destroys all detail.
+- All portrait config in `apps/pos-server/config.yaml` under `portrait:` (head_crop, crop, blur, dither_mode).
+- Crop tuner tool: `apps/pos-server/test_output/crop_tuner.html` (served via `/gallery/crop_tuner.html`).
+- Test CLI: `python portrait_pipeline.py <image> --dummy --skip-transform --duration 120 --output test_output/test`
+
 ## Debugging Gotchas
 
 - **System prompt = quotable content.** Any prose in the system prompt WILL be quoted by the AI back to visitors. Write instructions as imperatives ("Do X"), never descriptions ("This is a raw text..."). If the AI quotes something weird, check `packages/shared/src/programs/aphorism.ts`.
