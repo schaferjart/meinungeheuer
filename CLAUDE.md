@@ -118,6 +118,18 @@ The ElevenLabs integrator uses Opus because system prompt engineering and audio 
 
 When a task spans multiple domains, break it into subtasks and delegate. Prefer parallel execution when subtasks are independent.
 
+## Tools
+
+`tools/` — Standalone browser-based utilities for the art practice. Each tool is a **single self-contained HTML file** (all CSS/JS inline, no ES modules) so it works directly via `open filename.html` from `file://`. No build step, no server needed.
+
+- `tools/raster-painter/` — Wind/noise dot grid simulation → slice → export for large-format paintings. Ported from the LandingPage raster engine.
+
+**Gotcha:** ES modules (`type="module"`) are blocked by CORS on `file://` in Chrome. Any tool meant to be opened directly must inline all JS/CSS.
+
+## Related Projects
+
+- **LandingPage** (`/Users/janos/Desktop/VAKUNST/code/LandingPage`) — Gnomon Practice website. Contains the original canvas dot raster simulation (`projects/_landing/controller.js`) that the raster-painter tool was ported from. Vanilla JS, ES modules, no build tools.
+
 ## Deployment
 
 - **Tablet**: Docker (2-stage: node build → nginx SPA). Accepts `VITE_*` build args. Deployed via Coolify from GitHub `main` branch.

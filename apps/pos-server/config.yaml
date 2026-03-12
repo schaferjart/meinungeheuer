@@ -193,6 +193,7 @@ portrait:
   head_crop:
     pad_top: 0.02             # barely above forehead landmark
     pad_bottom: 0.02          # barely below chin landmark
+    aspect_ratio: 0.75        # width/height (0.75 = 3:4 portrait)
 
   # ── Duration-based width crop ──
   # Longer conversation → narrower strip → more "precise" portrait.

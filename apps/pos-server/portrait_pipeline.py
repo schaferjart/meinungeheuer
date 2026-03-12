@@ -214,20 +214,22 @@ def detect_face_landmarks(image: Image.Image) -> dict:
 
 def compute_head_crop(image_w: int, image_h: int, landmarks: dict, config: dict) -> tuple:
     """
-    Compute a tight vertical crop around the face, matching reference proportions.
+    Compute a tight passport-style crop around the face.
 
-    The crop is forehead-to-chin with configurable padding. Full width is preserved
-    (the subsequent duration-based width crop handles horizontal narrowing).
+    Crops BOTH vertically (forehead-to-chin) and horizontally (centered on face).
+    Width is set by aspect ratio relative to the cropped height.
 
     Config (portrait.head_crop):
-        pad_top:    padding above forehead as fraction of face height (default 0.20)
-        pad_bottom: padding below chin as fraction of face height (default 0.25)
+        pad_top:      padding above forehead as fraction of face height (default 0.02)
+        pad_bottom:   padding below chin as fraction of face height (default 0.02)
+        aspect_ratio: width/height ratio of the crop (default 0.75 = 3:4 portrait)
 
     Returns (left, top, right, bottom) crop box.
     """
     hc_cfg = config.get("portrait", {}).get("head_crop", {})
-    pad_top_frac = hc_cfg.get("pad_top", 0.20)
-    pad_bottom_frac = hc_cfg.get("pad_bottom", 0.25)
+    pad_top_frac = hc_cfg.get("pad_top", 0.02)
+    pad_bottom_frac = hc_cfg.get("pad_bottom", 0.02)
+    aspect = hc_cfg.get("aspect_ratio", 0.75)
 
     forehead_y = landmarks["forehead_top"][1]
     chin_y = landmarks["chin"][1]
@@ -235,8 +237,15 @@ def compute_head_crop(image_w: int, image_h: int, landmarks: dict, config: dict)
 
     top = max(0, forehead_y - int(face_h * pad_top_frac))
     bottom = min(image_h, chin_y + int(face_h * pad_bottom_frac))
+    crop_h = bottom - top
 
-    return (0, top, image_w, bottom)
+    # Width from aspect ratio, centered on face
+    crop_w = int(crop_h * aspect)
+    center_x = landmarks["face_center_x"]
+    left = max(0, min(center_x - crop_w // 2, image_w - crop_w))
+    right = left + crop_w
+
+    return (left, top, right, bottom)
 
 
 def compute_zoom_crops(image: Image.Image, landmarks: dict) -> list[dict]:
@@ -520,9 +529,10 @@ def print_portrait_duration(image: Image.Image, duration_seconds: float,
 
     Pipeline order:
       1. Prepare (resize to paper width, greyscale, enhance)
-      2. Vertical head crop (tight forehead-to-chin matching reference proportions)
-      3. Width crop based on conversation duration (centered on face)
-      4. Blur + dither ONLY on the final cropped strip
+      2. Head crop (tight forehead-to-chin passport style)
+      3. Width crop (duration-based, centered on face)
+      4. Blur the final strip
+      5. Dither + print
 
     When save_dir is set, saves ALL intermediates:
         03_greyscale.png, 04_head_crop.png, 05_width_crop.png,
@@ -565,19 +575,19 @@ def print_portrait_duration(image: Image.Image, duration_seconds: float,
                 scaled[k] = int(v * sx)
         landmarks = scaled
 
-    # Step 2: Vertical head crop (tight forehead-to-chin)
+    # Step 2: Head crop (tight forehead-to-chin)
     if landmarks:
         head_box = compute_head_crop(pw, ph, landmarks, config)
         head_cropped = grey.crop(head_box)
 
-        # Shift landmark y-coordinates for the cropped coordinate system
+        head_left = head_box[0]
         head_top = head_box[1]
         shifted = {}
         for k, v in landmarks.items():
             if isinstance(v, tuple):
-                shifted[k] = (v[0], v[1] - head_top)
+                shifted[k] = (v[0] - head_left, v[1] - head_top)
             else:
-                shifted[k] = v  # face_center_x is x-only, stays the same
+                shifted[k] = v - head_left  # face_center_x shifts too
         landmarks = shifted
     else:
         head_cropped = grey
@@ -597,12 +607,13 @@ def print_portrait_duration(image: Image.Image, duration_seconds: float,
     print(f"[PORTRAIT] Duration {duration_seconds}s → {width_pct:.0f}% width "
           f"({strip.size[0]}x{strip.size[1]} from {pw}x{ph})")
 
-    # Step 4: Blur + dither ONLY on the final cropped strip
+    # Step 4: Blur the final strip
     strip = _apply_blur(strip, blur)
 
     if save_dir:
         strip.save(os.path.join(save_dir, "06_blurred.png"))
 
+    # Step 5: Dither + print
     dithered = _dither_image(strip, dither_mode, dot_size)
 
     if save_dir:
