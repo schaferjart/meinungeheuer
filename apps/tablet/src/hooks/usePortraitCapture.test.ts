@@ -130,12 +130,15 @@ describe('usePortraitCapture', () => {
   });
 
   // -------------------------------------------------------------------------
-  // uploadPortrait
+  // uploadForProcessing (Phase 1)
   // -------------------------------------------------------------------------
 
-  describe('uploadPortrait', () => {
-    it('sends FormData POST with file field named "file" and skip_selection="true"', async () => {
-      const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+  describe('uploadForProcessing', () => {
+    it('sends FormData POST and returns job_id from response', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ status: 'processing', job_id: 'test-job-123' }),
+      });
       vi.stubGlobal('fetch', fetchSpy);
 
       const videoRef = { current: createMockVideo() };
@@ -144,10 +147,12 @@ describe('usePortraitCapture', () => {
       );
 
       const blob = new Blob(['test'], { type: 'image/jpeg' });
+      let jobId: string | null = null;
       await act(async () => {
-        await result.current.uploadPortrait(blob);
+        jobId = await result.current.uploadForProcessing(blob);
       });
 
+      expect(jobId).toBe('test-job-123');
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, opts] = fetchSpy.mock.calls[0] as [string, RequestInit];
       expect(url).toBe('http://localhost:9100/portrait/capture');
@@ -155,15 +160,12 @@ describe('usePortraitCapture', () => {
 
       const body = opts.body as FormData;
       expect(body.get('skip_selection')).toBe('true');
-      const file = body.get('file');
-      expect(file).toBeTruthy();
-      // Verify it's a Blob/File (happy-dom may not preserve File name from FormData.append)
-      expect(file).toBeInstanceOf(Blob);
+      expect(body.get('file')).toBeInstanceOf(Blob);
 
       vi.unstubAllGlobals();
     });
 
-    it('skips silently (no throw) when posServerUrl is empty string', async () => {
+    it('returns null when posServerUrl is empty', async () => {
       const fetchSpy = vi.fn();
       vi.stubGlobal('fetch', fetchSpy);
 
@@ -173,17 +175,75 @@ describe('usePortraitCapture', () => {
       );
 
       const blob = new Blob(['test'], { type: 'image/jpeg' });
+      let jobId: string | null = null;
       await act(async () => {
-        await result.current.uploadPortrait(blob);
+        jobId = await result.current.uploadForProcessing(blob);
       });
 
+      expect(jobId).toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
 
       vi.unstubAllGlobals();
     });
 
-    it('sets isCapturing true during upload, false after', async () => {
-      let resolveFetch!: (value: { ok: boolean }) => void;
+    it('returns null and sets lastError on fetch failure', async () => {
+      const fetchSpy = vi.fn().mockRejectedValue(new Error('Network error'));
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const videoRef = { current: createMockVideo() };
+      const { result } = renderHook(() =>
+        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+      );
+
+      const blob = new Blob(['test'], { type: 'image/jpeg' });
+      let jobId: string | null = null;
+      await act(async () => {
+        jobId = await result.current.uploadForProcessing(blob);
+      });
+
+      expect(jobId).toBeNull();
+      expect(result.current.lastError).toBe('Network error');
+
+      vi.unstubAllGlobals();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // finalizePortrait (Phase 2)
+  // -------------------------------------------------------------------------
+
+  describe('finalizePortrait', () => {
+    it('sends JSON POST with job_id and duration_seconds', async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ status: 'ok', width_percent: 42.5 }),
+      });
+      vi.stubGlobal('fetch', fetchSpy);
+
+      const videoRef = { current: createMockVideo() };
+      const { result } = renderHook(() =>
+        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+      );
+
+      await act(async () => {
+        await result.current.finalizePortrait('job-abc', 120);
+      });
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, opts] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('http://localhost:9100/portrait/finalize');
+      expect(opts.method).toBe('POST');
+      expect(opts.headers).toEqual({ 'Content-Type': 'application/json' });
+      expect(JSON.parse(opts.body as string)).toEqual({
+        job_id: 'job-abc',
+        duration_seconds: 120,
+      });
+
+      vi.unstubAllGlobals();
+    });
+
+    it('sets isProcessing during finalize and clears after', async () => {
+      let resolveFetch!: (value: { ok: boolean; json: () => Promise<unknown> }) => void;
       const fetchSpy = vi.fn().mockReturnValue(
         new Promise((r) => {
           resolveFetch = r;
@@ -196,29 +256,30 @@ describe('usePortraitCapture', () => {
         usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
       );
 
-      expect(result.current.isCapturing).toBe(false);
+      expect(result.current.isProcessing).toBe(false);
 
-      const blob = new Blob(['test'], { type: 'image/jpeg' });
-      let uploadPromise: Promise<void>;
+      let finalizePromise: Promise<void>;
       act(() => {
-        uploadPromise = result.current.uploadPortrait(blob);
+        finalizePromise = result.current.finalizePortrait('job-abc', 60);
       });
 
-      // isCapturing should be true while fetch is pending
-      expect(result.current.isCapturing).toBe(true);
+      expect(result.current.isProcessing).toBe(true);
 
       await act(async () => {
-        resolveFetch({ ok: true });
-        await uploadPromise!;
+        resolveFetch({
+          ok: true,
+          json: () => Promise.resolve({ status: 'ok', width_percent: 90 }),
+        });
+        await finalizePromise!;
       });
 
-      expect(result.current.isCapturing).toBe(false);
+      expect(result.current.isProcessing).toBe(false);
 
       vi.unstubAllGlobals();
     });
 
-    it('sets lastError on fetch failure, clears on retry', async () => {
-      const fetchSpy = vi.fn().mockRejectedValueOnce(new Error('Network error'));
+    it('sets lastError on finalize failure, never throws', async () => {
+      const fetchSpy = vi.fn().mockRejectedValue(new Error('Server down'));
       vi.stubGlobal('fetch', fetchSpy);
 
       const videoRef = { current: createMockVideo() };
@@ -226,69 +287,11 @@ describe('usePortraitCapture', () => {
         usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
       );
 
-      const blob = new Blob(['test'], { type: 'image/jpeg' });
-
-      // First call — should fail
       await act(async () => {
-        await result.current.uploadPortrait(blob);
+        await result.current.finalizePortrait('job-abc', 300);
       });
 
-      expect(result.current.lastError).toBe('Network error');
-
-      // Retry — should clear error on success
-      fetchSpy.mockResolvedValueOnce({ ok: true });
-      await act(async () => {
-        await result.current.uploadPortrait(blob);
-      });
-
-      expect(result.current.lastError).toBeNull();
-
-      vi.unstubAllGlobals();
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // captureAndUpload
-  // -------------------------------------------------------------------------
-
-  describe('captureAndUpload', () => {
-    it('calls captureFrame then uploadPortrait, does NOT throw', async () => {
-      const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
-      vi.stubGlobal('fetch', fetchSpy);
-
-      const video = createMockVideo();
-      const videoRef = { current: video };
-      const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
-      );
-
-      await act(async () => {
-        // Should not throw
-        await result.current.captureAndUpload();
-      });
-
-      // Verify canvas was used (captureFrame) and fetch was called (uploadPortrait)
-      expect(mockCanvas.getContext).toHaveBeenCalledWith('2d');
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-      vi.unstubAllGlobals();
-    });
-
-    it('does not upload when captureFrame returns null', async () => {
-      const fetchSpy = vi.fn();
-      vi.stubGlobal('fetch', fetchSpy);
-
-      const video = createMockVideo({ readyState: 1 }); // not ready
-      const videoRef = { current: video };
-      const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
-      );
-
-      await act(async () => {
-        await result.current.captureAndUpload();
-      });
-
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(result.current.lastError).toBe('Server down');
 
       vi.unstubAllGlobals();
     });

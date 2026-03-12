@@ -1,15 +1,17 @@
 /**
  * usePortraitCapture
  *
- * Captures a still frame from a shared <video> element (same stream used by
- * face detection) and uploads it to the POS server's /portrait/capture endpoint.
+ * Two-phase portrait pipeline:
+ *   Phase 1 (uploadForProcessing): Capture frame → POST to POS server →
+ *     server starts style transfer in background → returns job_id immediately.
+ *   Phase 2 (finalizePortrait): Send job_id + conversation duration →
+ *     server applies duration-based width crop → prints.
  *
  * Key constraints:
- * - Uses Canvas drawImage + toBlob (ImageCapture API is NOT supported on Safari).
+ * - Uses Canvas drawImage + toBlob (ImageCapture API NOT supported on Safari).
  * - NEVER calls getUserMedia — reuses the single stream via the shared videoRef
  *   (iOS Safari mutes the first stream if a second getUserMedia() is called).
- * - Upload is fire-and-forget; the POS server's pipeline runs synchronously
- *   for 30–180 s (style transfer). We must never block UI transitions.
+ * - Both phases are fire-and-forget; errors are logged but never thrown.
  */
 
 import { useCallback, useState } from 'react';
@@ -28,13 +30,13 @@ export interface UsePortraitCaptureOptions {
 export interface UsePortraitCaptureReturn {
   /** Capture a single JPEG frame from the video. Returns null if video is not ready. */
   captureFrame: () => Promise<Blob | null>;
-  /** Upload a previously captured blob to the POS server. Fire-and-forget. */
-  uploadPortrait: (blob: Blob) => Promise<void>;
-  /** Convenience: capture a frame then upload it. Never throws. */
-  captureAndUpload: () => Promise<void>;
-  /** True while an upload is in progress. */
-  isCapturing: boolean;
-  /** Last error message from upload, or null. Cleared on next successful upload. */
+  /** Phase 1: Upload photo for background processing. Returns job_id or null on failure. */
+  uploadForProcessing: (blob: Blob) => Promise<string | null>;
+  /** Phase 2: Send duration to trigger crop + print. Fire-and-forget. */
+  finalizePortrait: (jobId: string, durationSeconds: number) => Promise<void>;
+  /** True while an upload or finalize is in progress. */
+  isProcessing: boolean;
+  /** Last error message, or null. Cleared on next successful operation. */
   lastError: string | null;
 }
 
@@ -52,8 +54,10 @@ export function usePortraitCapture({
   videoRef,
   posServerUrl,
 }: UsePortraitCaptureOptions): UsePortraitCaptureReturn {
-  const [isCapturing, setIsCapturing] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
+
+  const baseUrl = posServerUrl.replace(/\/+$/, '');
 
   // -----------------------------------------------------------------------
   // captureFrame — draw the current video frame to an offscreen canvas
@@ -90,16 +94,17 @@ export function usePortraitCapture({
   }, [videoRef]);
 
   // -----------------------------------------------------------------------
-  // uploadPortrait — POST blob as multipart/form-data to POS server
+  // Phase 1: Upload photo for background processing (style transfer)
+  // Returns job_id on success, null on failure. Never throws.
   // -----------------------------------------------------------------------
-  const uploadPortrait = useCallback(
-    async (blob: Blob): Promise<void> => {
-      if (!posServerUrl) {
+  const uploadForProcessing = useCallback(
+    async (blob: Blob): Promise<string | null> => {
+      if (!baseUrl) {
         console.warn('[Portrait] No POS server URL configured, skipping upload');
-        return;
+        return null;
       }
 
-      setIsCapturing(true);
+      setIsProcessing(true);
       setLastError(null);
 
       try {
@@ -107,41 +112,74 @@ export function usePortraitCapture({
         formData.append('file', blob, 'portrait.jpg');
         formData.append('skip_selection', 'true');
 
-        const url = `${posServerUrl.replace(/\/+$/, '')}/portrait/capture`;
-
-        const res = await fetch(url, {
+        const res = await fetch(`${baseUrl}/portrait/capture`, {
           method: 'POST',
           body: formData,
-          // 5 min timeout: style transfer on POS server takes 30–180 s
+          signal: AbortSignal.timeout(30_000), // 30s — just the upload, not processing
+        });
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(`Upload failed ${res.status}: ${text}`);
+        }
+
+        const data = (await res.json()) as { status: string; job_id: string };
+        console.log('[Portrait] Phase 1 complete — job_id:', data.job_id);
+        return data.job_id;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn('[Portrait] Upload error:', msg);
+        setLastError(msg);
+        return null;
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [baseUrl],
+  );
+
+  // -----------------------------------------------------------------------
+  // Phase 2: Finalize — send duration, server crops and prints
+  // Fire-and-forget. Never throws.
+  // -----------------------------------------------------------------------
+  const finalizePortrait = useCallback(
+    async (jobId: string, durationSeconds: number): Promise<void> => {
+      if (!baseUrl) return;
+
+      setIsProcessing(true);
+      setLastError(null);
+
+      try {
+        const res = await fetch(`${baseUrl}/portrait/finalize`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            job_id: jobId,
+            duration_seconds: durationSeconds,
+          }),
+          // 5 min timeout — may need to wait for style transfer to finish
           signal: AbortSignal.timeout(300_000),
         });
 
         if (!res.ok) {
           const text = await res.text().catch(() => '');
-          throw new Error(`Portrait upload failed ${res.status}: ${text}`);
+          throw new Error(`Finalize failed ${res.status}: ${text}`);
         }
 
-        console.log('[Portrait] Upload successful');
+        const data = (await res.json()) as { status: string; width_percent: number };
+        console.log(
+          `[Portrait] Phase 2 complete — ${durationSeconds}s → ${data.width_percent}% width`,
+        );
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.warn('[Portrait] Upload error:', msg);
+        console.warn('[Portrait] Finalize error:', msg);
         setLastError(msg);
       } finally {
-        setIsCapturing(false);
+        setIsProcessing(false);
       }
     },
-    [posServerUrl],
+    [baseUrl],
   );
 
-  // -----------------------------------------------------------------------
-  // captureAndUpload — convenience combo. Never throws.
-  // -----------------------------------------------------------------------
-  const captureAndUpload = useCallback(async (): Promise<void> => {
-    const blob = await captureFrame();
-    if (blob) {
-      await uploadPortrait(blob);
-    }
-  }, [captureFrame, uploadPortrait]);
-
-  return { captureFrame, uploadPortrait, captureAndUpload, isCapturing, lastError };
+  return { captureFrame, uploadForProcessing, finalizePortrait, isProcessing, lastError };
 }

@@ -183,15 +183,23 @@ portrait:
     translucent wax sculpture where the material itself creates
     all the light behavior in the image.
 
-  # Print output
-  blur: 10
-  dither_mode: bayer
+  # ── Print processing ──
+  blur: 10                    # Gaussian blur radius (always applied)
+  dither_mode: bayer          # bayer | floyd | halftone
 
-  # Zoom crops — face-landmark based (computed from mediapipe)
+  # ── Duration-based width crop ──
+  # Longer conversation → narrower strip → more "precise" portrait.
+  # Height is always full. Width narrows linearly from max to min.
+  crop:
+    max_width_percent: 100    # at 0 seconds (full portrait width)
+    min_width_percent: 5      # at max_duration (narrowest strip)
+    max_duration_seconds: 600 # 10 min — beyond this, width stays at min
+
+  # Legacy zoom crops (used by run_pipeline / CLI --duration 0)
   # zoom_0: shoulders to hairline (full portrait)
-  # zoom_1: chin to forehead, outer-eye to outer-eye width (neck/face)
-  # zoom_2: eye-center to eye-center width, nose-bridge height
-  # zoom_3: narrow strip through face center (nose width)
+  # zoom_1: chin to forehead, outer-eye to outer-eye width
+  # zoom_2: eye-center to eye-center, nose-bridge height
+  # zoom_3: narrow strip through face center
 
 # Acidic template — big, raw, hard character-wrap
 acidic:

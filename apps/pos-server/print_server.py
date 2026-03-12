@@ -32,6 +32,7 @@ import io
 import os
 import sys
 import time
+import uuid
 import hmac
 import signal
 import socket
@@ -48,7 +49,10 @@ from printer_core import load_config, connect, Formatter, validate_config
 import templates
 from image_printer import process_image
 try:
-    from portrait_pipeline import run_pipeline, transform_to_statue
+    from portrait_pipeline import (
+        run_pipeline, transform_to_statue,
+        process_portrait_stages_ab, print_portrait_duration,
+    )
     _has_portrait = True
 except ImportError:
     _has_portrait = False
@@ -65,8 +69,18 @@ _zeroconf = None
 _print_lock = threading.Lock()
 _server_start_time = None
 _last_print_time = None
+_save_dir = None          # When set, save all portrait intermediates here
+_skip_transform = False   # When True, skip style transfer (use raw image)
 
 _PUBLIC_ENDPOINTS = frozenset({"health", "index", "static"})
+
+# ── Portrait job tracking (two-phase: upload → finalize) ─────────────
+# Jobs hold the style-transferred image between /portrait/capture and
+# /portrait/finalize. The background thread runs stages A+B; finalize
+# applies the duration-based crop and prints.
+_portrait_jobs = {}   # job_id → { event, status, image, error, created_at }
+_jobs_lock = threading.Lock()
+_JOB_TTL_SECONDS = 1800  # auto-cleanup orphaned jobs after 30 min
 
 logger = logging.getLogger(__name__)
 
@@ -267,58 +281,192 @@ def print_markdown():
     return jsonify({"status": "ok", "template": "markdown"})
 
 
+def _cleanup_stale_jobs():
+    """Remove portrait jobs older than TTL (called periodically)."""
+    now = time.time()
+    with _jobs_lock:
+        stale = [jid for jid, j in _portrait_jobs.items()
+                 if now - j.get("created_at", 0) > _JOB_TTL_SECONDS]
+        for jid in stale:
+            del _portrait_jobs[jid]
+            logger.info("Cleaned up stale portrait job %s", jid)
+
+
 @app.route("/portrait/capture", methods=["POST"])
 def portrait_capture():
+    """
+    Phase 1: Receive photo, start style transfer in background.
+    Returns immediately with a job_id. Call /portrait/finalize later
+    with the job_id and conversation duration to crop and print.
+
+    Accepts multipart/form-data:
+        file: one or more image files (required)
+        skip_selection: "1" or "true" to use first image
+
+    Returns: { status: "processing", job_id: "...", photos_received: N }
+    """
     if not _has_portrait:
         return jsonify({"error": "Portrait pipeline unavailable — install numpy and mediapipe"}), 501
-    """
-    Receive one or more photos, run the full portrait pipeline
-    (select best → style transfer → print at multiple zoom levels).
 
-    Accepts multipart/form-data with one or more 'file' fields.
-    """
     files = request.files.getlist("file")
     if not files:
         return error_response("No files uploaded", "file")
 
     tmp_paths = []
+    for uploaded in files:
+        if not uploaded.filename:
+            continue
+        suffix = os.path.splitext(uploaded.filename)[1] or ".jpg"
+        tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+        uploaded.save(tmp)
+        tmp.close()
+        tmp_paths.append(tmp.name)
+
+    if not tmp_paths:
+        return error_response("No valid files", "file")
+
+    skip_selection = request.form.get("skip_selection", "").lower() in ("1", "true")
+
+    # Cleanup stale jobs before creating a new one
+    _cleanup_stale_jobs()
+
+    job_id = str(uuid.uuid4())
+    event = threading.Event()
+
+    # Per-job save directory (when global _save_dir is set)
+    job_save_dir = None
+    if _save_dir:
+        job_save_dir = os.path.join(_save_dir, job_id)
+        os.makedirs(job_save_dir, exist_ok=True)
+
+    with _jobs_lock:
+        _portrait_jobs[job_id] = {
+            "event": event,
+            "status": "processing",
+            "image": None,
+            "error": None,
+            "created_at": time.time(),
+            "save_dir": job_save_dir,
+        }
+
+    def worker():
+        try:
+            # Save raw capture
+            if job_save_dir:
+                import shutil
+                shutil.copy2(tmp_paths[0], os.path.join(job_save_dir, "01_raw_capture.jpg"))
+
+            _, image = process_portrait_stages_ab(
+                tmp_paths, _config,
+                skip_selection=skip_selection,
+                skip_transform=_skip_transform,
+            )
+
+            # Save style-transferred image
+            if job_save_dir:
+                image.save(os.path.join(job_save_dir, "02_transformed.png"))
+
+            with _jobs_lock:
+                _portrait_jobs[job_id]["image"] = image
+                _portrait_jobs[job_id]["status"] = "done"
+            logger.info("Portrait job %s: transform complete (%dx%d)",
+                        job_id, image.size[0], image.size[1])
+        except Exception as e:
+            logger.error("Portrait job %s failed: %s", job_id, e)
+            with _jobs_lock:
+                if job_id in _portrait_jobs:
+                    _portrait_jobs[job_id]["error"] = str(e)
+                    _portrait_jobs[job_id]["status"] = "error"
+        finally:
+            event.set()
+            for p in tmp_paths:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+    logger.info("Portrait job %s: started (%d photos)", job_id, len(tmp_paths))
+
+    return jsonify({
+        "status": "processing",
+        "job_id": job_id,
+        "photos_received": len(tmp_paths),
+    })
+
+
+@app.route("/portrait/finalize", methods=["POST"])
+def portrait_finalize():
+    """
+    Phase 2: Apply duration-based width crop and print.
+
+    Accepts JSON:
+        job_id: string (required) — from /portrait/capture response
+        duration_seconds: number (required) — conversation length
+
+    The longer the conversation, the narrower the crop (more precise).
+    Height is always full. See portrait.crop config for thresholds.
+    """
+    if not _has_portrait:
+        return jsonify({"error": "Portrait pipeline unavailable"}), 501
+
+    data = request.get_json(force=True, silent=True)
+    if not data or "job_id" not in data:
+        return error_response("Missing job_id", "job_id")
+
+    job_id = data["job_id"]
+    duration_seconds = float(data.get("duration_seconds", 0))
+
+    with _jobs_lock:
+        job = _portrait_jobs.get(job_id)
+
+    if not job:
+        return error_response(f"Unknown or expired job: {job_id}", "job_id", 404)
+
+    # Wait for style transfer to complete (up to 5 min)
+    if not job["event"].wait(timeout=300):
+        with _jobs_lock:
+            _portrait_jobs.pop(job_id, None)
+        return error_response("Style transfer timed out", status=504)
+
+    if job["status"] == "error":
+        err = job.get("error", "unknown")
+        with _jobs_lock:
+            _portrait_jobs.pop(job_id, None)
+        return error_response(f"Transform failed: {err}", status=500)
+
+    image = job["image"]
+    job_save_dir = job.get("save_dir")
+
     try:
-        for uploaded in files:
-            if not uploaded.filename:
-                continue
-            suffix = os.path.splitext(uploaded.filename)[1] or ".jpg"
-            tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
-            uploaded.save(tmp)
-            tmp.close()
-            tmp_paths.append(tmp.name)
-
-        if not tmp_paths:
-            return error_response("No valid files", "file")
-
-        skip_selection = request.form.get("skip_selection", "").lower() in ("1", "true")
-        blur = request.form.get("blur")
-        mode = request.form.get("mode")
-
-        selected, _ = run_pipeline(
-            tmp_paths, _config, _printer,
-            dummy=_dummy,
-            skip_selection=skip_selection,
-            blur=float(blur) if blur else None,
-            dither_mode=mode,
+        width_pct = print_portrait_duration(
+            image, duration_seconds, _config, _printer,
+            dummy=_dummy, save_dir=job_save_dir,
         )
+
+        # Write metadata for the gallery
+        if job_save_dir:
+            meta_path = os.path.join(job_save_dir, "meta.txt")
+            with open(meta_path, "w") as f:
+                f.write(f"duration_seconds={duration_seconds}\n")
+                f.write(f"width_percent={width_pct:.1f}\n")
+                f.write(f"blur={_config.get('portrait', {}).get('blur', 10)}\n")
+                f.write(f"dither_mode={_config.get('portrait', {}).get('dither_mode', 'bayer')}\n")
 
         return jsonify({
             "status": "ok",
-            "template": "portrait",
-            "photos_received": len(tmp_paths),
-            "selected": os.path.basename(selected),
+            "duration_seconds": duration_seconds,
+            "width_percent": round(width_pct, 1),
+            "save_dir": job_save_dir,
         })
+    except Exception as e:
+        logger.error("Portrait finalize failed: %s", e)
+        return error_response(f"Print failed: {e}", status=500)
     finally:
-        for p in tmp_paths:
-            try:
-                os.unlink(p)
-            except OSError:
-                pass
+        with _jobs_lock:
+            _portrait_jobs.pop(job_id, None)
 
 
 @app.route("/portrait/transform", methods=["POST"])
@@ -387,6 +535,71 @@ def handle_error(e):
     return jsonify({"error": str(e)}), code
 
 
+@app.route("/gallery")
+def gallery():
+    """Browse all saved portrait pipeline stages."""
+    if not _save_dir or not os.path.isdir(_save_dir):
+        return "<h2>No save_dir configured. Start server with --save-dir test_output</h2>", 404
+
+    jobs = []
+    for name in sorted(os.listdir(_save_dir), reverse=True):
+        job_dir = os.path.join(_save_dir, name)
+        if not os.path.isdir(job_dir):
+            continue
+        images = sorted(f for f in os.listdir(job_dir)
+                        if f.endswith((".png", ".jpg", ".jpeg")))
+        meta = {}
+        meta_path = os.path.join(job_dir, "meta.txt")
+        if os.path.exists(meta_path):
+            for line in open(meta_path):
+                if "=" in line:
+                    k, v = line.strip().split("=", 1)
+                    meta[k] = v
+        jobs.append({"id": name, "images": images, "meta": meta})
+
+    html = """<!DOCTYPE html><html><head>
+    <title>Portrait Pipeline Gallery</title>
+    <style>
+      body { font-family: monospace; background: #111; color: #eee; padding: 20px; }
+      h1 { color: #fff; }
+      .job { margin-bottom: 40px; border: 1px solid #333; padding: 20px; }
+      .job h2 { margin-top: 0; font-size: 14px; color: #888; }
+      .meta { color: #0f0; margin-bottom: 10px; }
+      .stages { display: flex; gap: 10px; overflow-x: auto; }
+      .stage { text-align: center; }
+      .stage img { max-height: 400px; border: 1px solid #333; }
+      .stage p { font-size: 11px; color: #888; margin: 4px 0; }
+    </style></head><body>
+    <h1>Portrait Pipeline Gallery</h1>"""
+
+    if not jobs:
+        html += "<p>No jobs yet. Send an image to /portrait/capture</p>"
+    for job in jobs:
+        meta_str = " | ".join(f"{k}={v}" for k, v in job["meta"].items())
+        html += f'<div class="job"><h2>Job: {job["id"]}</h2>'
+        if meta_str:
+            html += f'<div class="meta">{meta_str}</div>'
+        html += '<div class="stages">'
+        for img in job["images"]:
+            html += f'''<div class="stage">
+                <img src="/gallery/{job["id"]}/{img}" />
+                <p>{img}</p></div>'''
+        html += "</div></div>"
+
+    html += "</body></html>"
+    return html
+
+
+@app.route("/gallery/<job_id>/<filename>")
+def gallery_image(job_id, filename):
+    """Serve a saved pipeline image."""
+    if not _save_dir:
+        return "No save_dir", 404
+    from flask import send_from_directory
+    job_dir = os.path.join(_save_dir, job_id)
+    return send_from_directory(job_dir, filename)
+
+
 def register_mdns(port):
     """Register the print server as a Bonjour/mDNS service for iPad discovery."""
     global _zeroconf
@@ -435,12 +648,24 @@ def graceful_shutdown(signum, frame):
 
 
 def main():
-    global _config, _printer, _dummy, _server_start_time
+    global _config, _printer, _dummy, _server_start_time, _save_dir, _skip_transform
 
     parser = argparse.ArgumentParser(description="Thermal printer HTTP server")
     parser.add_argument("--dummy", action="store_true", help="Run without real printer")
     parser.add_argument("--config", default="config.yaml", help="Config file path")
+    parser.add_argument("--save-dir", default=None,
+                        help="Save all portrait pipeline intermediates to this directory")
+    parser.add_argument("--skip-transform", action="store_true",
+                        help="Skip n8n style transfer (use raw image)")
     args = parser.parse_args()
+
+    _save_dir = args.save_dir
+    _skip_transform = args.skip_transform
+    if _save_dir:
+        os.makedirs(_save_dir, exist_ok=True)
+        print(f"[INFO] Saving portrait intermediates to: {os.path.abspath(_save_dir)}")
+    if _skip_transform:
+        print("[INFO] Style transfer SKIPPED (--skip-transform)")
 
     _config = load_config(args.config)
     validate_config(_config)  # fail fast if config incomplete

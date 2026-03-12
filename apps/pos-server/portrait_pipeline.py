@@ -384,7 +384,7 @@ def _fallback_strip(image: Image.Image) -> tuple:
     return (left, 0, left + nw, h)
 
 
-# ── Full Pipeline ────────────────────────────────────────────────────
+# ── Full Pipeline (legacy — prints all 4 zooms) ─────────────────────
 
 def run_pipeline(image_paths: list[str], config: dict, printer,
                  dummy: bool = False, save_dir: str = None,
@@ -420,6 +420,162 @@ def run_pipeline(image_paths: list[str], config: dict, printer,
     return selected, image
 
 
+# ── Two-Phase Pipeline (async transform + duration-based crop) ───────
+
+def process_portrait_stages_ab(image_paths: list[str], config: dict,
+                               skip_selection: bool = False,
+                               skip_transform: bool = False) -> tuple:
+    """
+    Stages A+B only: photo selection + style transfer.
+    Returns (selected_path, transformed_image).
+    Designed for async processing — call this in a background thread,
+    then call print_portrait_duration() later with the conversation duration.
+    """
+    # Stage A: Photo selection
+    if len(image_paths) > 1 and not skip_selection:
+        selected = select_best_photo(image_paths, config)
+    else:
+        selected = image_paths[0]
+        print(f"[PORTRAIT] Using image: {selected}")
+
+    # Stage B: Style transfer via n8n
+    if skip_transform:
+        image = open_image(selected)
+        print("[PORTRAIT] Skipping style transfer")
+    else:
+        image = transform_to_statue(selected, config)
+
+    return selected, image
+
+
+def compute_duration_crop(processed_w: int, processed_h: int,
+                          landmarks: dict | None,
+                          duration_seconds: float,
+                          config: dict) -> tuple:
+    """
+    Compute a width-only crop based on conversation duration.
+    Height is always the full image. Width narrows linearly with duration.
+
+    Longer conversation → narrower strip → more "precise" portrait.
+
+    Config (portrait.crop):
+        max_width_percent:    width at 0s duration (default 100)
+        min_width_percent:    width at max_duration (default 5)
+        max_duration_seconds: when minimum width is reached (default 600)
+
+    Returns ((left, top, right, bottom), width_percent).
+    """
+    crop_cfg = config.get("portrait", {}).get("crop", {})
+    max_w_pct = crop_cfg.get("max_width_percent", 100)
+    min_w_pct = crop_cfg.get("min_width_percent", 5)
+    max_dur = crop_cfg.get("max_duration_seconds", 600)
+
+    # Linear interpolation: longer duration → narrower crop
+    t = min(duration_seconds / max(max_dur, 1), 1.0)
+    width_pct = max_w_pct - t * (max_w_pct - min_w_pct)
+
+    crop_w = max(1, int(processed_w * width_pct / 100))
+
+    # Center on face if detected, otherwise image center
+    center_x = landmarks["face_center_x"] if landmarks else processed_w // 2
+
+    left = max(0, min(center_x - crop_w // 2, processed_w - crop_w))
+    right = left + crop_w
+
+    return (left, 0, right, processed_h), width_pct
+
+
+def print_portrait_duration(image: Image.Image, duration_seconds: float,
+                            config: dict, printer,
+                            dummy: bool = False, save_dir: str = None) -> float:
+    """
+    Stage C (duration-aware): print a single portrait with width-only crop.
+
+    The crop is centered on the face. Height is always full.
+    Longer conversation → narrower strip → more intimate/precise.
+    Blur and dither are applied to the full image before cropping,
+    so blur bleeds naturally at crop edges.
+
+    When save_dir is set, saves ALL intermediates:
+        03_greyscale.png, 04_blurred.png, 05_cropped.png,
+        06_dithered.png, 07_final_canvas.png
+
+    Returns the width_percent used.
+    """
+    from printer_core import Formatter
+
+    cfg = config.get("portrait", {})
+    halftone_cfg = config.get("halftone", {})
+
+    blur = cfg.get("blur", 10)
+    dither_mode = cfg.get("dither_mode", "bayer")
+    paper_px = halftone_cfg.get("paper_px", 576)
+    contrast = halftone_cfg.get("contrast", 1.3)
+    brightness = halftone_cfg.get("brightness", 1.0)
+    sharpness = halftone_cfg.get("sharpness", 1.2)
+    dot_size = halftone_cfg.get("dot_size", 6)
+
+    # Detect face landmarks on full-res image (better accuracy)
+    landmarks = detect_face_landmarks(image)
+
+    # Resize to paper width, greyscale, enhance
+    grey = _prepare(image, paper_px, contrast, brightness, sharpness)
+    pw, ph = grey.size
+
+    if save_dir:
+        grey.save(os.path.join(save_dir, "03_greyscale.png"))
+
+    # Scale landmarks to processed image coordinates
+    if landmarks:
+        sx = pw / image.size[0]
+        sy = ph / image.size[1]
+        scaled = {}
+        for k, v in landmarks.items():
+            if isinstance(v, tuple):
+                scaled[k] = (int(v[0] * sx), int(v[1] * sy))
+            else:
+                scaled[k] = int(v * sx)
+        landmarks = scaled
+
+    # Apply blur to full image BEFORE crop (avoids edge artifacts)
+    grey = _apply_blur(grey, blur)
+
+    if save_dir:
+        grey.save(os.path.join(save_dir, "04_blurred.png"))
+
+    # Compute width-only crop based on duration
+    crop_box, width_pct = compute_duration_crop(pw, ph, landmarks, duration_seconds, config)
+    cropped = grey.crop(crop_box)
+
+    if save_dir:
+        cropped.save(os.path.join(save_dir, "05_cropped.png"))
+
+    print(f"[PORTRAIT] Duration {duration_seconds}s → {width_pct:.0f}% width "
+          f"({cropped.size[0]}x{cropped.size[1]} from {pw}x{ph})")
+
+    # Dither the cropped strip
+    dithered = _dither_image(cropped, dither_mode, dot_size)
+
+    if save_dir:
+        dithered.save(os.path.join(save_dir, "06_dithered.png"))
+
+    # Print or save — the strip IS the output, no padding
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    label = f"{duration_seconds}s / {width_pct:.0f}%w / blur{blur} / {dither_mode}  {timestamp}"
+
+    if dummy:
+        print(f"[PORTRAIT] DUMMY — saved all stages to {save_dir}")
+    else:
+        fmt = Formatter(printer, config.get("printer", {}).get("paper_width", 48))
+        fmt.bold(label)
+        printer.image(dithered)
+        fmt.feed()
+        fmt.cut()
+        print(f"[PORTRAIT] Printed: {label}")
+
+    return width_pct
+
+
 # ── CLI test entry point ─────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -434,18 +590,37 @@ if __name__ == "__main__":
     parser.add_argument("--skip-transform", action="store_true")
     parser.add_argument("--blur", type=float)
     parser.add_argument("--mode", choices=["bayer", "floyd", "halftone"])
+    parser.add_argument("--duration", type=float, default=0,
+                        help="Simulate conversation duration in seconds (0=legacy 4-zoom)")
     parser.add_argument("--output", default=".", help="Output directory for previews")
     args = parser.parse_args()
 
     config = load_config(args.config)
     printer = connect(config, dummy=args.dummy)
 
-    run_pipeline(
-        args.images, config, printer,
-        dummy=args.dummy,
-        save_dir=args.output,
-        skip_selection=args.skip_selection,
-        skip_transform=args.skip_transform,
-        blur=args.blur,
-        dither_mode=args.mode,
-    )
+    if args.duration > 0:
+        # Two-phase: transform then duration-based crop
+        _, image = process_portrait_stages_ab(
+            args.images, config,
+            skip_selection=args.skip_selection,
+            skip_transform=args.skip_transform,
+        )
+        if args.output:
+            raw_path = os.path.join(args.output, "portrait_raw.png")
+            image.save(raw_path)
+            print(f"[PORTRAIT] Saved raw: {raw_path}")
+        print_portrait_duration(
+            image, args.duration, config, printer,
+            dummy=args.dummy, save_dir=args.output,
+        )
+    else:
+        # Legacy: all 4 zoom levels
+        run_pipeline(
+            args.images, config, printer,
+            dummy=args.dummy,
+            save_dir=args.output,
+            skip_selection=args.skip_selection,
+            skip_transform=args.skip_transform,
+            blur=args.blur,
+            dither_mode=args.mode,
+        )

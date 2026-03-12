@@ -77,17 +77,18 @@ function InstallationApp() {
   // or iOS Safari will mute the first stream (WebKit bug #179363).
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Portrait capture hook — reads frames from the shared video element
+  // Portrait capture hook — two-phase: upload immediately (starts style transfer),
+  // finalize after conversation (applies duration-based crop + prints).
   const posServerUrl = import.meta.env['VITE_POS_SERVER_URL'] ?? '';
-  const { captureFrame, uploadPortrait } = usePortraitCapture({
+  const { captureFrame, uploadForProcessing, finalizePortrait } = usePortraitCapture({
     videoRef,
     posServerUrl,
   });
 
-  // Store captured portrait blob for deferred upload (capture during conversation,
-  // upload after definition received — natural timing ensures definition prints first)
-  const portraitBlobRef = useRef<Blob | null>(null);
+  // Portrait state: job_id from phase 1, captured flag, conversation start time
+  const portraitJobIdRef = useRef<string | null>(null);
   const portraitCapturedRef = useRef(false);
+  const conversationStartRef = useRef<number>(0);
 
   // Track whether config has been fetched to avoid double-fetching
   const configFetchedRef = useRef(false);
@@ -150,18 +151,19 @@ function InstallationApp() {
       void persistDefinition(def);
       void persistPrintJob(result, state.sessionId ?? null, programRef.current.printLayout);
 
-      // Fire-and-forget portrait upload to POS server (only if program uses portraits).
-      // Definition card prints via Supabase print_queue (fast, ~2s).
-      // Portrait prints via POS pipeline (slow, 30-180s style transfer).
-      // Natural timing ensures definition card prints first.
-      if (portraitBlobRef.current && programRef.current.stages.portrait) {
-        void uploadPortrait(portraitBlobRef.current);
-        portraitBlobRef.current = null;
+      // Fire-and-forget portrait finalize: send conversation duration to POS server.
+      // Style transfer was already started at 5s into conversation (phase 1).
+      // Now we just send duration → POS crops based on it and prints.
+      if (portraitJobIdRef.current && programRef.current.stages.portrait) {
+        const durationSeconds = Math.round((Date.now() - conversationStartRef.current) / 1000);
+        console.log(`[App] Portrait finalize: ${durationSeconds}s conversation`);
+        void finalizePortrait(portraitJobIdRef.current, durationSeconds);
+        portraitJobIdRef.current = null;
       }
 
       setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
     },
-    [dispatch, state.sessionId, uploadPortrait],
+    [dispatch, state.sessionId, finalizePortrait],
   );
 
   const handleConversationEnd = useCallback(
@@ -266,18 +268,28 @@ function InstallationApp() {
     console.log('[App] Screen:', screen, '| Mode:', mode, '| Term:', term, '| EL status:', conversationStatus);
   }, [screen, mode, term, conversationStatus]);
 
-  // Capture a portrait frame 5s into the conversation screen.
-  // The visitor is facing the tablet and face detection confirms presence.
-  // Store the blob in portraitBlobRef — upload is deferred to handleDefinitionReceived.
+  // Track conversation start time for duration calculation
+  useEffect(() => {
+    if (screen === 'conversation') {
+      conversationStartRef.current = Date.now();
+    }
+  }, [screen]);
+
+  // Capture portrait frame 5s into conversation and upload IMMEDIATELY.
+  // POS server starts style transfer in background (30-180s).
+  // By the time conversation ends, transform is likely already done.
   useEffect(() => {
     if (screen === 'conversation' && !portraitCapturedRef.current && programRef.current.stages.portrait) {
       const timer = setTimeout(() => {
         captureFrame()
           .then((blob) => {
             if (blob) {
-              portraitBlobRef.current = blob;
               portraitCapturedRef.current = true;
-              console.log('[App] Portrait frame captured:', blob.size, 'bytes');
+              console.log('[App] Portrait frame captured:', blob.size, 'bytes — uploading now');
+              // Phase 1: upload immediately, get job_id for later finalization
+              uploadForProcessing(blob).then((jobId) => {
+                portraitJobIdRef.current = jobId;
+              });
             }
           })
           .catch(() => {});
@@ -286,9 +298,9 @@ function InstallationApp() {
     }
     if (screen !== 'conversation') {
       portraitCapturedRef.current = false;
-      portraitBlobRef.current = null;
+      portraitJobIdRef.current = null;
     }
-  }, [screen, captureFrame]);
+  }, [screen, captureFrame, uploadForProcessing]);
 
   function renderScreen() {
     switch (screen) {
