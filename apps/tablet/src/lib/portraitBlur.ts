@@ -21,20 +21,18 @@
  */
 
 import type { RefObject } from 'react';
-
-// Blobs below this size are almost certainly a black frame from an unready video.
-const MIN_BLOB_SIZE = 1024;
+import { PORTRAIT } from '@meinungeheuer/shared';
 
 /**
  * Capture a blurred JPEG from the video element referenced by videoRef.
  *
  * @param videoRef - Ref to the shared hidden <video> element.
- * @param blurRadius - CSS blur radius in pixels (default: 25).
+ * @param blurRadius - CSS blur radius in pixels (default from config).
  * @returns A JPEG Blob, or null if the video is not ready or capture fails.
  */
 export async function captureBlurredPortrait(
   videoRef: RefObject<HTMLVideoElement | null>,
-  blurRadius = 25,
+  blurRadius = PORTRAIT.blurRadius,
 ): Promise<Blob | null> {
   try {
     const video = videoRef.current;
@@ -74,7 +72,7 @@ export async function captureBlurredPortrait(
     return new Promise<Blob | null>((resolve) => {
       canvasB.toBlob(
         (blob) => {
-          if (blob && blob.size > MIN_BLOB_SIZE) {
+          if (blob && blob.size > PORTRAIT.minBlobSize) {
             console.log('[PortraitBlur] Blurred portrait captured:', blob.size, 'bytes');
             resolve(blob);
           } else {
@@ -83,7 +81,7 @@ export async function captureBlurredPortrait(
           }
         },
         'image/jpeg',
-        0.85,
+        PORTRAIT.jpegQuality,
       );
     });
   } catch (err) {

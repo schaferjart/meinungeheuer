@@ -1,4 +1,10 @@
-import { SpeechProfileSchema, VoiceChainStateSchema } from '@meinungeheuer/shared';
+import {
+  SpeechProfileSchema,
+  VoiceChainStateSchema,
+  VOICE_CLONE,
+  SPEECH_PROFILE_EXTRACTION,
+  ICEBREAKER_GENERATION,
+} from '@meinungeheuer/shared';
 import type { SpeechProfile, VoiceChainState } from '@meinungeheuer/shared';
 import { supabase } from './supabase.js';
 
@@ -19,7 +25,6 @@ function getOpenRouterApiKey(): string {
 }
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OPENROUTER_MODEL = 'google/gemini-2.0-flash-001';
 
 // ---------------------------------------------------------------------------
 // cloneVoice
@@ -36,7 +41,7 @@ export async function cloneVoice(audioBuffer: Buffer, sessionId: string): Promis
 
     const formData = new FormData();
     formData.append('name', `visitor_${sessionId}`);
-    formData.append('remove_background_noise', 'true');
+    formData.append('remove_background_noise', String(VOICE_CLONE.removeBackgroundNoise));
 
     // Wrap the Buffer in a Blob so FormData can attach it as a file field
     const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
@@ -116,21 +121,7 @@ export async function deleteVoiceClone(voiceId: string): Promise<void> {
 // extractSpeechProfile
 // ---------------------------------------------------------------------------
 
-const SPEECH_PROFILE_SYSTEM_PROMPT = `You are a linguist analyzing a conversation transcript from an art installation.
-Analyze only the visitor's turns and return a JSON object describing their speech profile.
-Return ONLY a valid JSON object — no markdown, no explanation.
-
-The JSON must have exactly these fields:
-{
-  "characteristic_phrases": ["array of 3-7 distinctive expressions or sentence patterns the visitor used"],
-  "vocabulary_level": "casual|conversational|formal|mixed",
-  "favorite_words": ["array of words the visitor used frequently or notably"],
-  "tone": "short description of overall emotional tone",
-  "humor_style": "description of how/whether they used humor",
-  "cadence_description": "description of their speech rhythm and pacing",
-  "topics_of_interest": ["genuine interests or passions they showed"],
-  "personality_snapshot": "2-3 sentence character description"
-}`;
+// Speech profile prompt now lives in voiceChainConfig
 
 /**
  * Uses an LLM to extract a structured speech profile from a conversation transcript.
@@ -159,12 +150,12 @@ export async function extractSpeechProfile(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: SPEECH_PROFILE_EXTRACTION.model,
         messages: [
-          { role: 'system', content: SPEECH_PROFILE_SYSTEM_PROMPT },
+          { role: 'system', content: SPEECH_PROFILE_EXTRACTION.systemPrompt },
           { role: 'user', content: transcriptText },
         ],
-        temperature: 0.3,
+        temperature: SPEECH_PROFILE_EXTRACTION.temperature,
       }),
     });
 
@@ -221,13 +212,7 @@ export async function extractSpeechProfile(
 // generateIcebreaker
 // ---------------------------------------------------------------------------
 
-const ICEBREAKER_SYSTEM_PROMPT = `Given this transcript from an art installation conversation, generate one compelling icebreaker (1-2 sentences) that:
-- references something specific from the conversation
-- is open-ended enough to start a new conversation with a different person
-- feels intriguing and slightly mysterious
-- does NOT reveal private information
-
-Return ONLY the icebreaker text, nothing else.`;
+// Icebreaker prompt now lives in voiceChainConfig
 
 /**
  * Generates a conversation icebreaker derived from a transcript.
@@ -250,12 +235,12 @@ export async function generateIcebreaker(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: ICEBREAKER_GENERATION.model,
         messages: [
-          { role: 'system', content: ICEBREAKER_SYSTEM_PROMPT },
+          { role: 'system', content: ICEBREAKER_GENERATION.systemPrompt },
           { role: 'user', content: transcriptText },
         ],
-        temperature: 0.9,
+        temperature: ICEBREAKER_GENERATION.temperature,
       }),
     });
 
@@ -431,7 +416,7 @@ export async function processVoiceChain(params: {
     // 6. Clean up old voice clones (retain current + 1 previous)
     // -----------------------------------------------------------------------
 
-    const retentionCutoff = newChainPosition - 2;
+    const retentionCutoff = newChainPosition - VOICE_CLONE.retentionWindow;
 
     if (retentionCutoff > 0) {
       const { data: staleRows, error: staleError } = await supabase

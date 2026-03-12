@@ -80,7 +80,16 @@ function installationReducer(
       return { ...state, language: action.lang };
 
     case 'RESET':
-      return { ...initialState };
+      return {
+        ...initialState,
+        // Preserve config across resets — config is fetched once on mount
+        mode: state.mode,
+        term: state.term,
+        contextText: state.contextText,
+        parentSessionId: state.parentSessionId,
+        stages: state.stages,
+        language: state.language,
+      };
 
     // --- State transitions ---
     case 'WAKE': {
@@ -139,12 +148,12 @@ function installationReducer(
 
     case 'TIMER_15S': {
       if (state.screen !== 'farewell') return state;
-      return { ...initialState };
+      return installationReducer(state, { type: 'RESET' });
     }
 
     case 'FACE_LOST': {
       if (state.screen !== 'farewell') return state;
-      return { ...initialState };
+      return installationReducer(state, { type: 'RESET' });
     }
 
     default:

@@ -8,7 +8,7 @@ import type { Mode } from '@meinungeheuer/shared';
 
 export const ConfigResponseSchema = z.object({
   mode: ModeSchema,
-  term: z.string(),
+  term: z.string().nullable(),
   program: z.string().optional(),
   contextText: z.string().nullable().optional(),
   parentSessionId: z.string().uuid().nullable().optional(),

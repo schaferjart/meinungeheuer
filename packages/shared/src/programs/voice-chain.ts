@@ -1,13 +1,14 @@
 import type { ConversationProgram, PromptParams } from './types.js';
 import type { SpeechProfile } from '../types.js';
+import { STYLE_INFLUENCE, COLD_START } from '../voiceChainConfig.js';
 
 // ============================================================
 // Helper: build speech profile injection block
 // ============================================================
 
 function buildStyleInfluenceBlock(profile: SpeechProfile): string {
-  const phrases = profile.characteristic_phrases.slice(0, 5).join('", "');
-  const words = profile.favorite_words.slice(0, 5).join(', ');
+  const phrases = profile.characteristic_phrases.slice(0, STYLE_INFLUENCE.maxPhrases).join('", "');
+  const words = profile.favorite_words.slice(0, STYLE_INFLUENCE.maxFavoriteWords).join(', ');
 
   return `
 STYLE INFLUENCE (absorbed from a previous visitor — be subtle, not mechanical):
@@ -196,8 +197,6 @@ EDGE CASES:
 
     // Fallback: cold start (first visitor in the chain, no previous conversation)
     const isGerman = params.language.startsWith('de');
-    return isGerman
-      ? `Jemand war gerade hier vor dir. Sie haben etwas hinterlassen. Ich bin neugierig — was bringst du mit?`
-      : `Someone was just here before you. They left something behind. I am curious — what do you bring?`;
+    return isGerman ? COLD_START.firstMessageDe : COLD_START.firstMessageEn;
   },
 };

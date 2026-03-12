@@ -5,35 +5,6 @@ import { getLatestVoiceChainState, processVoiceChain } from '../services/voiceCh
 export const voiceChainRoutes = new Hono();
 
 // ---------------------------------------------------------------------------
-// Shared secret middleware (same pattern as webhook routes)
-// ---------------------------------------------------------------------------
-
-const secretMiddleware = async (
-  c: Parameters<Parameters<typeof voiceChainRoutes.use>[1]>[0],
-  next: Parameters<Parameters<typeof voiceChainRoutes.use>[1]>[1],
-) => {
-  const secret = process.env['WEBHOOK_SECRET'];
-
-  // No secret configured — skip in dev mode
-  if (!secret) {
-    await next();
-    return;
-  }
-
-  const querySecret = c.req.query('secret');
-  const authHeader = c.req.header('Authorization');
-  const bearerSecret = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length)
-    : null;
-
-  if (querySecret !== secret && bearerSecret !== secret) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  await next();
-};
-
-// ---------------------------------------------------------------------------
 // Zod schema for process endpoint query fields (non-file fields)
 // ---------------------------------------------------------------------------
 
@@ -57,7 +28,7 @@ const TranscriptEntrySchema = z.array(
 // Returns 202 immediately and processes asynchronously.
 // ---------------------------------------------------------------------------
 
-voiceChainRoutes.post('/process', secretMiddleware, async (c) => {
+voiceChainRoutes.post('/process', async (c) => {
   let body: Record<string, string | File | undefined>;
   try {
     body = (await c.req.parseBody()) as Record<string, string | File | undefined>;

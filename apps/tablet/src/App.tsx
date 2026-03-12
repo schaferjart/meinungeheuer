@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { DEFAULT_MODE, DEFAULT_TERM, getProgram } from '@meinungeheuer/shared';
+import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@meinungeheuer/shared';
 import type { Definition, ConversationProgram } from '@meinungeheuer/shared';
 
 /** Build a partial Definition object from conversation results (client-side only). */
@@ -135,7 +135,7 @@ function InstallationApp() {
         dispatch({
           type: 'SET_CONFIG',
           mode: config.mode,
-          term: config.term,
+          term: config.term ?? '',
           contextText,
           parentSessionId: config.parentSessionId ?? null,
           stages: program.stages,
@@ -270,17 +270,30 @@ function InstallationApp() {
       startConversation().catch((err) => {
         console.error('[App] Failed to start conversation:', err);
       });
-
-      // Voice chain: record visitor audio for voice cloning
-      if (programRef.current.id === 'voice_chain') {
-        startRecording().catch(() => {});
-      }
     }
     // Reset the flag when we leave the conversation screen
     if (screen !== 'conversation') {
       conversationStartedRef.current = false;
     }
-  }, [screen, startConversation, startRecording]);
+  }, [screen, startConversation]);
+
+  // Voice chain: start recording visitor audio AFTER ElevenLabs connects.
+  // Must not race with startConversation for the mic — wait for 'connected'.
+  const audioRecordingStartedRef = useRef(false);
+  useEffect(() => {
+    if (
+      screen === 'conversation' &&
+      conversationStatus === 'connected' &&
+      !audioRecordingStartedRef.current &&
+      programRef.current.id === 'voice_chain'
+    ) {
+      audioRecordingStartedRef.current = true;
+      startRecording().catch(() => {});
+    }
+    if (screen !== 'conversation') {
+      audioRecordingStartedRef.current = false;
+    }
+  }, [screen, conversationStatus, startRecording]);
 
   // End the ElevenLabs session once we leave the conversation screen.
   // After save_definition fires, the screen transitions to synthesizing —
@@ -351,7 +364,7 @@ function InstallationApp() {
             })
             .catch(() => {});
         }
-      }, 5000);
+      }, PORTRAIT.captureDelayMs);
       return () => clearTimeout(timer);
     }
     if (screen !== 'conversation') {
