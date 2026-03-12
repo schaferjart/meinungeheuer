@@ -590,14 +590,13 @@ def gallery():
     return html
 
 
-@app.route("/gallery/<job_id>/<filename>")
-def gallery_image(job_id, filename):
-    """Serve a saved pipeline image."""
+@app.route("/gallery/<path:filepath>")
+def gallery_file(filepath):
+    """Serve any file from the save_dir (images, HTML tools, etc.)."""
     if not _save_dir:
         return "No save_dir", 404
     from flask import send_from_directory
-    job_dir = os.path.join(_save_dir, job_id)
-    return send_from_directory(job_dir, filename)
+    return send_from_directory(_save_dir, filepath)
 
 
 def register_mdns(port):

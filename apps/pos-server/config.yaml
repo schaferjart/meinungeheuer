@@ -191,9 +191,9 @@ portrait:
   # Tight forehead-to-chin framing matching reference proportions.
   # Padding is a fraction of face height (forehead landmark to chin landmark).
   head_crop:
-    pad_top: 0.02             # barely above forehead landmark
-    pad_bottom: 0.02          # barely below chin landmark
-    aspect_ratio: 0.75        # width/height (0.75 = 3:4 portrait)
+    pad_top: 0.15             # above forehead landmark (hairline → crown)
+    pad_bottom: 0.31          # below chin landmark (neck visible)
+    aspect_ratio: 0.63        # width/height
 
   # ── Duration-based width crop ──
   # Longer conversation → narrower strip → more "precise" portrait.
