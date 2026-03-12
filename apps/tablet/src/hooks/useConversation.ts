@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   useConversation as useElevenLabsConversation,
   type Status,
@@ -6,6 +6,11 @@ import {
   type Role as ElevenLabsRole,
 } from '@elevenlabs/react';
 import type { ConversationProgram } from '@meinungeheuer/shared';
+
+// If the visitor hasn't spoken for this long (ms) while the agent keeps
+// talking, end the conversation automatically. This prevents the AI from
+// babbling to itself when the visitor has walked away or gone silent.
+const VISITOR_SILENCE_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,6 +99,11 @@ export function useConversation(
   const onConversationEndRef = useRef(onConversationEnd);
   onConversationEndRef.current = onConversationEnd;
 
+  // Track when the visitor last spoke (or conversation started), for silence-based auto-end.
+  const lastActivityRef = useRef<number>(0);
+  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const endSessionRef = useRef<(() => Promise<void>) | null>(null);
+
   // -----------------------------------------------------------------------
   // ElevenLabs SDK hook
   // -----------------------------------------------------------------------
@@ -106,10 +116,17 @@ export function useConversation(
     },
 
     onMessage: ({ message, role }: { message: string; role: ElevenLabsRole }) => {
+      const mappedRole = mapRole(role);
+      // Only reset silence timer for real speech, not silence markers like "..."
+      if (mappedRole === 'visitor' && message.replace(/\./g, '').trim().length > 0) {
+        lastActivityRef.current = Date.now();
+        // Reschedule the silence timeout from now
+        scheduleSilenceTimeout();
+      }
       setTranscript((prev) => [
         ...prev,
         {
-          role: mapRole(role),
+          role: mappedRole,
           content: message,
           timestamp: Date.now(),
         },
@@ -176,11 +193,47 @@ export function useConversation(
   });
 
   // -----------------------------------------------------------------------
+  // Silence timeout: simple setTimeout that fires 30s after last visitor
+  // speech. Rescheduled on each real visitor message. Uses refs to avoid
+  // stale closures with the ElevenLabs SDK.
+  // -----------------------------------------------------------------------
+  const scheduleSilenceTimeout = useCallback(() => {
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    silenceTimerRef.current = setTimeout(() => {
+      console.log('[MeinUngeheuer] Visitor silent for 30s — auto-ending conversation');
+      endSessionRef.current?.().catch(() => {});
+    }, VISITOR_SILENCE_TIMEOUT_MS);
+  }, []);
+
+  // Keep endSessionRef current
+  endSessionRef.current = conversation.endSession;
+
+  // Start silence timer when connected, clear when disconnected
+  useEffect(() => {
+    if (conversation.status === 'connected') {
+      lastActivityRef.current = Date.now();
+      scheduleSilenceTimeout();
+    } else {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    };
+  }, [conversation.status, scheduleSilenceTimeout]);
+
+  // -----------------------------------------------------------------------
   // Start conversation
   // -----------------------------------------------------------------------
   const startConversation = useCallback(async (): Promise<string> => {
     // Reset transcript for new session
     setTranscript([]);
+    lastActivityRef.current = 0;
 
     const systemPrompt = program.buildSystemPrompt({ term, contextText: contextText ?? null, language });
     const firstMessage = program.buildFirstMessage({ term, contextText: contextText ?? null, language });

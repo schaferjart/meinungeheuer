@@ -4,23 +4,23 @@ milestone: v2.0
 milestone_name: — End-to-End Autonomous Installation
 current_plan: Not started
 status: completed
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-09T16:03:17.757Z"
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-10T23:15:59.280Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 10
-  completed_plans: 10
+  total_phases: 7
+  completed_phases: 7
+  total_plans: 11
+  completed_plans: 11
 ---
 
 # Project State
 
 ## Current Position
-- **Phase:** 06-program-integration-wiring (gap closure)
+- **Phase:** 07-live-concept-map
 - **Current Plan:** Not started
 - **Status:** Milestone complete
-- **Last session:** 2026-03-09T15:56:53Z
-- **Stopped at:** Completed 06-01-PLAN.md
+- **Last session:** 2026-03-11T00:10:00Z
+- **Stopped at:** Completed 07-01-PLAN.md
 
 ## Progress
 Phase 1: [====================] 2/2 plans complete
@@ -29,6 +29,7 @@ Phase 3: [====================] 2/2 plans complete
 Phase 4: [====================] 2/2 plans complete
 Phase 5: [====================] 2/2 plans complete
 Phase 6: [====================] 1/1 plans complete
+Phase 7: [====================] 1/1 plans complete
 
 ## What's Done
 - Codebase mapped (.planning/codebase/)
@@ -47,8 +48,10 @@ Phase 6: [====================] 1/1 plans complete
 - **Plan 05-01 complete:** ConversationProgram interface, program registry (getProgram/listPrograms), aphorism program (text_term extraction), free_association program, PrintPayload template field, InstallationConfig program field, DB migration 009, 19 tests
 - **Plan 05-02 complete:** Stage-config-driven state machine, program-based prompt building in useConversation, App.tsx program wiring, template-aware print persistence, portrait gating by program.stages.portrait, 204 tests pass
 - **Plan 06-01 complete:** Backend /api/config returns program field, printer-bridge forwards template to POS server, state machine TIMER_10S respects stages.printing, 207 tests pass
+- **Plan 07-01 complete:** Live concept map visualization replacing chat transcript. Concept extractor, force layout, Canvas+DOM hybrid, evolving definition. 27 new tests, 95 tablet tests pass
 
 ## What's Next
+- iPad Safari performance verification with physical device
 - Re-audit milestone to verify end-to-end program switching flow
 - Generate missing VERIFICATION.md for Phases 02/03
 
@@ -85,6 +88,11 @@ Phase 6: [====================] 1/1 plans complete
 - systemPrompt.ts and firstMessage.ts kept with @deprecated for regression test stability
 - Backend config.program defaults to null (tablet fallback handles 'aphorism')
 - Printer-bridge template defaults to 'dictionary' when payload.template undefined
+- Custom stopword filter over compromise.js for zero added dependencies
+- useSyncExternalStore for concept map state decoupled from React render cycle
+- Canvas+DOM hybrid: Canvas for connection lines, DOM for text labels
+- React.memo on ConceptNodeElement and EvolvingDefinition for animation performance
+- Force layout throttled to update React state every 3 frames (~20/sec)
 
 ## Blockers
 - Need ElevenLabs dashboard access to remove `end_call` tool
@@ -104,3 +112,4 @@ Phase 6: [====================] 1/1 plans complete
 | 05-01      | 8min     | 2     | 10    |
 | 05-02      | 7min     | 2     | 9     |
 | 06-01      | 4min     | 2     | 5     |
+| 07-01      | 15min    | 8     | 10    |
