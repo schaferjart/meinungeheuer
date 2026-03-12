@@ -269,6 +269,49 @@ export interface Database {
         };
         Relationships: [];
       };
+
+      voice_chain_state: {
+        Row: {
+          id: string;
+          session_id: string | null;
+          voice_clone_id: string | null;
+          voice_clone_status: 'pending' | 'ready' | 'failed' | 'deleted';
+          speech_profile: Record<string, unknown> | null;
+          icebreaker: string | null;
+          portrait_blurred_url: string | null;
+          chain_position: number;
+          is_active: boolean;
+          visitor_audio_path: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          session_id?: string | null;
+          voice_clone_id?: string | null;
+          voice_clone_status?: 'pending' | 'ready' | 'failed' | 'deleted';
+          speech_profile?: Record<string, unknown> | null;
+          icebreaker?: string | null;
+          portrait_blurred_url?: string | null;
+          chain_position?: number;
+          is_active?: boolean;
+          visitor_audio_path?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          session_id?: string | null;
+          voice_clone_id?: string | null;
+          voice_clone_status?: 'pending' | 'ready' | 'failed' | 'deleted';
+          speech_profile?: Record<string, unknown> | null;
+          icebreaker?: string | null;
+          portrait_blurred_url?: string | null;
+          chain_position?: number;
+          is_active?: boolean;
+          visitor_audio_path?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
 
     Views: Record<string, never>;

@@ -1,6 +1,7 @@
 import type { ConversationProgram } from './types.js';
 import { aphorismProgram } from './aphorism.js';
 import { freeAssociationProgram } from './free-association.js';
+import { voiceChainProgram } from './voice-chain.js';
 
 // Re-export types for convenience
 export type {
@@ -14,6 +15,7 @@ export type {
 // Re-export individual programs
 export { aphorismProgram } from './aphorism.js';
 export { freeAssociationProgram } from './free-association.js';
+export { voiceChainProgram } from './voice-chain.js';
 
 // ============================================================
 // Program Registry
@@ -22,6 +24,7 @@ export { freeAssociationProgram } from './free-association.js';
 const REGISTRY: Record<string, ConversationProgram> = {
   [aphorismProgram.id]: aphorismProgram,
   [freeAssociationProgram.id]: freeAssociationProgram,
+  [voiceChainProgram.id]: voiceChainProgram,
 };
 
 /** Default program used when none is specified. */
