@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ModeSchema } from '@meinungeheuer/shared';
+import { ModeSchema, SpeechProfileSchema } from '@meinungeheuer/shared';
 import type { Mode } from '@meinungeheuer/shared';
 
 // ============================================================
@@ -8,7 +8,7 @@ import type { Mode } from '@meinungeheuer/shared';
 
 export const ConfigResponseSchema = z.object({
   mode: ModeSchema,
-  term: z.string(),
+  term: z.string().nullable(),
   program: z.string().optional(),
   contextText: z.string().nullable().optional(),
   parentSessionId: z.string().uuid().nullable().optional(),
@@ -24,6 +24,15 @@ export const ConfigResponseSchema = z.object({
     definition_text: z.string(),
     chain_depth: z.number(),
     language: z.string(),
+  }).nullable().optional(),
+  voice_chain: z.object({
+    id: z.string(),
+    voice_clone_id: z.string().nullable(),
+    voice_clone_status: z.string(),
+    speech_profile: SpeechProfileSchema.nullable(),
+    icebreaker: z.string().nullable(),
+    portrait_blurred_url: z.string().nullable(),
+    chain_position: z.number(),
   }).nullable().optional(),
 });
 export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
@@ -88,4 +97,60 @@ export async function startSession(
     },
     SessionStartResponseSchema,
   );
+}
+
+// ============================================================
+// Voice chain
+// ============================================================
+
+export interface SubmitVoiceChainDataParams {
+  /** Recorded visitor audio blob (webm/opus or mp4). */
+  audio: Blob;
+  /** Installation session ID. */
+  sessionId: string;
+  /** Full conversation transcript. */
+  transcript: Array<{ role: string; content: string }>;
+  /** Public URL of the blurred portrait in Supabase Storage, or null. */
+  portraitBlurredUrl: string | null;
+}
+
+/**
+ * Submit voice chain data to the backend for async processing.
+ *
+ * The backend will:
+ * - Clone the visitor's voice via ElevenLabs IVC
+ * - Extract a speech profile from the transcript
+ * - Generate an icebreaker for the next visitor
+ * - Store everything in voice_chain_state
+ *
+ * Fire-and-forget — errors are logged, never thrown or blocking.
+ */
+export async function submitVoiceChainData(
+  backendUrl: string,
+  params: SubmitVoiceChainDataParams,
+): Promise<void> {
+  try {
+    const formData = new FormData();
+    formData.append('audio', params.audio, 'visitor_audio.webm');
+    formData.append('session_id', params.sessionId);
+    formData.append('transcript', JSON.stringify(params.transcript));
+    if (params.portraitBlurredUrl !== null) {
+      formData.append('portrait_blurred_url', params.portraitBlurredUrl);
+    }
+
+    const res = await fetch(`${backendUrl}/api/voice-chain/process`, {
+      method: 'POST',
+      body: formData,
+      // No Content-Type header — browser sets it with correct multipart boundary
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn('[API] Voice chain submit failed:', res.status, text);
+    } else {
+      console.log('[API] Voice chain data submitted successfully');
+    }
+  } catch (err) {
+    console.warn('[API] Voice chain submit error:', err);
+  }
 }
