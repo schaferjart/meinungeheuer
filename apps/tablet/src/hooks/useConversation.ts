@@ -5,7 +5,7 @@ import {
   type DisconnectionDetails,
   type Role as ElevenLabsRole,
 } from '@elevenlabs/react';
-import type { ConversationProgram } from '@meinungeheuer/shared';
+import type { ConversationProgram, SpeechProfile } from '@meinungeheuer/shared';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -36,6 +36,12 @@ export interface UseConversationParams {
   contextText?: string | null;
   /** Preferred language for the first message ("de" | "en") */
   language?: string;
+  /** Voice chain: ElevenLabs voice clone ID for TTS override */
+  voiceId?: string;
+  /** Voice chain: previous visitor's extracted speech profile */
+  speechProfile?: SpeechProfile;
+  /** Voice chain: generated icebreaker from previous conversation */
+  voiceChainIcebreaker?: string;
   /** Called when the agent calls save_definition */
   onDefinitionReceived?: (result: SaveDefinitionResult) => void;
   /** Called when the conversation ends for any reason */
@@ -80,19 +86,32 @@ export function useConversation(
     term,
     contextText,
     language = 'de',
+    voiceId,
+    speechProfile,
+    voiceChainIcebreaker,
     onDefinitionReceived,
     onConversationEnd,
   } = params;
 
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
 
-  // Use refs for callbacks so the ElevenLabs hook doesn't re-initialize
-  // when callback identity changes.
+  // Use refs for callbacks and voice chain params so the ElevenLabs hook
+  // doesn't re-initialize when these values change between renders.
   const onDefinitionReceivedRef = useRef(onDefinitionReceived);
   onDefinitionReceivedRef.current = onDefinitionReceived;
 
   const onConversationEndRef = useRef(onConversationEnd);
   onConversationEndRef.current = onConversationEnd;
+
+  // Voice chain refs — accessed inside startConversation callback
+  const voiceIdRef = useRef(voiceId);
+  voiceIdRef.current = voiceId;
+
+  const speechProfileRef = useRef(speechProfile);
+  speechProfileRef.current = speechProfile;
+
+  const voiceChainIcebreakerRef = useRef(voiceChainIcebreaker);
+  voiceChainIcebreakerRef.current = voiceChainIcebreaker;
 
   // -----------------------------------------------------------------------
   // ElevenLabs SDK hook
@@ -182,21 +201,42 @@ export function useConversation(
     // Reset transcript for new session
     setTranscript([]);
 
-    const systemPrompt = program.buildSystemPrompt({ term, contextText: contextText ?? null, language });
-    const firstMessage = program.buildFirstMessage({ term, contextText: contextText ?? null, language });
+    const systemPrompt = program.buildSystemPrompt({
+      term,
+      contextText: contextText ?? null,
+      language,
+      speechProfile: speechProfileRef.current,
+      voiceChainIcebreaker: voiceChainIcebreakerRef.current,
+    });
+    const firstMessage = program.buildFirstMessage({
+      term,
+      contextText: contextText ?? null,
+      language,
+      speechProfile: speechProfileRef.current,
+      voiceChainIcebreaker: voiceChainIcebreakerRef.current,
+    });
+
+    const overrides: Record<string, unknown> = {
+      agent: {
+        prompt: {
+          prompt: systemPrompt,
+        },
+        firstMessage,
+        language: language === 'de' ? 'de' : 'en',
+      },
+    };
+
+    // Voice chain: override TTS voice to use previous visitor's cloned voice
+    if (voiceIdRef.current) {
+      overrides['tts'] = {
+        voiceId: voiceIdRef.current,
+      };
+    }
 
     const conversationId = await conversation.startSession({
       agentId,
       connectionType: 'websocket',
-      overrides: {
-        agent: {
-          prompt: {
-            prompt: systemPrompt,
-          },
-          firstMessage,
-          language: language === 'de' ? 'de' : 'en',
-        },
-      },
+      overrides,
     });
 
     return conversationId;

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { DEFAULT_MODE, DEFAULT_TERM, getProgram } from '@meinungeheuer/shared';
+import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@meinungeheuer/shared';
 import type { Definition, ConversationProgram } from '@meinungeheuer/shared';
 
 /** Build a partial Definition object from conversation results (client-side only). */
@@ -25,8 +25,11 @@ function makeClientDefinition(d: {
 import { useInstallationMachine } from './hooks/useInstallationMachine';
 import { useConversation } from './hooks/useConversation';
 import { usePortraitCapture } from './hooks/usePortraitCapture';
-import { fetchConfig } from './lib/api';
-import { persistDefinition, persistPrintJob, persistTranscript } from './lib/persist';
+import { useAudioCapture } from './hooks/useAudioCapture';
+import { fetchConfig, submitVoiceChainData } from './lib/api';
+import type { ConfigResponse } from './lib/api';
+import { persistDefinition, persistPrintJob, persistTranscript, uploadBlurredPortrait } from './lib/persist';
+import { captureBlurredPortrait } from './lib/portraitBlur';
 import { ScreenTransition } from './components/ScreenTransition';
 import { CameraDetector } from './components/CameraDetector';
 import { Admin } from './pages/Admin';
@@ -89,6 +92,15 @@ function InstallationApp() {
   const portraitBlobRef = useRef<Blob | null>(null);
   const portraitCapturedRef = useRef(false);
 
+  // Voice chain: blurred portrait blob captured during conversation
+  const blurredPortraitBlobRef = useRef<Blob | null>(null);
+
+  // Voice chain state from config — holds voice clone ID, speech profile, icebreaker
+  const voiceChainRef = useRef<ConfigResponse['voice_chain']>(null);
+
+  // Audio capture hook — records visitor mic independently of the ElevenLabs WebSocket
+  const { startRecording, stopRecording } = useAudioCapture();
+
   // Track whether config has been fetched to avoid double-fetching
   const configFetchedRef = useRef(false);
 
@@ -110,6 +122,12 @@ function InstallationApp() {
           contextText = config.chain_context.definition_text;
         }
 
+        // Voice chain: store state for session start and data submission
+        if (config.voice_chain) {
+          voiceChainRef.current = config.voice_chain;
+          console.log('[App] Voice chain state loaded, position:', config.voice_chain.chain_position);
+        }
+
         // Resolve the conversation program from config
         const program = getProgram(config.program ?? 'aphorism');
         programRef.current = program;
@@ -117,7 +135,7 @@ function InstallationApp() {
         dispatch({
           type: 'SET_CONFIG',
           mode: config.mode,
-          term: config.term,
+          term: config.term ?? '',
           contextText,
           parentSessionId: config.parentSessionId ?? null,
           stages: program.stages,
@@ -169,6 +187,32 @@ function InstallationApp() {
       console.log('[App] Conversation ended, reason:', reason);
       // Persist transcript to Supabase
       void persistTranscript(conversationIdRef.current, transcriptRef.current);
+
+      // Voice chain: stop recording and submit captured data to backend
+      if (programRef.current.id === 'voice_chain') {
+        void (async () => {
+          const audioBlob = await stopRecording();
+
+          // Upload blurred portrait to Supabase Storage
+          let portraitUrl: string | null = null;
+          if (blurredPortraitBlobRef.current) {
+            portraitUrl = await uploadBlurredPortrait(blurredPortraitBlobRef.current);
+            blurredPortraitBlobRef.current = null;
+          }
+
+          if (audioBlob) {
+            void submitVoiceChainData(BACKEND_URL, {
+              audio: audioBlob,
+              sessionId: state.sessionId ?? 'unknown',
+              transcript: transcriptRef.current.map((t) => ({ role: t.role, content: t.content })),
+              portraitBlurredUrl: portraitUrl,
+            });
+          } else {
+            console.warn('[App] No audio blob captured for voice chain');
+          }
+        })();
+      }
+
       // If the conversation ended without a definition (e.g. agent disconnected),
       // and we're still on the conversation screen, synthesize gracefully
       if (state.screen === 'conversation' && !state.definition) {
@@ -184,8 +228,10 @@ function InstallationApp() {
         setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
       }
     },
-    [dispatch, state.screen, state.definition, term, language],
+    [dispatch, state.screen, state.definition, state.sessionId, term, language, stopRecording],
   );
+
+  const voiceChain = voiceChainRef.current;
 
   const {
     status: conversationStatus,
@@ -201,6 +247,10 @@ function InstallationApp() {
     term,
     contextText,
     language,
+    // Voice chain: override TTS voice and inject speech style from previous visitor
+    voiceId: voiceChain?.voice_clone_id ?? undefined,
+    speechProfile: voiceChain?.speech_profile ?? undefined,
+    voiceChainIcebreaker: voiceChain?.icebreaker ?? undefined,
     onDefinitionReceived: handleDefinitionReceived,
     onConversationEnd: handleConversationEnd,
   });
@@ -226,6 +276,24 @@ function InstallationApp() {
       conversationStartedRef.current = false;
     }
   }, [screen, startConversation]);
+
+  // Voice chain: start recording visitor audio AFTER ElevenLabs connects.
+  // Must not race with startConversation for the mic — wait for 'connected'.
+  const audioRecordingStartedRef = useRef(false);
+  useEffect(() => {
+    if (
+      screen === 'conversation' &&
+      conversationStatus === 'connected' &&
+      !audioRecordingStartedRef.current &&
+      programRef.current.id === 'voice_chain'
+    ) {
+      audioRecordingStartedRef.current = true;
+      startRecording().catch(() => {});
+    }
+    if (screen !== 'conversation') {
+      audioRecordingStartedRef.current = false;
+    }
+  }, [screen, conversationStatus, startRecording]);
 
   // End the ElevenLabs session once we leave the conversation screen.
   // After save_definition fires, the screen transitions to synthesizing —
@@ -268,25 +336,41 @@ function InstallationApp() {
 
   // Capture a portrait frame 5s into the conversation screen.
   // The visitor is facing the tablet and face detection confirms presence.
-  // Store the blob in portraitBlobRef — upload is deferred to handleDefinitionReceived.
+  // - For voice_chain: capture blurred portrait (stored for Supabase upload)
+  // - For other programs: capture regular portrait (deferred POS upload)
   useEffect(() => {
     if (screen === 'conversation' && !portraitCapturedRef.current && programRef.current.stages.portrait) {
       const timer = setTimeout(() => {
-        captureFrame()
-          .then((blob) => {
-            if (blob) {
-              portraitBlobRef.current = blob;
-              portraitCapturedRef.current = true;
-              console.log('[App] Portrait frame captured:', blob.size, 'bytes');
-            }
-          })
-          .catch(() => {});
-      }, 5000);
+        if (programRef.current.id === 'voice_chain') {
+          // Blurred portrait for Supabase Storage (voice chain)
+          captureBlurredPortrait(videoRef)
+            .then((blob) => {
+              if (blob) {
+                blurredPortraitBlobRef.current = blob;
+                portraitCapturedRef.current = true;
+                console.log('[App] Blurred portrait captured:', blob.size, 'bytes');
+              }
+            })
+            .catch(() => {});
+        } else {
+          // Regular portrait for POS server
+          captureFrame()
+            .then((blob) => {
+              if (blob) {
+                portraitBlobRef.current = blob;
+                portraitCapturedRef.current = true;
+                console.log('[App] Portrait frame captured:', blob.size, 'bytes');
+              }
+            })
+            .catch(() => {});
+        }
+      }, PORTRAIT.captureDelayMs);
       return () => clearTimeout(timer);
     }
     if (screen !== 'conversation') {
       portraitCapturedRef.current = false;
       portraitBlobRef.current = null;
+      blurredPortraitBlobRef.current = null;
     }
   }, [screen, captureFrame]);
 

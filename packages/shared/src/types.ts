@@ -126,6 +126,35 @@ export const InsertDefinitionSchema = DefinitionSchema.omit({ id: true, created_
 export type InsertDefinition = z.infer<typeof InsertDefinitionSchema>;
 
 // ============================================================
+// Voice chain types — used by the voice chain program
+// ============================================================
+
+export const SpeechProfileSchema = z.object({
+  characteristic_phrases: z.array(z.string()),
+  vocabulary_level: z.enum(['casual', 'conversational', 'formal', 'mixed']),
+  favorite_words: z.array(z.string()),
+  tone: z.string(),
+  humor_style: z.string(),
+  cadence_description: z.string(),
+  topics_of_interest: z.array(z.string()),
+  personality_snapshot: z.string(),
+});
+export type SpeechProfile = z.infer<typeof SpeechProfileSchema>;
+
+export const VoiceChainStateSchema = z.object({
+  id: z.string().uuid(),
+  session_id: z.string().uuid().nullable(),
+  voice_clone_id: z.string().nullable(),
+  voice_clone_status: z.enum(['pending', 'ready', 'failed', 'deleted']),
+  speech_profile: SpeechProfileSchema.nullable(),
+  icebreaker: z.string().nullable(),
+  portrait_blurred_url: z.string().nullable(),
+  chain_position: z.number().int(),
+  created_at: z.string().datetime({ offset: true }),
+});
+export type VoiceChainState = z.infer<typeof VoiceChainStateSchema>;
+
+// ============================================================
 // PrintPayload — the typed shape stored in print_queue.payload
 // ============================================================
 

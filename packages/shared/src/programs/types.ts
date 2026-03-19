@@ -1,4 +1,4 @@
-import type { Mode } from '../types.js';
+import type { Mode, SpeechProfile } from '../types.js';
 
 // ============================================================
 // Stage configuration — which pipeline stages are active
@@ -39,6 +39,10 @@ export interface PromptParams {
   term: string;
   contextText: string | null;
   language: string;
+  /** Voice chain: previous visitor's extracted speech profile. */
+  speechProfile?: SpeechProfile;
+  /** Voice chain: generated icebreaker from previous conversation. */
+  voiceChainIcebreaker?: string;
 }
 
 // ============================================================

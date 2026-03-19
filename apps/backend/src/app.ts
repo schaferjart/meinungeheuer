@@ -4,6 +4,7 @@ import { logger } from 'hono/logger';
 import { webhookRoutes } from './routes/webhook.js';
 import { sessionRoutes } from './routes/session.js';
 import { configRoutes } from './routes/config.js';
+import { voiceChainRoutes } from './routes/voiceChain.js';
 
 export const app = new Hono();
 
@@ -46,6 +47,9 @@ app.route('/api/config', configRoutes);
 
 // Also expose definitions and chain directly under /api for convenience
 app.route('/api', configRoutes);
+
+// Voice chain processing and state
+app.route('/api/voice-chain', voiceChainRoutes);
 
 // ---------------------------------------------------------------------------
 // 404 fallback

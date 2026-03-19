@@ -88,6 +88,35 @@ export async function persistPrintJob(
 }
 
 /**
+ * Upload a blurred portrait JPEG to Supabase Storage.
+ * Fire-and-forget — returns the public URL on success, null on any error.
+ *
+ * Storage bucket: 'portraits-blurred' (must exist with public read access).
+ */
+export async function uploadBlurredPortrait(blob: Blob): Promise<string | null> {
+  try {
+    const supabase = getSupabaseClient();
+    const path = `portraits-blurred/${crypto.randomUUID()}.jpg`;
+
+    const { error } = await supabase.storage
+      .from('portraits-blurred')
+      .upload(path, blob, { contentType: 'image/jpeg' });
+
+    if (error) {
+      console.warn('[Persist] Blurred portrait upload error:', error.message);
+      return null;
+    }
+
+    const { data } = supabase.storage.from('portraits-blurred').getPublicUrl(path);
+    console.log('[Persist] Blurred portrait uploaded:', data.publicUrl);
+    return data.publicUrl;
+  } catch (err) {
+    console.warn('[Persist] Blurred portrait upload error:', err);
+    return null;
+  }
+}
+
+/**
  * Persist conversation transcript turns to Supabase.
  * Fire-and-forget.
  */

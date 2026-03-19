@@ -117,6 +117,18 @@ configRoutes.get('/', async (c) => {
     }
   }
 
+  // For the voice_chain program: include the latest active voice chain state
+  if (config.program === 'voice_chain') {
+    try {
+      const { getLatestVoiceChainState } = await import('../services/voiceChain.js');
+      const voiceChainState = await getLatestVoiceChainState();
+      response['voice_chain'] = voiceChainState;
+    } catch (err) {
+      console.error('[config/GET] Failed to fetch voice chain state:', err);
+      response['voice_chain'] = null;
+    }
+  }
+
   return c.json(response, 200);
 });
 
