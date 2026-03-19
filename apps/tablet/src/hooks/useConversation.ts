@@ -26,6 +26,8 @@ export interface SaveDefinitionResult {
 }
 
 export interface UseConversationParams {
+  /** Backend URL for API calls (voice chain apply-voice) */
+  backendUrl: string;
   /** ElevenLabs agent ID (from env) */
   agentId: string;
   /** Active conversation program (replaces mode for prompt building) */
@@ -81,6 +83,7 @@ export function useConversation(
   params: UseConversationParams,
 ): UseConversationReturn {
   const {
+    backendUrl,
     agentId,
     program,
     term,
@@ -104,6 +107,9 @@ export function useConversation(
   onConversationEndRef.current = onConversationEnd;
 
   // Voice chain refs — accessed inside startConversation callback
+  const backendUrlRef = useRef(backendUrl);
+  backendUrlRef.current = backendUrl;
+
   const voiceIdRef = useRef(voiceId);
   voiceIdRef.current = voiceId;
 
@@ -226,11 +232,27 @@ export function useConversation(
       },
     };
 
-    // Voice chain: override TTS voice to use previous visitor's cloned voice
+    // Voice chain: PATCH the agent's voice on the server before connecting.
+    // ElevenLabs Conversational AI does NOT support tts.voiceId session overrides
+    // for instant voice clones — we must update the agent config instead.
     if (voiceIdRef.current) {
-      overrides['tts'] = {
-        voiceId: voiceIdRef.current,
-      };
+      console.log('[MeinUngeheuer] Applying voice clone to agent:', voiceIdRef.current);
+      try {
+        const resp = await fetch(`${backendUrlRef.current}/api/voice-chain/apply-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voice_id: voiceIdRef.current, agent_id: agentId }),
+        });
+        if (resp.ok) {
+          console.log('[MeinUngeheuer] Agent voice updated successfully');
+        } else {
+          console.warn('[MeinUngeheuer] Failed to apply voice clone, using default');
+        }
+      } catch {
+        console.warn('[MeinUngeheuer] Failed to reach backend for voice apply');
+      }
+    } else {
+      console.log('[MeinUngeheuer] No voice override — using agent default voice');
     }
 
     const conversationId = await conversation.startSession({

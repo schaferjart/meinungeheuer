@@ -17,7 +17,7 @@ export const VOICE_CLONE = {
   /** Strip background noise from visitor recording before cloning. */
   removeBackgroundNoise: true,
   /** How many chain positions to retain before deleting old clones. */
-  retentionWindow: 2,
+  retentionWindow: 10,
 } as const;
 
 // ============================================================

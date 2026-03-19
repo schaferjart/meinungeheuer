@@ -39,12 +39,26 @@ export async function cloneVoice(audioBuffer: Buffer, sessionId: string): Promis
   try {
     const apiKey = getElevenLabsApiKey();
 
+    // ElevenLabs has an 11MB upload limit — truncate if needed.
+    // First ~10MB of webm/opus is plenty for voice cloning (~60-90s of audio).
+    const MAX_BYTES = 10 * 1024 * 1024; // 10MB (leave 1MB headroom)
+    const trimmedBuffer = audioBuffer.byteLength > MAX_BYTES
+      ? audioBuffer.subarray(0, MAX_BYTES)
+      : audioBuffer;
+
+    if (audioBuffer.byteLength > MAX_BYTES) {
+      console.log('[voiceChain/cloneVoice] Audio trimmed:', {
+        original: `${(audioBuffer.byteLength / 1024 / 1024).toFixed(1)}MB`,
+        trimmed: `${(trimmedBuffer.byteLength / 1024 / 1024).toFixed(1)}MB`,
+      });
+    }
+
     const formData = new FormData();
     formData.append('name', `visitor_${sessionId}`);
     formData.append('remove_background_noise', String(VOICE_CLONE.removeBackgroundNoise));
 
     // Wrap the Buffer in a Blob so FormData can attach it as a file field
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/webm' });
+    const audioBlob = new Blob([trimmedBuffer], { type: 'audio/webm' });
     formData.append('files', audioBlob, `visitor_${sessionId}.webm`);
 
     const response = await fetch('https://api.elevenlabs.io/v1/voices/add', {
@@ -384,7 +398,7 @@ export async function processVoiceChain(params: {
     const { data: inserted, error: insertError } = await supabase
       .from('voice_chain_state')
       .insert({
-        session_id: sessionId,
+        session_id: sessionId && sessionId !== 'unknown' ? sessionId : null,
         voice_clone_id: voiceCloneId,
         voice_clone_status: voiceCloneId ? 'ready' : 'failed',
         speech_profile: speechProfile,

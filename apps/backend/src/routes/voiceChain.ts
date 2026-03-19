@@ -106,3 +106,58 @@ voiceChainRoutes.get('/latest', async (c) => {
   const voiceChain = await getLatestVoiceChainState();
   return c.json({ voiceChain }, 200);
 });
+
+// ---------------------------------------------------------------------------
+// POST /api/voice-chain/apply-voice
+// PATCHes the ElevenLabs agent to use the given voice clone ID.
+// Must be called before starting a conversation with a cloned voice,
+// because the Conversational AI WebSocket does NOT support tts.voiceId
+// overrides for instant voice clones.
+// ---------------------------------------------------------------------------
+
+voiceChainRoutes.post('/apply-voice', async (c) => {
+  const body = await c.req.json<{ voice_id: string; agent_id: string }>().catch(() => null);
+  if (!body?.voice_id || !body?.agent_id) {
+    return c.json({ error: 'voice_id and agent_id are required' }, 400);
+  }
+
+  const apiKey = process.env['ELEVENLABS_API_KEY'];
+  if (!apiKey) {
+    return c.json({ error: 'ELEVENLABS_API_KEY not set' }, 500);
+  }
+
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/convai/agents/${body.agent_id}`,
+      {
+        method: 'PATCH',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation_config: {
+            tts: {
+              voice_id: body.voice_id,
+            },
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      console.error('[voice-chain/apply-voice] ElevenLabs PATCH error:', {
+        status: response.status,
+        body: text,
+      });
+      return c.json({ error: 'Failed to update agent voice', details: text }, 502);
+    }
+
+    console.log('[voice-chain/apply-voice] Agent voice updated to:', body.voice_id);
+    return c.json({ success: true, voice_id: body.voice_id });
+  } catch (err) {
+    console.error('[voice-chain/apply-voice] Unexpected error:', err);
+    return c.json({ error: 'Internal error' }, 500);
+  }
+});
