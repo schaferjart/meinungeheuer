@@ -158,6 +158,29 @@ function InstallationApp() {
 
   const { screen, mode, term, contextText, definition, language } = state;
 
+  // Re-fetch voice chain state each time we return to sleep (between visitors)
+  const prevScreenRef = useRef(screen);
+  useEffect(() => {
+    const prev = prevScreenRef.current;
+    prevScreenRef.current = screen;
+
+    // Only refetch when transitioning TO sleep from another screen (not on initial mount)
+    if (screen === 'sleep' && prev !== 'sleep' && programRef.current.id === 'voice_chain') {
+      console.log('[App] Re-fetching voice chain state for next visitor...');
+      fetchConfig(BACKEND_URL)
+        .then((config) => {
+          if (config.voice_chain) {
+            voiceChainRef.current = config.voice_chain;
+            console.log('[App] Voice chain state updated, position:', config.voice_chain.chain_position);
+          } else {
+            voiceChainRef.current = null;
+            console.log('[App] No voice chain state available yet');
+          }
+        })
+        .catch(() => {});
+    }
+  }, [screen]);
+
   // -----------------------------------------------------------------------
   // ElevenLabs conversation hook
   // -----------------------------------------------------------------------
@@ -200,7 +223,8 @@ function InstallationApp() {
             blurredPortraitBlobRef.current = null;
           }
 
-          if (audioBlob) {
+          // Only submit audio large enough to clone (>50KB = ~5s of speech)
+          if (audioBlob && audioBlob.size > 50_000) {
             void submitVoiceChainData(BACKEND_URL, {
               audio: audioBlob,
               sessionId: state.sessionId ?? 'unknown',
@@ -242,6 +266,7 @@ function InstallationApp() {
     endConversation,
     sendUserActivity,
   } = useConversation({
+    backendUrl: BACKEND_URL,
     agentId: ELEVENLABS_AGENT_ID,
     program: programRef.current,
     term,
@@ -266,6 +291,10 @@ function InstallationApp() {
   useEffect(() => {
     if (screen === 'conversation' && !conversationStartedRef.current) {
       conversationStartedRef.current = true;
+      // Generate a session ID for tracking this conversation
+      if (!state.sessionId) {
+        dispatch({ type: 'SET_SESSION_ID', id: crypto.randomUUID() });
+      }
       console.log('[App] Starting ElevenLabs conversation...');
       startConversation().catch((err) => {
         console.error('[App] Failed to start conversation:', err);
