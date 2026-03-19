@@ -158,6 +158,16 @@ export function useConversation(
       } else {
         console.log('[MeinUngeheuer] User-initiated disconnect');
       }
+      // Restore default agent voice if we applied a clone (prevents stale PATCH)
+      if (voiceIdRef.current) {
+        const defaultVoiceId = 'DLsHlh26Ugcm6ELvS0qi';
+        console.log('[MeinUngeheuer] Restoring default agent voice');
+        void fetch(`${backendUrlRef.current}/api/voice-chain/apply-voice`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ voice_id: defaultVoiceId, agent_id: agentId }),
+        }).catch(() => {});
+      }
       onConversationEndRef.current?.(details.reason);
     },
 
