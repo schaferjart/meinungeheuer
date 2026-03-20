@@ -196,8 +196,11 @@ function InstallationApp() {
       // Portrait prints via POS pipeline (slow, 30-180s style transfer).
       // Natural timing ensures definition card prints first.
       if (portraitBlobRef.current && programRef.current.stages.portrait) {
+        console.log('[App] Uploading portrait to POS server:', portraitBlobRef.current.size, 'bytes');
         void uploadPortrait(portraitBlobRef.current);
         portraitBlobRef.current = null;
+      } else {
+        console.log('[App] No portrait to upload — blob:', !!portraitBlobRef.current, 'stages.portrait:', programRef.current.stages.portrait);
       }
 
       setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
@@ -216,20 +219,13 @@ function InstallationApp() {
         void (async () => {
           const audioBlob = await stopRecording();
 
-          // Upload blurred portrait to Supabase Storage
-          let portraitUrl: string | null = null;
-          if (blurredPortraitBlobRef.current) {
-            portraitUrl = await uploadBlurredPortrait(blurredPortraitBlobRef.current);
-            blurredPortraitBlobRef.current = null;
-          }
-
           // Only submit audio large enough to clone (>50KB = ~5s of speech)
           if (audioBlob && audioBlob.size > 50_000) {
             void submitVoiceChainData(BACKEND_URL, {
               audio: audioBlob,
               sessionId: state.sessionId ?? 'unknown',
               transcript: transcriptRef.current.map((t) => ({ role: t.role, content: t.content })),
-              portraitBlurredUrl: portraitUrl,
+              portraitBlurredUrl: null,
             });
           } else {
             console.warn('[App] No audio blob captured for voice chain');
@@ -365,34 +361,19 @@ function InstallationApp() {
 
   // Capture a portrait frame 5s into the conversation screen.
   // The visitor is facing the tablet and face detection confirms presence.
-  // - For voice_chain: capture blurred portrait (stored for Supabase upload)
-  // - For other programs: capture regular portrait (deferred POS upload)
+  // Portrait is uploaded to POS server for style transfer + thermal print.
   useEffect(() => {
     if (screen === 'conversation' && !portraitCapturedRef.current && programRef.current.stages.portrait) {
       const timer = setTimeout(() => {
-        if (programRef.current.id === 'voice_chain') {
-          // Blurred portrait for Supabase Storage (voice chain)
-          captureBlurredPortrait(videoRef)
-            .then((blob) => {
-              if (blob) {
-                blurredPortraitBlobRef.current = blob;
-                portraitCapturedRef.current = true;
-                console.log('[App] Blurred portrait captured:', blob.size, 'bytes');
-              }
-            })
-            .catch(() => {});
-        } else {
-          // Regular portrait for POS server
-          captureFrame()
-            .then((blob) => {
-              if (blob) {
-                portraitBlobRef.current = blob;
-                portraitCapturedRef.current = true;
-                console.log('[App] Portrait frame captured:', blob.size, 'bytes');
-              }
-            })
-            .catch(() => {});
-        }
+        captureFrame()
+          .then((blob) => {
+            if (blob) {
+              portraitBlobRef.current = blob;
+              portraitCapturedRef.current = true;
+              console.log('[App] Portrait frame captured:', blob.size, 'bytes');
+            }
+          })
+          .catch(() => {});
       }, PORTRAIT.captureDelayMs);
       return () => clearTimeout(timer);
     }

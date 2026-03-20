@@ -153,7 +153,11 @@ def detect_face_landmarks(image: Image.Image) -> dict:
         right_eye_center, nose_tip, face_center_x
     Returns None if no face detected.
     """
-    import mediapipe as mp
+    try:
+        import mediapipe as mp
+    except ImportError:
+        print("[PORTRAIT] mediapipe not available (ARM), skipping face detection")
+        return None
 
     w, h = image.size
     rgb = np.array(image.convert("RGB"))
