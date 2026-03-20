@@ -143,9 +143,78 @@ def transform_to_statue(image_path: str, config: dict) -> Image.Image:
 
 # ── Face Landmark Detection ──────────────────────────────────────────
 
+def _estimate_landmarks_from_bbox(fx, fy, fw, fh) -> dict:
+    """
+    Estimate facial landmark positions from a face bounding box using
+    standard human face proportions.
+
+    Proportions (fraction of face-box height from top):
+        forehead: 0.0, eyes: 0.35, nose: 0.60, chin: 1.0
+    Eye spread: ~65% of face width, centered.
+    """
+    cx = fx + fw // 2
+    eye_y = fy + int(fh * 0.35)
+    nose_y = fy + int(fh * 0.60)
+
+    # Eye spread: inner eyes ~30% of width apart, outer ~65%
+    eye_inner_half = int(fw * 0.15)
+    eye_outer_half = int(fw * 0.325)
+
+    landmarks = {
+        "forehead_top": (cx, fy),
+        "chin": (cx, fy + fh),
+        "nose_tip": (cx, nose_y),
+        "left_eye_outer": (cx - eye_outer_half, eye_y),
+        "left_eye_inner": (cx - eye_inner_half, eye_y),
+        "right_eye_inner": (cx + eye_inner_half, eye_y),
+        "right_eye_outer": (cx + eye_outer_half, eye_y),
+        "left_eye_center": (cx - int(fw * 0.24), eye_y),
+        "right_eye_center": (cx + int(fw * 0.24), eye_y),
+        "face_center_x": cx,
+    }
+    return landmarks
+
+
+def _detect_face_opencv(image: Image.Image) -> dict:
+    """
+    Fallback face detection using OpenCV Haar cascade.
+    Returns estimated landmarks dict or None.
+    """
+    try:
+        import cv2
+    except ImportError:
+        print("[PORTRAIT] OpenCV not available, no face detection possible")
+        return None
+
+    grey = np.array(image.convert("L"))
+
+    # Try multiple cascade files (path varies by install)
+    cascade_paths = [
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml",
+        cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml",
+    ]
+    for path in cascade_paths:
+        cascade = cv2.CascadeClassifier(path)
+        if not cascade.empty():
+            break
+    else:
+        print("[PORTRAIT] No Haar cascade found")
+        return None
+
+    faces = cascade.detectMultiScale(grey, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
+    if len(faces) == 0:
+        return None
+
+    # Pick largest face
+    fx, fy, fw, fh = max(faces, key=lambda f: f[2] * f[3])
+    print(f"[PORTRAIT] OpenCV face detected — bbox ({fx},{fy}) {fw}x{fh}")
+    return _estimate_landmarks_from_bbox(fx, fy, fw, fh)
+
+
 def detect_face_landmarks(image: Image.Image) -> dict:
     """
-    Use mediapipe FaceMesh to find key facial landmarks.
+    Detect face landmarks. Tries mediapipe first (precise, 468 landmarks),
+    falls back to OpenCV Haar cascade (bounding box + estimated proportions).
 
     Returns dict with pixel coordinates:
         forehead_top, chin, left_eye_outer, left_eye_inner,
@@ -153,67 +222,70 @@ def detect_face_landmarks(image: Image.Image) -> dict:
         right_eye_center, nose_tip, face_center_x
     Returns None if no face detected.
     """
+    # Try mediapipe first (precise landmarks, x86 only)
     try:
         import mediapipe as mp
+
+        w, h = image.size
+        rgb = np.array(image.convert("RGB"))
+
+        with mp.solutions.face_mesh.FaceMesh(
+            static_image_mode=True,
+            max_num_faces=1,
+            refine_landmarks=True,
+            min_detection_confidence=0.5,
+        ) as mesh:
+            results = mesh.process(rgb)
+
+        if results.multi_face_landmarks:
+            lm = results.multi_face_landmarks[0].landmark
+
+            def px(idx):
+                return int(lm[idx].x * w), int(lm[idx].y * h)
+
+            forehead_top = px(10)
+            chin = px(152)
+            nose_tip = px(4)
+            left_eye_outer = px(33)
+            left_eye_inner = px(133)
+            right_eye_inner = px(362)
+            right_eye_outer = px(263)
+
+            left_eye_center = (
+                (left_eye_outer[0] + left_eye_inner[0]) // 2,
+                (left_eye_outer[1] + left_eye_inner[1]) // 2,
+            )
+            right_eye_center = (
+                (right_eye_outer[0] + right_eye_inner[0]) // 2,
+                (right_eye_outer[1] + right_eye_inner[1]) // 2,
+            )
+
+            face_center_x = (left_eye_center[0] + right_eye_center[0]) // 2
+
+            landmarks = {
+                "forehead_top": forehead_top,
+                "chin": chin,
+                "nose_tip": nose_tip,
+                "left_eye_outer": left_eye_outer,
+                "left_eye_inner": left_eye_inner,
+                "right_eye_inner": right_eye_inner,
+                "right_eye_outer": right_eye_outer,
+                "left_eye_center": left_eye_center,
+                "right_eye_center": right_eye_center,
+                "face_center_x": face_center_x,
+            }
+
+            print(f"[PORTRAIT] MediaPipe face detected — eyes at y={left_eye_center[1]}, chin at y={chin[1]}")
+            return landmarks
+
     except ImportError:
-        print("[PORTRAIT] mediapipe not available (ARM), skipping face detection")
-        return None
+        pass  # Fall through to OpenCV
 
-    w, h = image.size
-    rgb = np.array(image.convert("RGB"))
-
-    with mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=True,
-        max_num_faces=1,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-    ) as mesh:
-        results = mesh.process(rgb)
-
-    if not results.multi_face_landmarks:
-        return None
-
-    lm = results.multi_face_landmarks[0].landmark
-
-    def px(idx):
-        return int(lm[idx].x * w), int(lm[idx].y * h)
-
-    # Key mediapipe landmark indices
-    forehead_top = px(10)
-    chin = px(152)
-    nose_tip = px(4)
-    left_eye_outer = px(33)
-    left_eye_inner = px(133)
-    right_eye_inner = px(362)
-    right_eye_outer = px(263)
-
-    # Eye centers (average of inner and outer corners)
-    left_eye_center = (
-        (left_eye_outer[0] + left_eye_inner[0]) // 2,
-        (left_eye_outer[1] + left_eye_inner[1]) // 2,
-    )
-    right_eye_center = (
-        (right_eye_outer[0] + right_eye_inner[0]) // 2,
-        (right_eye_outer[1] + right_eye_inner[1]) // 2,
-    )
-
-    face_center_x = (left_eye_center[0] + right_eye_center[0]) // 2
-
-    landmarks = {
-        "forehead_top": forehead_top,
-        "chin": chin,
-        "nose_tip": nose_tip,
-        "left_eye_outer": left_eye_outer,
-        "left_eye_inner": left_eye_inner,
-        "right_eye_inner": right_eye_inner,
-        "right_eye_outer": right_eye_outer,
-        "left_eye_center": left_eye_center,
-        "right_eye_center": right_eye_center,
-        "face_center_x": face_center_x,
-    }
-
-    print(f"[PORTRAIT] Face detected — eyes at y={left_eye_center[1]}, chin at y={chin[1]}")
-    return landmarks
+    # Fallback: OpenCV Haar cascade + proportional estimation
+    result = _detect_face_opencv(image)
+    if result:
+        print("[PORTRAIT] Using OpenCV fallback with estimated proportions")
+    return result
 
 
 def compute_zoom_crops(image: Image.Image, landmarks: dict) -> list[dict]:
