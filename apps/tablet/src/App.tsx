@@ -81,10 +81,11 @@ function InstallationApp() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Portrait capture hook — reads frames from the shared video element
-  const posServerUrl = import.meta.env['VITE_POS_SERVER_URL'] ?? '';
+  const printRendererUrl = import.meta.env['VITE_PRINT_RENDERER_URL'] ?? '';
   const { captureFrame, uploadPortrait } = usePortraitCapture({
     videoRef,
-    posServerUrl,
+    printRendererUrl,
+    sessionId: state.sessionId,
   });
 
   // Store captured portrait blob for deferred upload (capture during conversation,
