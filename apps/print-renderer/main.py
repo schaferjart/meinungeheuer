@@ -11,6 +11,8 @@ import io
 import os
 import hmac
 import uuid
+import base64
+import json
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -50,6 +52,7 @@ class DictionaryRequest(BaseModel):
     definition: str
     citations: list[str] = []
     template: str = "dictionary"
+    config_override: dict | None = None  # Merged onto template config for previews
 
 
 @app.post("/render/dictionary", dependencies=[Depends(verify_api_key)])
@@ -58,7 +61,13 @@ def render_dictionary(req: DictionaryRequest):
     from templates import render_dictionary_image
 
     data = {"word": req.word, "definition": req.definition, "citations": req.citations}
-    img = render_dictionary_image(data, get_render_config(_CONFIG_PATH), style=req.template)
+    config = get_render_config(_CONFIG_PATH)
+    if req.config_override:
+        template_key = req.template
+        if template_key in config:
+            merged = {**config[template_key], **req.config_override}
+            config = {**config, **{template_key: merged}}
+    img = render_dictionary_image(data, config, style=req.template)
     return _image_response(img)
 
 
