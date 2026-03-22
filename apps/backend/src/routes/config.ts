@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ModeSchema } from '@meinungeheuer/shared';
+import { ModeSchema, type Database } from '@meinungeheuer/shared';
 import { supabase } from '../services/supabase.js';
 import { getActiveChainContext, getChainHistory } from '../services/chain.js';
+
+type InstallationConfigRow = Database['public']['Tables']['installation_config']['Row'];
 
 export const configRoutes = new Hono();
 
@@ -58,11 +60,14 @@ const DefinitionsQuerySchema = z.object({
 
 configRoutes.get('/', async (c) => {
   // Fetch the single installation_config row (there should be exactly one)
-  const { data: config, error: configError } = await supabase
+  const { data: configRaw, error: configError } = await supabase
     .from('installation_config')
-    .select('id, mode, active_term, active_text_id, program, updated_at')
+    .select('*')
     .limit(1)
     .maybeSingle();
+  // Cast to the full Row type — select('*') loses column-level type inference
+  // in PostgREST's TypeScript generics but fetches all columns at runtime.
+  const config = configRaw as InstallationConfigRow | null;
 
   if (configError) {
     console.error('[config/GET] Config fetch error:', configError);
@@ -73,10 +78,96 @@ configRoutes.get('/', async (c) => {
     return c.json({ error: 'Installation config not found' }, 404);
   }
 
+  // Fetch the active prompt template (non-fatal if missing)
+  const { data: promptData } = await supabase
+    .from('prompts')
+    .select('system_prompt, first_message_de, first_message_en')
+    .eq('program_id', config.program || 'aphorism')
+    .maybeSingle();
+
   const response: Record<string, unknown> = {
     mode: config.mode,
     term: config.active_term,
     program: config.program ?? null,
+
+    // Language
+    language: config.language || 'de',
+
+    // Stage overrides (null = use program defaults)
+    stages: {
+      textReading: config.stage_text_reading,
+      termPrompt: config.stage_term_prompt,
+      portrait: config.stage_portrait,
+      printing: config.stage_printing,
+    },
+
+    // Face detection
+    faceDetection: {
+      enabled: config.face_detection_enabled ?? true,
+      wakeMs: config.face_wake_ms ?? 3000,
+      sleepMs: config.face_sleep_ms ?? 30000,
+      intervalMs: config.face_detection_interval_ms ?? 500,
+      minConfidence: config.face_min_confidence ?? 0.5,
+    },
+
+    // Timers
+    timers: {
+      welcomeMs: config.welcome_duration_ms ?? 3000,
+      termPromptMs: config.term_prompt_duration_ms ?? 2000,
+      definitionDisplayMs: config.definition_display_ms ?? 10000,
+      farewellMs: config.farewell_duration_ms ?? 15000,
+      printTimeoutMs: config.print_timeout_ms ?? 30000,
+    },
+
+    // ElevenLabs (non-secret)
+    elevenlabs: {
+      agentId: config.elevenlabs_agent_id || undefined,
+      voiceId: config.elevenlabs_voice_id || undefined,
+    },
+
+    // Voice settings
+    voice: {
+      stability: config.voice_stability ?? 0.35,
+      similarityBoost: config.voice_similarity_boost ?? 0.65,
+      style: config.voice_style ?? 0.6,
+      speakerBoost: config.voice_speaker_boost ?? true,
+    },
+
+    // Voice chain config
+    voiceChainConfig: {
+      removeBgNoise: config.vc_remove_bg_noise ?? true,
+      retentionWindow: config.vc_retention_window ?? 10,
+      profileModel: config.vc_profile_model,
+      profileTemperature: config.vc_profile_temperature ?? 0.3,
+      icebreakerModel: config.vc_icebreaker_model,
+      icebreakerTemperature: config.vc_icebreaker_temperature ?? 0.9,
+      coldStartDe: config.vc_cold_start_de,
+      coldStartEn: config.vc_cold_start_en,
+      maxPhrases: config.vc_max_phrases ?? 5,
+      maxFavoriteWords: config.vc_max_favorite_words ?? 5,
+    },
+
+    // Portrait capture settings
+    portrait: {
+      captureDelayMs: config.portrait_capture_delay_ms ?? 5000,
+      jpegQuality: config.portrait_jpeg_quality ?? 0.85,
+      minBlobSize: config.portrait_min_blob_size ?? 1024,
+      blurRadiusCss: config.portrait_blur_radius_css ?? 25,
+    },
+
+    // Display styling
+    display: {
+      highlightColor: config.display_highlight_color ?? '#fcd34d',
+      spokenOpacity: config.display_spoken_opacity ?? 0.4,
+      upcomingOpacity: config.display_upcoming_opacity ?? 0.9,
+      fontSize: config.display_font_size,
+      lineHeight: config.display_line_height ?? 1.8,
+      letterSpacing: config.display_letter_spacing,
+      maxWidth: config.display_max_width,
+    },
+
+    // Prompt template (if exists in DB)
+    prompt: promptData ?? undefined,
   };
 
   // For text_term mode: fetch the active text content

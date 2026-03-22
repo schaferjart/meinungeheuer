@@ -191,6 +191,57 @@ export interface Database {
           active_text_id: string | null;
           program: string;
           updated_at: string;
+          // Language
+          language: string | null;
+          // Stage overrides
+          stage_text_reading: boolean | null;
+          stage_term_prompt: boolean | null;
+          stage_portrait: boolean | null;
+          stage_printing: boolean | null;
+          // Face detection
+          face_detection_enabled: boolean | null;
+          face_wake_ms: number | null;
+          face_sleep_ms: number | null;
+          face_detection_interval_ms: number | null;
+          face_min_confidence: number | null;
+          // Timers
+          welcome_duration_ms: number | null;
+          term_prompt_duration_ms: number | null;
+          definition_display_ms: number | null;
+          farewell_duration_ms: number | null;
+          print_timeout_ms: number | null;
+          // ElevenLabs
+          elevenlabs_agent_id: string | null;
+          elevenlabs_voice_id: string | null;
+          // Voice settings
+          voice_stability: number | null;
+          voice_similarity_boost: number | null;
+          voice_style: number | null;
+          voice_speaker_boost: boolean | null;
+          // Voice chain config
+          vc_remove_bg_noise: boolean | null;
+          vc_retention_window: number | null;
+          vc_profile_model: string | null;
+          vc_profile_temperature: number | null;
+          vc_icebreaker_model: string | null;
+          vc_icebreaker_temperature: number | null;
+          vc_cold_start_de: string | null;
+          vc_cold_start_en: string | null;
+          vc_max_phrases: number | null;
+          vc_max_favorite_words: number | null;
+          // Portrait capture
+          portrait_capture_delay_ms: number | null;
+          portrait_jpeg_quality: number | null;
+          portrait_min_blob_size: number | null;
+          portrait_blur_radius_css: number | null;
+          // Display styling
+          display_highlight_color: string | null;
+          display_spoken_opacity: number | null;
+          display_upcoming_opacity: number | null;
+          display_font_size: string | null;
+          display_line_height: number | null;
+          display_letter_spacing: string | null;
+          display_max_width: string | null;
         };
         Insert: {
           id?: string;
@@ -199,6 +250,48 @@ export interface Database {
           active_text_id?: string | null;
           program?: string;
           updated_at?: string;
+          language?: string | null;
+          stage_text_reading?: boolean | null;
+          stage_term_prompt?: boolean | null;
+          stage_portrait?: boolean | null;
+          stage_printing?: boolean | null;
+          face_detection_enabled?: boolean | null;
+          face_wake_ms?: number | null;
+          face_sleep_ms?: number | null;
+          face_detection_interval_ms?: number | null;
+          face_min_confidence?: number | null;
+          welcome_duration_ms?: number | null;
+          term_prompt_duration_ms?: number | null;
+          definition_display_ms?: number | null;
+          farewell_duration_ms?: number | null;
+          print_timeout_ms?: number | null;
+          elevenlabs_agent_id?: string | null;
+          elevenlabs_voice_id?: string | null;
+          voice_stability?: number | null;
+          voice_similarity_boost?: number | null;
+          voice_style?: number | null;
+          voice_speaker_boost?: boolean | null;
+          vc_remove_bg_noise?: boolean | null;
+          vc_retention_window?: number | null;
+          vc_profile_model?: string | null;
+          vc_profile_temperature?: number | null;
+          vc_icebreaker_model?: string | null;
+          vc_icebreaker_temperature?: number | null;
+          vc_cold_start_de?: string | null;
+          vc_cold_start_en?: string | null;
+          vc_max_phrases?: number | null;
+          vc_max_favorite_words?: number | null;
+          portrait_capture_delay_ms?: number | null;
+          portrait_jpeg_quality?: number | null;
+          portrait_min_blob_size?: number | null;
+          portrait_blur_radius_css?: number | null;
+          display_highlight_color?: string | null;
+          display_spoken_opacity?: number | null;
+          display_upcoming_opacity?: number | null;
+          display_font_size?: string | null;
+          display_line_height?: number | null;
+          display_letter_spacing?: string | null;
+          display_max_width?: string | null;
         };
         Update: {
           id?: string;
@@ -206,6 +299,79 @@ export interface Database {
           active_term?: string | null;
           active_text_id?: string | null;
           program?: string;
+          updated_at?: string;
+          language?: string | null;
+          stage_text_reading?: boolean | null;
+          stage_term_prompt?: boolean | null;
+          stage_portrait?: boolean | null;
+          stage_printing?: boolean | null;
+          face_detection_enabled?: boolean | null;
+          face_wake_ms?: number | null;
+          face_sleep_ms?: number | null;
+          face_detection_interval_ms?: number | null;
+          face_min_confidence?: number | null;
+          welcome_duration_ms?: number | null;
+          term_prompt_duration_ms?: number | null;
+          definition_display_ms?: number | null;
+          farewell_duration_ms?: number | null;
+          print_timeout_ms?: number | null;
+          elevenlabs_agent_id?: string | null;
+          elevenlabs_voice_id?: string | null;
+          voice_stability?: number | null;
+          voice_similarity_boost?: number | null;
+          voice_style?: number | null;
+          voice_speaker_boost?: boolean | null;
+          vc_remove_bg_noise?: boolean | null;
+          vc_retention_window?: number | null;
+          vc_profile_model?: string | null;
+          vc_profile_temperature?: number | null;
+          vc_icebreaker_model?: string | null;
+          vc_icebreaker_temperature?: number | null;
+          vc_cold_start_de?: string | null;
+          vc_cold_start_en?: string | null;
+          vc_max_phrases?: number | null;
+          vc_max_favorite_words?: number | null;
+          portrait_capture_delay_ms?: number | null;
+          portrait_jpeg_quality?: number | null;
+          portrait_min_blob_size?: number | null;
+          portrait_blur_radius_css?: number | null;
+          display_highlight_color?: string | null;
+          display_spoken_opacity?: number | null;
+          display_upcoming_opacity?: number | null;
+          display_font_size?: string | null;
+          display_line_height?: number | null;
+          display_letter_spacing?: string | null;
+          display_max_width?: string | null;
+        };
+        Relationships: [];
+      };
+
+      prompts: {
+        Row: {
+          id: string;
+          program_id: string;
+          system_prompt: string | null;
+          first_message_de: string | null;
+          first_message_en: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          program_id: string;
+          system_prompt?: string | null;
+          first_message_de?: string | null;
+          first_message_en?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          program_id?: string;
+          system_prompt?: string | null;
+          first_message_de?: string | null;
+          first_message_en?: string | null;
+          created_at?: string;
           updated_at?: string;
         };
         Relationships: [];
