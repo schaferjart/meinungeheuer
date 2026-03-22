@@ -9,6 +9,19 @@ from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 from helpers import resolve_font_path, wrap_text, FONT_THIN, FONT_BOLD
 
+import qrcode
+
+ARCHIVE_BASE_URL = "https://archive.baufer.beauty"
+
+
+def _make_qr(url: str, size: int = 140) -> Image.Image:
+    """Generate a small QR code image for the given URL."""
+    qr = qrcode.QRCode(version=1, box_size=4, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    return img.get_image().resize((size, size), Image.Resampling.NEAREST)
+
 
 def render_dictionary_image(data: dict, config: dict = None, style: str = "dictionary") -> Image.Image:
     """
@@ -82,8 +95,14 @@ def render_dictionary_image(data: dict, config: dict = None, style: str = "dicti
     sep_gap = 16
     date_h = 24
 
+    # QR code for archive link (optional)
+    definition_id = data.get("definition_id")
+    qr_size = 140
+    qr_gap = 20
+    qr_h = (qr_gap + qr_size) if definition_id else 0
+
     total_h = (y + word_h + gap_after_word + def_h + cite_gap + cite_h
-               + sep_gap + date_h + margin)
+               + sep_gap + date_h + qr_h + margin)
 
     # --- Draw ---
     img = Image.new("1", (paper_px, total_h), 1)
@@ -119,6 +138,16 @@ def render_dictionary_image(data: dict, config: dict = None, style: str = "dicti
 
     # Date
     draw.text((margin, y), now, font=date_font, fill=0)
+
+    # QR code linking to archive page
+    if definition_id:
+        y += date_h + qr_gap
+        archive_url = f"{ARCHIVE_BASE_URL}/#/definition/{definition_id}"
+        qr_img = _make_qr(archive_url, qr_size)
+        # Convert QR to mode "1" (1-bit) to match the card image
+        qr_img = qr_img.convert("1")
+        qr_x = (paper_px - qr_size) // 2
+        img.paste(qr_img, (qr_x, y))
 
     return img
 

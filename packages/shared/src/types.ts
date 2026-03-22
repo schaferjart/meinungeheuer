@@ -171,6 +171,8 @@ export const PrintPayloadSchema = z.object({
   timestamp: z.string().datetime({ offset: true }),
   // Optional print template override (e.g. 'dictionary_portrait')
   template: z.string().optional(),
+  // Definition UUID — used to generate QR code linking to the archive page
+  definition_id: z.string().uuid().optional(),
 });
 export type PrintPayload = z.infer<typeof PrintPayloadSchema>;
 

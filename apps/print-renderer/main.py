@@ -63,6 +63,7 @@ class DictionaryRequest(BaseModel):
     citations: list[str] = []
     template: str = "dictionary"
     config_override: dict | None = None  # Merged onto template config for previews
+    definition_id: str | None = None  # UUID for QR code linking to archive page
 
 
 @app.post("/render/dictionary", dependencies=[Depends(verify_api_key)])
@@ -70,7 +71,7 @@ def render_dictionary(req: DictionaryRequest):
     """Render a dictionary card as a PNG image and return it directly."""
     from templates import render_dictionary_image
 
-    data = {"word": req.word, "definition": req.definition, "citations": req.citations}
+    data = {"word": req.word, "definition": req.definition, "citations": req.citations, "definition_id": req.definition_id}
     config = get_render_config(_CONFIG_PATH)
     if req.config_override:
         template_key = req.template

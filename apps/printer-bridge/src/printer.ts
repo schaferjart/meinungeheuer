@@ -45,6 +45,7 @@ export async function renderAndPrint(
       definition: payload.definition_text,
       citations: payload.citations,
       template: payload.template ?? 'dictionary',
+      definition_id: payload.definition_id ?? null,
     };
 
     const renderHeaders: Record<string, string> = { 'Content-Type': 'application/json' };

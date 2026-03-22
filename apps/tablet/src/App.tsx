@@ -213,7 +213,7 @@ function InstallationApp() {
       const def = makeClientDefinition(result);
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
-      void persistPrintJob(result, state.sessionId ?? null, programRef.current.printLayout);
+      void persistPrintJob(result, state.sessionId ?? null, programRef.current.printLayout, def.id);
 
       // Fire-and-forget portrait upload to POS server (only if program uses portraits).
       // Definition card prints via Supabase print_queue (fast, ~2s).
