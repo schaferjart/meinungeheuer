@@ -106,14 +106,14 @@ function createStageFlagField(label: string, initial: boolean | null): StageFlag
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.checked = current === true;
-  checkbox.style.cssText = 'width:16px;height:16px;accent-color:#5b6cf0;cursor:pointer;flex-shrink:0;';
+  checkbox.style.cssText = 'width:16px;height:16px;accent-color:#ffffff;cursor:pointer;flex-shrink:0;';
 
   const labelSpan = document.createElement('span');
   labelSpan.textContent = label;
   labelSpan.style.cssText = 'font-size:13px;color:#e0e0e0;cursor:pointer;';
 
   const nullIndicator = document.createElement('span');
-  nullIndicator.style.cssText = 'font-size:11px;color:#888899;';
+  nullIndicator.style.cssText = 'font-size:11px;color:#777777;';
   nullIndicator.textContent = current === null ? '(program default)' : '';
 
   checkbox.addEventListener('change', () => {
@@ -133,15 +133,15 @@ function createStageFlagField(label: string, initial: boolean | null): StageFlag
     padding:2px 7px;
     font-size:11px;
     background:transparent;
-    color:#888899;
-    border:1px solid #2a2a40;
+    color:#777777;
+    border:1px solid #2a2a2a;
     border-radius:4px;
     cursor:pointer;
     font-family:system-ui,sans-serif;
     flex-shrink:0;
   `;
   resetBtn.addEventListener('mouseover', () => { resetBtn.style.color = '#e0e0e0'; });
-  resetBtn.addEventListener('mouseout', () => { resetBtn.style.color = '#888899'; });
+  resetBtn.addEventListener('mouseout', () => { resetBtn.style.color = '#777777'; });
 
   resetBtn.addEventListener('click', () => {
     current = null;
@@ -183,10 +183,10 @@ export function render(container: HTMLElement): void {
     margin-bottom:12px;
     min-height:18px;
     font-family:system-ui,sans-serif;
-    color:#888899;
+    color:#777777;
   `;
 
-  function setStatus(msg: string, color = '#888899'): void {
+  function setStatus(msg: string, color = '#777777'): void {
     statusEl.textContent = msg;
     statusEl.style.color = color;
   }
@@ -194,7 +194,7 @@ export function render(container: HTMLElement): void {
   // Loading message
   const loadingEl = document.createElement('div');
   loadingEl.textContent = 'Loading...';
-  loadingEl.style.cssText = 'color:#888899;font-size:14px;font-family:system-ui,sans-serif;';
+  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:system-ui,sans-serif;';
   container.appendChild(loadingEl);
 
   // Stage flag refs (created after data loads, captured here)
@@ -278,7 +278,7 @@ export function render(container: HTMLElement): void {
 
     const noteEl = document.createElement('p');
     noteEl.textContent = 'Leave unchecked to use program defaults. Click "reset" to restore null (program default).';
-    noteEl.style.cssText = 'font-size:12px;color:#888899;margin-bottom:14px;line-height:1.5;font-family:system-ui,sans-serif;';
+    noteEl.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:system-ui,sans-serif;';
     body2.appendChild(noteEl);
 
     const sfTextReading = createStageFlagField('Text reading', config.stage_text_reading);
@@ -425,7 +425,7 @@ export function render(container: HTMLElement): void {
   async function handleSave(btn: HTMLElement): Promise<void> {
     const btnEl = btn as HTMLButtonElement;
     btnEl.disabled = true;
-    setStatus('Saving...', '#888899');
+    setStatus('Saving...', '#777777');
 
     const payload: Omit<InstallationConfig, 'id'> = {
       mode: form.mode,

@@ -2,7 +2,7 @@
  * forms.ts — DOM element builder helpers for the config app.
  *
  * All helpers return a styled HTMLElement ready to append.
- * Dark theme: bg #12121f, border #2a2a40, text #e0e0e0.
+ * Dark theme: bg #0a0a0a, border #2a2a2a, text #e0e0e0.
  */
 
 const CSS = `
@@ -17,13 +17,13 @@ const CSS = `
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: #888899;
+    color: #777777;
   }
   .cf-input, .cf-select, .cf-textarea {
     padding: 8px 10px;
-    background: #12121f;
+    background: #0a0a0a;
     color: #e0e0e0;
-    border: 1px solid #2a2a40;
+    border: 1px solid #2a2a2a;
     border-radius: 5px;
     font-size: 13px;
     font-family: system-ui, sans-serif;
@@ -32,14 +32,14 @@ const CSS = `
     width: 100%;
   }
   .cf-input:focus, .cf-select:focus, .cf-textarea:focus {
-    border-color: #5b6cf0;
+    border-color: #ffffff;
   }
   .cf-textarea {
     resize: vertical;
     line-height: 1.5;
   }
   .cf-select option {
-    background: #12121f;
+    background: #0a0a0a;
     color: #e0e0e0;
   }
   .cf-slider-row {
@@ -49,7 +49,7 @@ const CSS = `
   }
   .cf-slider {
     flex: 1;
-    accent-color: #5b6cf0;
+    accent-color: #ffffff;
     cursor: pointer;
   }
   .cf-slider-value {
@@ -68,7 +68,7 @@ const CSS = `
   .cf-toggle-row input[type="checkbox"] {
     width: 16px;
     height: 16px;
-    accent-color: #5b6cf0;
+    accent-color: #ffffff;
     cursor: pointer;
     flex-shrink: 0;
   }
@@ -91,7 +91,7 @@ const CSS = `
   .cf-radio-row input[type="radio"] {
     width: 14px;
     height: 14px;
-    accent-color: #5b6cf0;
+    accent-color: #ffffff;
     cursor: pointer;
     flex-shrink: 0;
   }
@@ -109,19 +109,19 @@ const CSS = `
     width: 40px;
     height: 30px;
     padding: 2px;
-    background: #12121f;
-    border: 1px solid #2a2a40;
+    background: #0a0a0a;
+    border: 1px solid #2a2a2a;
     border-radius: 5px;
     cursor: pointer;
   }
   .cf-color-hex {
     font-size: 12px;
-    color: #888899;
+    color: #777777;
     font-variant-numeric: tabular-nums;
   }
   .cf-section {
     margin-bottom: 28px;
-    border: 1px solid #2a2a40;
+    border: 1px solid #2a2a2a;
     border-radius: 7px;
     overflow: hidden;
   }
@@ -130,7 +130,7 @@ const CSS = `
     align-items: center;
     gap: 8px;
     padding: 10px 14px;
-    background: #12121f;
+    background: #0a0a0a;
     cursor: pointer;
     user-select: none;
     font-size: 13px;
@@ -142,11 +142,11 @@ const CSS = `
     text-align: left;
   }
   .cf-section-header:hover {
-    background: #1a1a2e;
+    background: #141414;
   }
   .cf-section-chevron {
     font-size: 10px;
-    color: #888899;
+    color: #777777;
     transition: transform 0.2s;
     margin-left: auto;
   }
@@ -162,7 +162,7 @@ const CSS = `
   }
   .cf-save-btn {
     padding: 8px 20px;
-    background: #5b6cf0;
+    background: #ffffff;
     color: #fff;
     border: none;
     border-radius: 5px;
@@ -175,7 +175,7 @@ const CSS = `
     margin-bottom: 14px;
   }
   .cf-save-btn:hover {
-    background: #6e7ef5;
+    background: #cccccc;
   }
   .cf-save-btn:disabled {
     opacity: 0.5;

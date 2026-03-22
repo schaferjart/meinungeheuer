@@ -148,10 +148,10 @@ function makeStatusEl(): {
 } {
   const el = document.createElement('div');
   el.style.cssText =
-    'font-size:12px;min-height:18px;font-family:system-ui,sans-serif;color:#888899;margin-bottom:8px;';
+    'font-size:12px;min-height:18px;font-family:system-ui,sans-serif;color:#777777;margin-bottom:8px;';
   return {
     el,
-    set(msg: string, color = '#888899') {
+    set(msg: string, color = '#777777') {
       el.textContent = msg;
       el.style.color = color;
     },
@@ -233,9 +233,9 @@ function buildTemplateSection(
   previewContainer.style.cssText = 'margin-top:14px;margin-bottom:14px;';
   const previewImg = document.createElement('img');
   previewImg.style.cssText =
-    'display:none;max-width:100%;border:1px solid #2a2a40;border-radius:5px;margin-top:8px;';
+    'display:none;max-width:100%;border:1px solid #2a2a2a;border-radius:5px;margin-top:8px;';
   const previewNote = document.createElement('div');
-  previewNote.style.cssText = 'font-size:12px;color:#888899;font-family:system-ui,sans-serif;';
+  previewNote.style.cssText = 'font-size:12px;color:#777777;font-family:system-ui,sans-serif;';
   previewContainer.appendChild(previewNote);
   previewContainer.appendChild(previewImg);
 
@@ -243,7 +243,7 @@ function buildTemplateSection(
   previewBtn.type = 'button';
   previewBtn.textContent = 'Preview Card';
   previewBtn.style.cssText =
-    'padding:7px 16px;background:#1a1a2e;color:#e0e0e0;border:1px solid #2a2a40;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-bottom:8px;';
+    'padding:7px 16px;background:#141414;color:#e0e0e0;border:1px solid #2a2a2a;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-bottom:8px;';
   previewBtn.addEventListener('click', () => {
     void handlePreview();
   });
@@ -298,7 +298,7 @@ function buildTemplateSection(
 
   async function handleSave(): Promise<void> {
     (saveBtn as HTMLButtonElement).disabled = true;
-    status.set('Saving...', '#888899');
+    status.set('Saving...', '#777777');
 
     await onSave({
       template: activeTemplate,
@@ -321,12 +321,12 @@ function buildTemplateConfigPanel(
 ): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.style.cssText =
-    'border:1px solid #2a2a40;border-radius:5px;padding:12px;margin-bottom:12px;';
+    'border:1px solid #2a2a2a;border-radius:5px;padding:12px;margin-bottom:12px;';
 
   const panelLabel = document.createElement('div');
   panelLabel.textContent = _title;
   panelLabel.style.cssText =
-    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888899;margin-bottom:12px;';
+    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#777777;margin-bottom:12px;';
   wrapper.appendChild(panelLabel);
 
   // Size fields
@@ -461,7 +461,7 @@ function buildDitheringSection(
 
   async function handleSave(): Promise<void> {
     (saveBtn as HTMLButtonElement).disabled = true;
-    status.set('Saving...', '#888899');
+    status.set('Saving...', '#777777');
     await onSave({ ...cfg });
     (saveBtn as HTMLButtonElement).disabled = false;
   }
@@ -526,13 +526,13 @@ function buildPortraitSection(
   const cropLabel = document.createElement('div');
   cropLabel.textContent = 'Crop Parameters';
   cropLabel.style.cssText =
-    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888899;margin-top:14px;margin-bottom:10px;';
+    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#777777;margin-top:14px;margin-bottom:10px;';
   body.appendChild(cropLabel);
 
   // Zoom 0
   const zoom0Label = document.createElement('div');
   zoom0Label.textContent = 'Zoom 0';
-  zoom0Label.style.cssText = 'font-size:12px;color:#888899;margin-bottom:6px;font-family:system-ui,sans-serif;';
+  zoom0Label.style.cssText = 'font-size:12px;color:#777777;margin-bottom:6px;font-family:system-ui,sans-serif;';
   body.appendChild(zoom0Label);
 
   body.appendChild(
@@ -556,7 +556,7 @@ function buildPortraitSection(
   // Zoom 1
   const zoom1Label = document.createElement('div');
   zoom1Label.textContent = 'Zoom 1';
-  zoom1Label.style.cssText = 'font-size:12px;color:#888899;margin-bottom:6px;margin-top:10px;font-family:system-ui,sans-serif;';
+  zoom1Label.style.cssText = 'font-size:12px;color:#777777;margin-bottom:6px;margin-top:10px;font-family:system-ui,sans-serif;';
   body.appendChild(zoom1Label);
 
   body.appendChild(
@@ -574,7 +574,7 @@ function buildPortraitSection(
   // Zoom 3
   const zoom3Label = document.createElement('div');
   zoom3Label.textContent = 'Zoom 3';
-  zoom3Label.style.cssText = 'font-size:12px;color:#888899;margin-bottom:6px;margin-top:10px;font-family:system-ui,sans-serif;';
+  zoom3Label.style.cssText = 'font-size:12px;color:#777777;margin-bottom:6px;margin-top:10px;font-family:system-ui,sans-serif;';
   body.appendChild(zoom3Label);
 
   body.appendChild(
@@ -587,7 +587,7 @@ function buildPortraitSection(
   const installLabel = document.createElement('div');
   installLabel.textContent = 'Tablet Portrait Settings';
   installLabel.style.cssText =
-    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888899;margin-top:18px;margin-bottom:10px;';
+    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#777777;margin-top:18px;margin-bottom:10px;';
   body.appendChild(installLabel);
 
   body.appendChild(
@@ -615,7 +615,7 @@ function buildPortraitSection(
 
   async function handleSave(): Promise<void> {
     (saveBtn as HTMLButtonElement).disabled = true;
-    status.set('Saving...', '#888899');
+    status.set('Saving...', '#777777');
     await onSave(
       { ...cfg },
       {
@@ -652,7 +652,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
   uploadLabel.className = 'cf-label';
   uploadLabel.textContent = 'Image';
   uploadLabel.style.cssText =
-    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888899;margin-bottom:6px;display:block;';
+    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#777777;margin-bottom:6px;display:block;';
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
   fileInput.accept = 'image/*';
@@ -689,7 +689,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
     const hdr = document.createElement('div');
     hdr.textContent = 'Slice labels';
     hdr.style.cssText =
-      'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888899;margin-bottom:8px;';
+      'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#777777;margin-bottom:8px;';
     labelsContainer.appendChild(hdr);
     for (let i = 0; i < sliceCount; i++) {
       const idx = i;
@@ -741,7 +741,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
       const img = document.createElement('img');
       img.src = url;
       img.style.cssText =
-        'max-width:120px;max-height:200px;border:1px solid #2a2a40;border-radius:4px;';
+        'max-width:120px;max-height:200px;border:1px solid #2a2a2a;border-radius:4px;';
       previewArea.appendChild(img);
     }
   }
@@ -751,7 +751,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
   previewBtn.type = 'button';
   previewBtn.textContent = 'Preview Slices';
   previewBtn.style.cssText =
-    'padding:7px 16px;background:#1a1a2e;color:#e0e0e0;border:1px solid #2a2a40;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-right:8px;margin-bottom:8px;';
+    'padding:7px 16px;background:#141414;color:#e0e0e0;border:1px solid #2a2a2a;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-right:8px;margin-bottom:8px;';
   previewBtn.addEventListener('click', () => {
     void handlePreviewSlices();
   });
@@ -761,7 +761,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
   printBtn.type = 'button';
   printBtn.textContent = 'Print';
   printBtn.style.cssText =
-    'padding:7px 16px;background:#5b6cf0;color:#fff;border:none;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-right:8px;margin-bottom:8px;';
+    'padding:7px 16px;background:#ffffff;color:#fff;border:none;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-right:8px;margin-bottom:8px;';
   printBtn.addEventListener('click', () => {
     void handlePrint();
   });
@@ -771,10 +771,10 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
   exportBtn.type = 'button';
   exportBtn.textContent = 'Export ZIP';
   exportBtn.style.cssText =
-    'padding:7px 16px;background:#1a1a2e;color:#e0e0e0;border:1px solid #2a2a40;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-bottom:8px;';
+    'padding:7px 16px;background:#141414;color:#e0e0e0;border:1px solid #2a2a2a;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-bottom:8px;';
   exportBtn.addEventListener('click', () => {
     console.log('[composer] Export ZIP — not yet implemented');
-    status.set('Export ZIP not yet implemented.', '#888899');
+    status.set('Export ZIP not yet implemented.', '#777777');
   });
 
   const btnRow = document.createElement('div');
@@ -789,7 +789,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
       status.set('Select an image file first.', '#e05b5b');
       return;
     }
-    status.set('Rendering slices...', '#888899');
+    status.set('Rendering slices...', '#777777');
     previewArea.innerHTML = '';
 
     try {
@@ -829,7 +829,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
       status.set('Select an image file first.', '#e05b5b');
       return;
     }
-    status.set('Queueing print job...', '#888899');
+    status.set('Queueing print job...', '#777777');
 
     try {
       const reader = new FileReader();
@@ -885,7 +885,7 @@ function buildTestPrintingSection(): HTMLElement {
   const imageLabel = document.createElement('div');
   imageLabel.textContent = 'Test image';
   imageLabel.style.cssText =
-    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#888899;margin-bottom:6px;display:block;';
+    'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#777777;margin-bottom:6px;display:block;';
   const testImageInput = document.createElement('input');
   testImageInput.type = 'file';
   testImageInput.accept = 'image/*';
@@ -915,7 +915,7 @@ function buildTestPrintingSection(): HTMLElement {
 
   async function handleTestCard(): Promise<void> {
     (testCardBtn as HTMLButtonElement).disabled = true;
-    status.set('Queueing test card...', '#888899');
+    status.set('Queueing test card...', '#777777');
 
     const { error } = await supabase.from('print_queue').insert({
       type: 'definition',
@@ -945,7 +945,7 @@ function buildTestPrintingSection(): HTMLElement {
     }
 
     (testImageBtn as HTMLButtonElement).disabled = true;
-    status.set('Queueing test image...', '#888899');
+    status.set('Queueing test image...', '#777777');
 
     try {
       const reader = new FileReader();
@@ -981,7 +981,7 @@ function buildTestPrintingSection(): HTMLElement {
     }
 
     (testMarkdownBtn as HTMLButtonElement).disabled = true;
-    status.set('Queueing markdown print...', '#888899');
+    status.set('Queueing markdown print...', '#777777');
 
     const { error } = await supabase.from('print_queue').insert({
       type: 'markdown',
@@ -1008,7 +1008,7 @@ export function render(container: HTMLElement): void {
 
   const loadingEl = document.createElement('div');
   loadingEl.textContent = 'Loading...';
-  loadingEl.style.cssText = 'color:#888899;font-size:14px;font-family:system-ui,sans-serif;';
+  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:system-ui,sans-serif;';
   container.appendChild(loadingEl);
 
   const globalStatus = makeStatusEl();
@@ -1064,7 +1064,7 @@ export function render(container: HTMLElement): void {
     // ── Save handlers ──────────────────────────────────────────────────────────
 
     async function saveRenderConfig(patch: Partial<RenderConfig>): Promise<void> {
-      globalStatus.set('Saving...', '#888899');
+      globalStatus.set('Saving...', '#777777');
       const { error } = await supabase
         .from('render_config')
         .update(patch)
@@ -1085,7 +1085,7 @@ export function render(container: HTMLElement): void {
       portraitCfg: PortraitConfig,
       installPatch: Partial<InstallationConfig>
     ): Promise<void> {
-      globalStatus.set('Saving...', '#888899');
+      globalStatus.set('Saving...', '#777777');
       const [rcErr, instErr] = await Promise.all([
         supabase.from('render_config').update({ portrait_config: portraitCfg }).eq('id', true),
         supabase
