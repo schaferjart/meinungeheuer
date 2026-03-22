@@ -155,7 +155,7 @@ const CSS = `
   }
   .cf-section-body {
     padding: 16px 14px 6px;
-    background: #0a0a1a;
+    background: #0a0a0a;
   }
   .cf-section-body.hidden {
     display: none;
