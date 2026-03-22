@@ -163,7 +163,7 @@ const CSS = `
   .cf-save-btn {
     padding: 8px 20px;
     background: #ffffff;
-    color: #fff;
+    color: #000000;
     border: none;
     border-radius: 5px;
     font-size: 13px;
@@ -176,6 +176,7 @@ const CSS = `
   }
   .cf-save-btn:hover {
     background: #cccccc;
+    color: #000000;
   }
   .cf-save-btn:disabled {
     opacity: 0.5;
