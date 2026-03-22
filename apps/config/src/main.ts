@@ -1,8 +1,6 @@
 import { supabase, getSession, signIn, signOut } from './lib/supabase.js';
-import { render as renderInstallation } from './tabs/installation.js';
-import { render as renderConversation } from './tabs/conversation.js';
-import { render as renderPrinting } from './tabs/printing.js';
-import { render as renderTools } from './tabs/tools.js';
+import { render as renderPrograms } from './tabs/programs.js';
+import { render as renderWorkbench } from './tabs/workbench.js';
 import { render as renderSystem } from './tabs/system.js';
 
 // ── DOM references ──────────────────────────────────────────────────────────
@@ -14,26 +12,25 @@ const loginPassword = document.getElementById('login-password') as HTMLInputElem
 const loginSubmit = document.getElementById('login-submit') as HTMLButtonElement;
 const loginError = document.getElementById('login-error') as HTMLDivElement;
 const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
+const systemBtn = document.getElementById('system-btn') as HTMLButtonElement;
 const contentEl = document.getElementById('content') as HTMLElement;
-const tabButtons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
+const modeButtons = document.querySelectorAll<HTMLButtonElement>('.mode-btn');
 
-// ── Tab registry ─────────────────────────────────────────────────────────────
+// ── Mode registry ─────────────────────────────────────────────────────────────
 
-type TabId = 'installation' | 'conversation' | 'printing' | 'tools' | 'system';
+type ModeId = 'programs' | 'workbench' | 'system';
 
-const tabRenderers: Record<TabId, (container: HTMLElement) => void> = {
-  installation: renderInstallation,
-  conversation: renderConversation,
-  printing: renderPrinting,
-  tools: renderTools,
+const modeRenderers: Record<ModeId, (container: HTMLElement) => void> = {
+  programs: renderPrograms,
+  workbench: renderWorkbench,
   system: renderSystem,
 };
 
-let activeTab: TabId = 'installation';
+let activeMode: ModeId = 'programs';
 
 // ── Public helper ─────────────────────────────────────────────────────────────
 
-/** Returns the #content element for tab renderers that need it externally. */
+/** Returns the #content element for renderers that need it externally. */
 export function getContentEl(): HTMLElement {
   return contentEl;
 }
@@ -49,20 +46,28 @@ function hideLogin(): void {
   loginOverlay.classList.add('hidden');
 }
 
-// ── Tab switching ─────────────────────────────────────────────────────────────
+// ── Mode switching ─────────────────────────────────────────────────────────────
 
-function activateTab(tabId: TabId): void {
-  activeTab = tabId;
+function activateMode(modeId: ModeId): void {
+  activeMode = modeId;
 
-  tabButtons.forEach((btn) => {
-    if (btn.dataset['tab'] === tabId) {
+  // Update mode buttons (only programs/workbench, not system)
+  modeButtons.forEach((btn) => {
+    if (btn.dataset['mode'] === modeId) {
       btn.classList.add('active');
     } else {
       btn.classList.remove('active');
     }
   });
 
-  const renderer = tabRenderers[tabId];
+  // System button highlight
+  if (modeId === 'system') {
+    systemBtn.classList.add('active');
+  } else {
+    systemBtn.classList.remove('active');
+  }
+
+  const renderer = modeRenderers[modeId];
   if (renderer) {
     renderer(contentEl);
   }
@@ -117,7 +122,7 @@ loginForm.addEventListener('submit', async (e) => {
   }
 
   hideLogin();
-  activateTab(activeTab);
+  activateMode(activeMode);
   void checkConnections();
 });
 
@@ -132,15 +137,26 @@ logoutBtn.addEventListener('click', async () => {
   setDot('dot-renderer', 'checking');
 });
 
-// ── Tab clicks ────────────────────────────────────────────────────────────────
+// ── Mode button clicks ────────────────────────────────────────────────────────
 
-tabButtons.forEach((btn) => {
+modeButtons.forEach((btn) => {
   btn.addEventListener('click', () => {
-    const tabId = btn.dataset['tab'] as TabId | undefined;
-    if (tabId && tabId in tabRenderers) {
-      activateTab(tabId);
+    const modeId = btn.dataset['mode'] as ModeId | undefined;
+    if (modeId && modeId in modeRenderers) {
+      activateMode(modeId);
     }
   });
+});
+
+// ── System button ────────────────────────────────────────────────────────────
+
+systemBtn.addEventListener('click', () => {
+  if (activeMode === 'system') {
+    // Toggle back to programs if already on system
+    activateMode('programs');
+  } else {
+    activateMode('system');
+  }
 });
 
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
@@ -154,7 +170,7 @@ async function init(): Promise<void> {
   }
 
   hideLogin();
-  activateTab(activeTab);
+  activateMode(activeMode);
   void checkConnections();
 }
 
