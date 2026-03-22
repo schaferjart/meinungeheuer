@@ -174,6 +174,21 @@ export const PrintPayloadSchema = z.object({
 export type PrintPayload = z.infer<typeof PrintPayloadSchema>;
 
 // ============================================================
+// PortraitPrintPayload — pre-rendered images ready for printing
+// ============================================================
+
+export const PortraitPrintPayloadSchema = z.object({
+  type: z.literal('portrait'),
+  image_urls: z.array(z.object({
+    name: z.string(),
+    url: z.string().url(),
+  })),
+  job_id: z.string(),
+  timestamp: z.string().datetime({ offset: true }),
+});
+export type PortraitPrintPayload = z.infer<typeof PortraitPrintPayloadSchema>;
+
+// ============================================================
 // SaveDefinitionPayload — ElevenLabs webhook tool call body
 // ============================================================
 

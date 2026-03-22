@@ -59,7 +59,7 @@ describe('usePortraitCapture', () => {
       const videoRef = { current: video };
 
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: '' }),
+        usePortraitCapture({ videoRef, printRendererUrl: '' }),
       );
 
       let blob: Blob | null = null;
@@ -78,7 +78,7 @@ describe('usePortraitCapture', () => {
       const videoRef = { current: video };
 
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: '' }),
+        usePortraitCapture({ videoRef, printRendererUrl: '' }),
       );
 
       let blob: Blob | null = null;
@@ -94,7 +94,7 @@ describe('usePortraitCapture', () => {
       const videoRef = { current: video };
 
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: '' }),
+        usePortraitCapture({ videoRef, printRendererUrl: '' }),
       );
 
       let blob: Blob | null = null;
@@ -117,7 +117,7 @@ describe('usePortraitCapture', () => {
       const videoRef = { current: video };
 
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: '' }),
+        usePortraitCapture({ videoRef, printRendererUrl: '' }),
       );
 
       let blob: Blob | null = null;
@@ -140,7 +140,7 @@ describe('usePortraitCapture', () => {
 
       const videoRef = { current: createMockVideo() };
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+        usePortraitCapture({ videoRef, printRendererUrl: 'http://localhost:8000' }),
       );
 
       const blob = new Blob(['test'], { type: 'image/jpeg' });
@@ -150,7 +150,7 @@ describe('usePortraitCapture', () => {
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       const [url, opts] = fetchSpy.mock.calls[0] as [string, RequestInit];
-      expect(url).toBe('http://localhost:9100/portrait/capture');
+      expect(url).toBe('http://localhost:8000/process/portrait');
       expect(opts.method).toBe('POST');
 
       const body = opts.body as FormData;
@@ -163,13 +163,13 @@ describe('usePortraitCapture', () => {
       vi.unstubAllGlobals();
     });
 
-    it('skips silently (no throw) when posServerUrl is empty string', async () => {
+    it('skips silently (no throw) when printRendererUrl is empty string', async () => {
       const fetchSpy = vi.fn();
       vi.stubGlobal('fetch', fetchSpy);
 
       const videoRef = { current: createMockVideo() };
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: '' }),
+        usePortraitCapture({ videoRef, printRendererUrl: '' }),
       );
 
       const blob = new Blob(['test'], { type: 'image/jpeg' });
@@ -193,7 +193,7 @@ describe('usePortraitCapture', () => {
 
       const videoRef = { current: createMockVideo() };
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+        usePortraitCapture({ videoRef, printRendererUrl: 'http://localhost:8000' }),
       );
 
       expect(result.current.isCapturing).toBe(false);
@@ -223,7 +223,7 @@ describe('usePortraitCapture', () => {
 
       const videoRef = { current: createMockVideo() };
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+        usePortraitCapture({ videoRef, printRendererUrl: 'http://localhost:8000' }),
       );
 
       const blob = new Blob(['test'], { type: 'image/jpeg' });
@@ -259,7 +259,7 @@ describe('usePortraitCapture', () => {
       const video = createMockVideo();
       const videoRef = { current: video };
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+        usePortraitCapture({ videoRef, printRendererUrl: 'http://localhost:8000' }),
       );
 
       await act(async () => {
@@ -281,7 +281,7 @@ describe('usePortraitCapture', () => {
       const video = createMockVideo({ readyState: 1 }); // not ready
       const videoRef = { current: video };
       const { result } = renderHook(() =>
-        usePortraitCapture({ videoRef, posServerUrl: 'http://localhost:9100' }),
+        usePortraitCapture({ videoRef, printRendererUrl: 'http://localhost:8000' }),
       );
 
       await act(async () => {

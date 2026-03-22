@@ -31,9 +31,9 @@ describe('program registry', () => {
   });
 
   describe('listPrograms', () => {
-    it('returns array of length 2', () => {
+    it('returns array of length 3', () => {
       const programs = listPrograms();
-      expect(programs).toHaveLength(2);
+      expect(programs).toHaveLength(3);
     });
   });
 

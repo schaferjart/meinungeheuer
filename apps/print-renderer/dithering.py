@@ -130,6 +130,18 @@ _MODES = {
 }
 
 
+def dither_image(grey: Image.Image, mode: str, dot_size: int = 6) -> Image.Image:
+    """Apply the selected dithering mode."""
+    if mode == "halftone":
+        return _dither_halftone(grey, dot_size=dot_size)
+    elif mode == "bayer":
+        return _dither_bayer(grey)
+    elif mode == "floyd":
+        return _dither_floyd(grey)
+    else:
+        return _dither_bayer(grey)
+
+
 def process_image(path: str, config: dict = None,
                   mode: str = None, dot_size: int = None,
                   contrast: float = None, brightness: float = None,

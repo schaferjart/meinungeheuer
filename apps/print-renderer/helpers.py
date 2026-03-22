@@ -1,15 +1,11 @@
 """
-Shared utility functions for the POS thermal printer system.
+Shared utility functions for the print renderer service.
 
 CONSTRAINT: This module imports ONLY stdlib + Pillow. No project imports.
 This prevents circular dependencies since multiple project modules import from here.
-
-Functions:
-    resolve_font_path  — resolve relative font paths against the project directory
-    wrap_text          — word-wrap text to a pixel width using PIL font metrics
-    open_image         — open an image file with EXIF transpose and alpha compositing
 """
 
+import io
 import os
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -69,12 +65,15 @@ def wrap_text(text: str, font: ImageFont.ImageFont, max_width: int,
 
 # ── Image opening ─────────────────────────────────────────────────
 
-def open_image(path: str) -> Image.Image:
-    """Open an image file, apply EXIF transpose, and composite alpha onto white.
+def open_image(source) -> Image.Image:
+    """Open an image from a file path, bytes, or BytesIO.
 
-    Returns an RGB PIL Image ready for further processing.
+    Applies EXIF transpose and composites alpha onto white background.
+    Returns an RGB PIL Image.
     """
-    img = Image.open(path)
+    if isinstance(source, bytes):
+        source = io.BytesIO(source)
+    img = Image.open(source)
     img = ImageOps.exif_transpose(img)
 
     if img.mode in ("RGBA", "LA", "PA"):

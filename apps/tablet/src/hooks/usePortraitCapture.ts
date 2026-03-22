@@ -2,14 +2,15 @@
  * usePortraitCapture
  *
  * Captures a still frame from a shared <video> element (same stream used by
- * face detection) and uploads it to the POS server's /portrait/capture endpoint.
+ * face detection) and uploads it to the cloud print-renderer's
+ * /process/portrait endpoint.
  *
  * Key constraints:
  * - Uses Canvas drawImage + toBlob (ImageCapture API is NOT supported on Safari).
  * - NEVER calls getUserMedia — reuses the single stream via the shared videoRef
  *   (iOS Safari mutes the first stream if a second getUserMedia() is called).
- * - Upload is fire-and-forget; the POS server's pipeline runs synchronously
- *   for 30–180 s (style transfer). We must never block UI transitions.
+ * - Upload is fire-and-forget; the print-renderer's pipeline runs asynchronously
+ *   (style transfer + face detection + dithering). We must never block UI transitions.
  */
 
 import { useCallback, useState } from 'react';
@@ -21,8 +22,10 @@ import { useCallback, useState } from 'react';
 export interface UsePortraitCaptureOptions {
   /** Shared ref to the hidden <video> element (same one used by face detection). */
   videoRef: React.RefObject<HTMLVideoElement | null>;
-  /** POS server base URL, e.g. "http://192.168.1.50:9100". Empty = disabled. */
-  posServerUrl: string;
+  /** Print renderer base URL, e.g. "https://renderer.example.com". Empty = disabled. */
+  printRendererUrl: string;
+  /** Optional session ID to associate portrait prints with. */
+  sessionId?: string | null;
 }
 
 export interface UsePortraitCaptureReturn {
@@ -50,7 +53,8 @@ const MIN_BLOB_SIZE = 1024;
 
 export function usePortraitCapture({
   videoRef,
-  posServerUrl,
+  printRendererUrl,
+  sessionId,
 }: UsePortraitCaptureOptions): UsePortraitCaptureReturn {
   const [isCapturing, setIsCapturing] = useState(false);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -90,12 +94,12 @@ export function usePortraitCapture({
   }, [videoRef]);
 
   // -----------------------------------------------------------------------
-  // uploadPortrait — POST blob as multipart/form-data to POS server
+  // uploadPortrait — POST blob to cloud print-renderer /process/portrait
   // -----------------------------------------------------------------------
   const uploadPortrait = useCallback(
     async (blob: Blob): Promise<void> => {
-      if (!posServerUrl) {
-        console.warn('[Portrait] No POS server URL configured, skipping upload');
+      if (!printRendererUrl) {
+        console.warn('[Portrait] No print renderer URL configured, skipping upload');
         return;
       }
 
@@ -106,13 +110,16 @@ export function usePortraitCapture({
         const formData = new FormData();
         formData.append('file', blob, 'portrait.jpg');
         formData.append('skip_selection', 'true');
+        if (sessionId) {
+          formData.append('session_id', sessionId);
+        }
 
-        const url = `${posServerUrl.replace(/\/+$/, '')}/portrait/capture`;
+        const url = `${printRendererUrl.replace(/\/+$/, '')}/process/portrait`;
 
         const res = await fetch(url, {
           method: 'POST',
           body: formData,
-          // 5 min timeout: style transfer on POS server takes 30–180 s
+          // 5 min timeout: style transfer + face detection in cloud
           signal: AbortSignal.timeout(300_000),
         });
 
@@ -121,7 +128,7 @@ export function usePortraitCapture({
           throw new Error(`Portrait upload failed ${res.status}: ${text}`);
         }
 
-        console.log('[Portrait] Upload successful');
+        console.log('[Portrait] Upload to print-renderer successful');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         console.warn('[Portrait] Upload error:', msg);
@@ -130,7 +137,7 @@ export function usePortraitCapture({
         setIsCapturing(false);
       }
     },
-    [posServerUrl],
+    [printRendererUrl, sessionId],
   );
 
   // -----------------------------------------------------------------------

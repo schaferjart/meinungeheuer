@@ -9,9 +9,9 @@
  */
 
 import { createSupabaseClient } from '@meinungeheuer/shared';
-import { PrintPayloadSchema } from '@meinungeheuer/shared';
+import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@meinungeheuer/shared';
 import { loadConfig } from './config.js';
-import { printCard } from './printer.js';
+import { renderAndPrint, printPortrait } from './printer.js';
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,7 @@ const config = loadConfig();
 
 console.log('[bridge] MeinUngeheuer Printer Bridge starting…');
 console.log(`[bridge] POS server: ${config.posServerUrl || '(console mode)'}`);
+console.log(`[bridge] Print renderer: ${config.printRendererUrl}`);
 
 // ─── Supabase ─────────────────────────────────────────────────────────────────
 
@@ -58,27 +59,33 @@ async function processJob(rowId: string, rawPayload: Record<string, unknown>): P
     return;
   }
 
-  const parseResult = PrintPayloadSchema.safeParse(rawPayload);
-  if (!parseResult.success) {
-    console.error(`[bridge] Invalid payload for job ${rowId}:`, parseResult.error.flatten());
-    await supabase
-      .from('print_queue')
-      .update({ status: 'error' })
-      .eq('id', rowId);
-    return;
-  }
-
-  const payload = parseResult.data;
-
   try {
-    await printCard(config.posServerUrl, payload);
+    if (rawPayload.type === 'portrait') {
+      // Portrait: pre-rendered images, download from Storage and print
+      const parsed = PortraitPrintPayloadSchema.safeParse(rawPayload);
+      if (!parsed.success) {
+        console.error(`[bridge] Invalid portrait payload for job ${rowId}:`, parsed.error.flatten());
+        await supabase.from('print_queue').update({ status: 'error' }).eq('id', rowId);
+        return;
+      }
+      await printPortrait(config.posServerUrl, parsed.data);
+      console.log(`[bridge] Job ${rowId} done — portrait ${parsed.data.job_id}`);
+    } else {
+      // Text: render via cloud print-renderer, then print
+      const parsed = PrintPayloadSchema.safeParse(rawPayload);
+      if (!parsed.success) {
+        console.error(`[bridge] Invalid payload for job ${rowId}:`, parsed.error.flatten());
+        await supabase.from('print_queue').update({ status: 'error' }).eq('id', rowId);
+        return;
+      }
+      await renderAndPrint(config.posServerUrl, config.printRendererUrl, config.renderApiKey, parsed.data);
+      console.log(`[bridge] Job ${rowId} done — card for #${parsed.data.session_number} "${parsed.data.term}"`);
+    }
 
     await supabase
       .from('print_queue')
       .update({ status: 'done', printed_at: new Date().toISOString() })
       .eq('id', rowId);
-
-    console.log(`[bridge] Job ${rowId} done — card printed for #${payload.session_number} "${payload.term}"`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[bridge] Print error for job ${rowId}: ${message}`);
