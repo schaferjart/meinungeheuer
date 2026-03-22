@@ -1,5 +1,5 @@
 /**
- * test-print.ts — CLI script for printing a sample card via POS server.
+ * test-print.ts — CLI script for printing a sample card via print-renderer + POS server.
  *
  * Usage:
  *   pnpm run test-print
@@ -8,7 +8,7 @@
  */
 
 import { loadConfig } from './config.js';
-import { printCard, buildTestPayload } from './printer.js';
+import { renderAndPrint, buildTestPayload } from './printer.js';
 import type { PrintPayload } from '@meinungeheuer/shared';
 
 function parseArgs(argv: string[]): { text?: string; term?: string } {
@@ -34,6 +34,7 @@ async function main(): Promise<void> {
 
   console.log('[test-print] Configuration:');
   console.log(`  POS server: ${config.posServerUrl || '(console mode)'}`);
+  console.log(`  Print renderer: ${config.printRendererUrl}`);
   console.log('');
 
   const base = buildTestPayload();
@@ -43,7 +44,7 @@ async function main(): Promise<void> {
     definition_text: args.text ?? base.definition_text,
   };
 
-  await printCard(config.posServerUrl, payload);
+  await renderAndPrint(config.posServerUrl, config.printRendererUrl, config.renderApiKey, payload);
   console.log('[test-print] Done.');
 }
 

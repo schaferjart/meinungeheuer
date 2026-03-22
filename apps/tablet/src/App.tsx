@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@meinungeheuer/shared';
 import type { Definition, ConversationProgram } from '@meinungeheuer/shared';
 
@@ -28,6 +28,8 @@ import { usePortraitCapture } from './hooks/usePortraitCapture';
 import { useAudioCapture } from './hooks/useAudioCapture';
 import { fetchConfig, submitVoiceChainData } from './lib/api';
 import type { ConfigResponse } from './lib/api';
+import { RuntimeConfigContext, DEFAULT_RUNTIME_CONFIG } from './lib/configContext';
+import type { RuntimeConfig } from './lib/configContext';
 import { persistDefinition, persistPrintJob, persistTranscript, uploadBlurredPortrait } from './lib/persist';
 import { captureBlurredPortrait } from './lib/portraitBlur';
 import { ScreenTransition } from './components/ScreenTransition';
@@ -81,10 +83,11 @@ function InstallationApp() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Portrait capture hook — reads frames from the shared video element
-  const posServerUrl = import.meta.env['VITE_POS_SERVER_URL'] ?? '';
+  const printRendererUrl = import.meta.env['VITE_PRINT_RENDERER_URL'] ?? '';
   const { captureFrame, uploadPortrait } = usePortraitCapture({
     videoRef,
-    posServerUrl,
+    printRendererUrl,
+    sessionId: state.sessionId,
   });
 
   // Store captured portrait blob for deferred upload (capture during conversation,
@@ -100,6 +103,9 @@ function InstallationApp() {
 
   // Audio capture hook — records visitor mic independently of the ElevenLabs WebSocket
   const { startRecording, stopRecording } = useAudioCapture();
+
+  // Runtime config — populated from backend response, defaults from constants
+  const [runtimeConfig, setRuntimeConfig] = useState<RuntimeConfig>(DEFAULT_RUNTIME_CONFIG);
 
   // Track whether config has been fetched to avoid double-fetching
   const configFetchedRef = useRef(false);
@@ -140,6 +146,23 @@ function InstallationApp() {
           parentSessionId: config.parentSessionId ?? null,
           stages: program.stages,
         });
+
+        // Merge runtime config from backend response — fall back to defaults per field
+        const merged: RuntimeConfig = {
+          faceDetection: config.faceDetection ?? DEFAULT_RUNTIME_CONFIG.faceDetection,
+          timers: config.timers ?? DEFAULT_RUNTIME_CONFIG.timers,
+          voice: config.voice ?? DEFAULT_RUNTIME_CONFIG.voice,
+          portrait: config.portrait ?? DEFAULT_RUNTIME_CONFIG.portrait,
+          display: config.display
+            ? {
+                ...config.display,
+                fontSize: config.display.fontSize ?? DEFAULT_RUNTIME_CONFIG.display.fontSize,
+                letterSpacing: config.display.letterSpacing ?? DEFAULT_RUNTIME_CONFIG.display.letterSpacing,
+                maxWidth: config.display.maxWidth ?? DEFAULT_RUNTIME_CONFIG.display.maxWidth,
+              }
+            : DEFAULT_RUNTIME_CONFIG.display,
+        };
+        setRuntimeConfig(merged);
       })
       .catch((err: unknown) => {
         // Network failure — fall back to defaults already set in initial state
@@ -442,25 +465,27 @@ function InstallationApp() {
   }
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: '#000000',
-        overflow: 'hidden',
-      }}
-    >
-      {/*
-        CameraDetector is always mounted at the app root — it runs the face
-        detection loop regardless of which screen is active. It renders only
-        a zero-size hidden video element; nothing is shown to the visitor.
-        Tap-to-start on SleepScreen remains the fallback if camera is denied.
-      */}
-      <CameraDetector onWake={handleWake} onSleep={handleFaceLost} videoRef={videoRef} />
+    <RuntimeConfigContext.Provider value={runtimeConfig}>
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: '#000000',
+          overflow: 'hidden',
+        }}
+      >
+        {/*
+          CameraDetector is always mounted at the app root — it runs the face
+          detection loop regardless of which screen is active. It renders only
+          a zero-size hidden video element; nothing is shown to the visitor.
+          Tap-to-start on SleepScreen remains the fallback if camera is denied.
+        */}
+        <CameraDetector onWake={handleWake} onSleep={handleFaceLost} videoRef={videoRef} />
 
-      <ScreenTransition screenKey={screen}>
-        {renderScreen()}
-      </ScreenTransition>
-    </div>
+        <ScreenTransition screenKey={screen}>
+          {renderScreen()}
+        </ScreenTransition>
+      </div>
+    </RuntimeConfigContext.Provider>
   );
 }

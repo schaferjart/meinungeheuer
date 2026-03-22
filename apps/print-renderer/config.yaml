@@ -1,0 +1,158 @@
+# Print Renderer Configuration — rendering settings only
+# (no printer/server config — that stays on the Pi)
+
+# Dictionary art-print template
+dictionary:
+  font_word: "fonts/Burra-Bold.ttf"
+  font_body: "fonts/Burra-Thin.ttf"
+  font_cite: "fonts/Burra-Thin.ttf"
+  font_date: "fonts/Burra-Thin.ttf"
+  size_word: 32
+  size_body: 20
+  size_cite: 18
+  size_date: 16
+  line_spacing: 1.4
+  gap_after_word: 30
+  gap_before_cite: 20
+  margin: 20
+  paper_px: 576
+
+# Helvetica Neue template (clean, minimal)
+helvetica:
+  font_word: "/System/Library/Fonts/HelveticaNeue.ttc"
+  font_word_index: 1
+  font_body: "/System/Library/Fonts/HelveticaNeue.ttc"
+  font_body_index: 7
+  font_bold: "/System/Library/Fonts/HelveticaNeue.ttc"
+  font_bold_index: 1
+  font_cite: "/System/Library/Fonts/HelveticaNeue.ttc"
+  font_cite_index: 12
+  font_date: "/System/Library/Fonts/HelveticaNeue.ttc"
+  font_date_index: 5
+  size_word: 36
+  size_body: 22
+  size_cite: 19
+  size_date: 17
+  line_spacing: 1.5
+  gap_after_word: 29
+  gap_before_cite: 19
+  margin: 24
+  paper_px: 576
+
+# Halftone image printing
+halftone:
+  paper_px: 576
+  mode: floyd
+  dot_size: 6
+  contrast: 1.3
+  brightness: 1.0
+  sharpness: 1.2
+  blur: 0
+
+# Portrait pipeline
+portrait:
+  openrouter_api_key_env: "OPENROUTER_API_KEY"
+  selection_model: "google/gemini-3.1-flash-image-preview"
+  n8n_webhook_url: "https://n8n.baufer.beauty/webhook/portrait-statue"
+  style_prompt: >
+    Photograph of a life-size human head and upper torso cast in
+    translucent wax. Museum catalog image. Medium format camera,
+    90mm lens, f/4. The subject gazes directly into the camera.
+
+    The face is clean — no beard, no stubble, no facial hair.
+    Smooth jaw, smooth chin, smooth upper lip. Scalp hair is
+    visible but coated and frosted in the same wax — individual
+    strands embedded in the surface, bleached, like hair preserved
+    in resin. The hairline is natural.
+
+    FRAME: Head, full neck, and upper shoulders visible. Portrait
+    2:3. Shoulders dissolve into background. Do not crop at jaw.
+
+    THE MATERIAL IS THE IMAGE. Everything about this photograph —
+    the lighting, the texture, the tone — is a consequence of
+    what this object is made of. The head is cast in a TRANSLUCENT
+    WAX with real physical depth. The wax is not a thin coating —
+    it is the substance of the sculpture itself, several
+    millimeters thick everywhere. It has body. It has mass. Light
+    does not just land on this material — it enters it, travels
+    through it, scatters inside it, and exits somewhere nearby.
+
+    SUBSURFACE BEHAVIOR: Where the form is convex and faces the
+    overhead light — the center of the forehead, the nose bridge,
+    the peak of the cheekbones — light penetrates into the wax
+    and diffuses internally, producing a soft GLOW that comes
+    from WITHIN the material. This glow has naturally soft edges
+    because the light is spreading inside a translucent solid,
+    not reflecting off a surface. The nose bridge is bright at
+    its center but blooms outward gently, fading gradually into
+    the surrounding tone. It is not a sharp specular reflection
+    or a hard stripe — it is light moving through wax. The
+    forehead glows from inside. The cheekbones have a faint
+    internal luminosity. This subsurface scattering is the
+    defining visual quality of the entire image.
+
+    Where the form is concave or turned away — eye sockets, sides
+    of the nose, under the chin, temples — less light enters the
+    material, so these areas are quieter and greyer. But the
+    transitions are EXTREMELY gradual because the light is
+    diffusing through a continuous solid, not casting shadows on
+    an opaque surface. There are no hard shadow edges anywhere.
+
+    LIGHT SOURCE: A single soft overhead point light — nothing
+    dramatic, a standard diffused ceiling fixture. The light
+    source is simple. The MATERIAL does all the visual work.
+
+    SURFACE TEXTURE: The wax has a soft waxy sheen — not wet,
+    not metallic, but the quiet organic gloss of cooled beeswax.
+    The surface has visible layered texture everywhere: fine
+    overlapping flow-marks where the wax settled, subtle ridges,
+    hairline veins and fine patterning visible beneath the
+    translucent layers — like veining in marble or fracture
+    patterns inside ice. This texture is omnipresent and uniform
+    across skull, face, neck, and shoulders. No smooth or bare
+    patches. The wax is fully cooled and solidified — it does
+    not drip, flow, or move. It is still and frozen.
+
+    TONE: The wax is pale cool GREY — not white. The background
+    is BRIGHTER than the head. Grey sculpture in a bright
+    near-white field. Monochrome, no color. No true blacks.
+
+    EYES: Photorealistic, natural, alive. The only non-wax
+    element. They sit quietly within the tonal space.
+
+    EYEBROWS: Visible as frosted relief — coated, bleached,
+    structurally present but muted.
+
+    FOCUS: Shallow depth of field. Sharp at the cheekbones,
+    softening at the ears and crown. The surface texture is
+    razor-crisp on the central face.
+
+    BONE STRUCTURE: Cheekbones, brow ridge, jaw angle, and nose
+    ridge read through the material. This is a specific
+    recognizable individual, not a generic form.
+
+    NOT metallic. NOT chrome. NOT dripping. NOT a 3D
+    render. NOT body paint. NOT digitally smooth. A physical
+    translucent wax sculpture where the material itself creates
+    all the light behavior in the image.
+
+  blur: 10
+  dither_mode: bayer
+
+# Acidic template — big, raw, hard character-wrap
+acidic:
+  font_word: "fonts/Acidic.TTF"
+  font_body: "fonts/Acidic.TTF"
+  font_bold: "fonts/Acidic.TTF"
+  font_cite: "fonts/Acidic.TTF"
+  font_date: "fonts/Acidic.TTF"
+  size_word: 240
+  size_body: 200
+  size_cite: 180
+  size_date: 140
+  line_spacing: 1.2
+  gap_after_word: 80
+  gap_before_cite: 60
+  margin: 20
+  paper_px: 576
+  hard_wrap: true
