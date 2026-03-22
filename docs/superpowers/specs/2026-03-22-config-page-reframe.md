@@ -218,6 +218,61 @@ The config page does NOT need a visual pipeline builder for MVP. That's a future
 
 ---
 
+## Tablet Screen Preview
+
+The config page should show a **live preview of how each tablet screen will look** with the current settings. For any block that affects the tablet UI (text_display, term_prompt, conversation, definition), the config page renders a scaled-down mockup:
+
+- An iframe-sized preview (tablet aspect ratio) showing the screen with current font sizes, colors, opacities, spacing
+- Updates live as you adjust settings — change `display_font_size` and see the text reflow instantly
+- Screens to preview:
+  - **Welcome** — layout, timing indicator
+  - **Text Display** — font, highlight color, spoken/upcoming opacity, max width, line height
+  - **Term Prompt** — term styling, duration
+  - **Conversation** — agent/listening indicator colors, message font
+  - **Definition** — term/definition/citation font sizes, layout
+  - **Farewell** — timing, message
+
+Implementation: the config page imports the same CSS/styling as the tablet app (or a lightweight replica). The preview is a `<div>` styled to tablet dimensions with the actual Tailwind classes and CSS variables applied. No iframe to the real tablet — just a visual mockup using the same design tokens.
+
+This is the bridge between "I changed a number" and "I see what it does."
+
+---
+
+## Archive Page
+
+A public page where visitors can revisit all definitions from the exhibition. Accessible via QR code printed on cards or displayed at the exhibition.
+
+- **URL**: `archive.baufer.beauty` (or similar)
+- **App**: `apps/archive/` — minimal Vite app or static HTML
+- **Data source**: reads `definitions` table from Supabase (anon key, SELECT only)
+- **Content per entry**: term, definition_text, citations, language, date
+- **Design**: black and white, matching installation aesthetic (thermal receipt style)
+- **Per-card QR**: each printed card includes a QR code linking to that specific definition (`archive.baufer.beauty/#/definition/{id}`)
+- **Browse mode**: full archive, scrollable, filterable by term
+- **No auth required** — public read-only page
+
+---
+
+## Consent Block (Voice Chain)
+
+Voice chain clones the visitor's voice — requires explicit consent (GDPR). Added as a pipeline block:
+
+```
+voice_chain program:
+  face_detect → consent → voice_chain → text_display → conversation → print_card
+```
+
+The `consent` block:
+- Shows a consent screen on the tablet before conversation starts
+- Clear language: "Your voice will be recorded and may be used to greet the next visitor"
+- Accept / Decline buttons
+- Accept → proceed with voice cloning
+- Decline → skip voice cloning, still allow conversation (uses default voice)
+- Consent record stored in Supabase: `{ session_id, accepted: boolean, timestamp }`
+- Only shown in programs that include the `consent` block
+
+---
+
 ## Open Questions
 
 1. **Does the tablet need to understand arbitrary pipelines?** Or do we keep the existing state machine and just let programs configure which stages are active? (The simpler option — the tablet always has the same stages, programs just toggle them on/off and set their parameters.)
