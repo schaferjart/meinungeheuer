@@ -11,7 +11,6 @@ import io
 import os
 import hmac
 import uuid
-import yaml
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -21,10 +20,9 @@ from pydantic import BaseModel
 
 load_dotenv()
 
-# Load rendering config (fonts, layout, dithering settings)
+from supabase_config import get_render_config, get_active_template, get_paper_px
+
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
-with open(_CONFIG_PATH) as f:
-    RENDER_CONFIG = yaml.safe_load(f)
 
 app = FastAPI(title="MeinUngeheuer Print Renderer")
 
@@ -60,7 +58,7 @@ def render_dictionary(req: DictionaryRequest):
     from templates import render_dictionary_image
 
     data = {"word": req.word, "definition": req.definition, "citations": req.citations}
-    img = render_dictionary_image(data, RENDER_CONFIG, style=req.template)
+    img = render_dictionary_image(data, get_render_config(_CONFIG_PATH), style=req.template)
     return _image_response(img)
 
 
@@ -77,7 +75,7 @@ def render_md(req: MarkdownRequest):
     """Render markdown text as a PNG image and return it directly."""
     from md_renderer import render_markdown
 
-    img = render_markdown(req.text, RENDER_CONFIG, req.show_date, req.style)
+    img = render_markdown(req.text, get_render_config(_CONFIG_PATH), req.show_date, req.style)
     return _image_response(img)
 
 
@@ -102,15 +100,16 @@ async def process_portrait_endpoint(
 
     image_bytes = await file.read()
 
-    portrait_cfg = RENDER_CONFIG.get("portrait", {})
+    _render_cfg = get_render_config(_CONFIG_PATH)
+    portrait_cfg = _render_cfg.get("portrait", {})
     config = {
         "n8n_webhook_url": os.environ.get("N8N_WEBHOOK_URL") or portrait_cfg.get("n8n_webhook_url"),
         "openrouter_api_key_env": portrait_cfg.get("openrouter_api_key_env", "OPENROUTER_API_KEY"),
         "style_prompt": portrait_cfg.get("style_prompt", "Transform this portrait into a monochrome sculpture."),
-        "paper_px": RENDER_CONFIG.get("halftone", {}).get("paper_px", 576),
-        "contrast": RENDER_CONFIG.get("halftone", {}).get("contrast", 1.3),
-        "brightness": RENDER_CONFIG.get("halftone", {}).get("brightness", 1.0),
-        "sharpness": RENDER_CONFIG.get("halftone", {}).get("sharpness", 1.2),
+        "paper_px": _render_cfg.get("halftone", {}).get("paper_px", 576),
+        "contrast": _render_cfg.get("halftone", {}).get("contrast", 1.3),
+        "brightness": _render_cfg.get("halftone", {}).get("brightness", 1.0),
+        "sharpness": _render_cfg.get("halftone", {}).get("sharpness", 1.2),
         "blur": portrait_cfg.get("blur", 10),
         "dither_mode": portrait_cfg.get("dither_mode", "bayer"),
     }
