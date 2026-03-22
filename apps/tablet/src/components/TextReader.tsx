@@ -4,6 +4,7 @@ import { useElevenLabsTTS } from 'karaoke-reader/elevenlabs';
 import type { TtsStatus } from 'karaoke-reader';
 import 'karaoke-reader/styles.css';
 import { createSupabaseTTSCache } from '../lib/supabaseCacheAdapter';
+import { useRuntimeConfig } from '../lib/configContext';
 
 // ============================================================
 // Types
@@ -16,17 +17,6 @@ export interface TextReaderProps {
   language: 'de' | 'en';
   onComplete: () => void;
 }
-
-// ============================================================
-// Voice settings (MeinUngeheuer-specific)
-// ============================================================
-
-const VOICE_SETTINGS = {
-  stability: 0.35,
-  similarity_boost: 0.65,
-  style: 0.6,
-  use_speaker_boost: true,
-} as const;
 
 // ============================================================
 // Combined status type
@@ -51,6 +41,8 @@ function getCacheAdapter() {
 // ============================================================
 
 export function TextReader({ text, voiceId, apiKey, language, onComplete }: TextReaderProps) {
+  const config = useRuntimeConfig();
+
   // Strip markdown for TTS so it doesn't speak "#" or "~~"
   const ttsText = useMemo(() => stripMarkdownForTTS(text), [text]);
 
@@ -61,10 +53,15 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
       apiKey,
       voiceId,
       text: ttsText,
-      voiceSettings: VOICE_SETTINGS,
+      voiceSettings: {
+        stability: config.voice.stability,
+        similarity_boost: config.voice.similarityBoost,
+        style: config.voice.style,
+        use_speaker_boost: config.voice.speakerBoost,
+      },
       cache: getCacheAdapter(),
     };
-  }, [ttsText, voiceId, apiKey]);
+  }, [ttsText, voiceId, apiKey, config.voice]);
 
   // Fetch TTS data via karaoke-reader's ElevenLabs adapter
   const { status: ttsStatus, result: ttsResult, error: ttsError } = useElevenLabsTTS(ttsOptions);

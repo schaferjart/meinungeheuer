@@ -34,6 +34,71 @@ export const ConfigResponseSchema = z.object({
     portrait_blurred_url: z.string().nullable(),
     chain_position: z.number(),
   }).nullable().optional(),
+
+  // New optional fields — all optional for backwards compatibility with old backends
+  language: z.string().optional(),
+  stages: z.object({
+    textReading: z.boolean().nullable(),
+    termPrompt: z.boolean().nullable(),
+    portrait: z.boolean().nullable(),
+    printing: z.boolean().nullable(),
+  }).optional(),
+  faceDetection: z.object({
+    enabled: z.boolean(),
+    wakeMs: z.number(),
+    sleepMs: z.number(),
+    intervalMs: z.number(),
+    minConfidence: z.number(),
+  }).optional(),
+  timers: z.object({
+    welcomeMs: z.number(),
+    termPromptMs: z.number(),
+    definitionDisplayMs: z.number(),
+    farewellMs: z.number(),
+    printTimeoutMs: z.number(),
+  }).optional(),
+  elevenlabs: z.object({
+    agentId: z.string().optional(),
+    voiceId: z.string().optional(),
+  }).optional(),
+  voice: z.object({
+    stability: z.number(),
+    similarityBoost: z.number(),
+    style: z.number(),
+    speakerBoost: z.boolean(),
+  }).optional(),
+  voiceChainConfig: z.object({
+    removeBgNoise: z.boolean(),
+    retentionWindow: z.number(),
+    profileModel: z.string().nullable(),
+    profileTemperature: z.number(),
+    icebreakerModel: z.string().nullable(),
+    icebreakerTemperature: z.number(),
+    coldStartDe: z.string().nullable(),
+    coldStartEn: z.string().nullable(),
+    maxPhrases: z.number(),
+    maxFavoriteWords: z.number(),
+  }).optional(),
+  portrait: z.object({
+    captureDelayMs: z.number(),
+    jpegQuality: z.number(),
+    minBlobSize: z.number(),
+    blurRadiusCss: z.number(),
+  }).optional(),
+  display: z.object({
+    highlightColor: z.string(),
+    spokenOpacity: z.number(),
+    upcomingOpacity: z.number(),
+    fontSize: z.string().nullable(),
+    lineHeight: z.number(),
+    letterSpacing: z.string().nullable(),
+    maxWidth: z.string().nullable(),
+  }).optional(),
+  prompt: z.object({
+    system_prompt: z.string(),
+    first_message_de: z.string(),
+    first_message_en: z.string(),
+  }).optional(),
 });
 export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
 
