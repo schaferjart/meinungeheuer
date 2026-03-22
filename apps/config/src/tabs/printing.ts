@@ -174,6 +174,7 @@ function deepMerge<T extends object>(defaults: T, overrides: Partial<T>): T {
 function buildTemplateSection(
   rc: RenderConfig,
   rendererUrl: string,
+  renderApiKey: string,
   onSave: (patch: Partial<RenderConfig>) => Promise<void>
 ): HTMLElement {
   const { section, body } = createSection('Card Template');
@@ -262,9 +263,11 @@ function buildTemplateSection(
           : acidCfg;
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (renderApiKey) headers['X-Api-Key'] = renderApiKey;
       const res = await fetch(`${rendererUrl}/render/dictionary`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           word: 'BEISPIEL',
           definition:
@@ -632,7 +635,7 @@ function buildPortraitSection(
 
 // ── Section 4: Print Composer ─────────────────────────────────────────────────
 
-function buildComposerSection(rendererUrl: string): HTMLElement {
+function buildComposerSection(rendererUrl: string, renderApiKey: string): HTMLElement {
   const { section, body } = createSection('Print Composer', true);
 
   const status = makeStatusEl();
@@ -798,8 +801,11 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
       fd.append('direction', direction);
       fd.append('count', String(sliceCount));
 
+      const sliceHeaders: Record<string, string> = {};
+      if (renderApiKey) sliceHeaders['X-Api-Key'] = renderApiKey;
       const res = await fetch(`${rendererUrl}/render/slice`, {
         method: 'POST',
+        headers: sliceHeaders,
         body: fd,
       });
 
@@ -1062,6 +1068,19 @@ export function render(container: HTMLElement): void {
 
     const rendererUrl = install.print_renderer_url ?? 'http://localhost:8000';
 
+    // Fetch render API key from secrets (authenticated user can read it)
+    let renderApiKey = '';
+    try {
+      const { data: secretsData } = await supabase
+        .from('secrets')
+        .select('render_api_key')
+        .eq('id', true)
+        .single();
+      renderApiKey = secretsData?.render_api_key ?? '';
+    } catch {
+      // Secrets may not be accessible, continue without API key
+    }
+
     // ── Save handlers ──────────────────────────────────────────────────────────
 
     async function saveRenderConfig(patch: Partial<RenderConfig>): Promise<void> {
@@ -1107,10 +1126,10 @@ export function render(container: HTMLElement): void {
     container.innerHTML = '';
     container.appendChild(globalStatus.el);
 
-    container.appendChild(buildTemplateSection(rc, rendererUrl, saveRenderConfig));
+    container.appendChild(buildTemplateSection(rc, rendererUrl, renderApiKey, saveRenderConfig));
     container.appendChild(buildDitheringSection(rc, saveHalftone));
     container.appendChild(buildPortraitSection(rc, install, savePortrait));
-    container.appendChild(buildComposerSection(rendererUrl));
+    container.appendChild(buildComposerSection(rendererUrl, renderApiKey));
     container.appendChild(buildTestPrintingSection());
   }
 
