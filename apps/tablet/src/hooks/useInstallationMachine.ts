@@ -18,6 +18,8 @@ export interface InstallationState {
   conversationId: string | null;
   language: 'de' | 'en';
   stages: StageConfig;
+  /** GDPR voice-clone consent given by the visitor. null = not yet asked. */
+  voiceCloneConsent: boolean | null;
 }
 
 const initialState: InstallationState = {
@@ -31,6 +33,7 @@ const initialState: InstallationState = {
   conversationId: null,
   language: 'de',
   stages: { textReading: true, termPrompt: false, portrait: true, printing: true },
+  voiceCloneConsent: null,
 };
 
 // ============================================================
@@ -40,6 +43,8 @@ const initialState: InstallationState = {
 export type InstallationAction =
   | { type: 'WAKE' }
   | { type: 'TIMER_3S' }
+  | { type: 'CONSENT_ACCEPTED' }
+  | { type: 'CONSENT_DECLINED' }
   | { type: 'READY' }
   | { type: 'TIMER_2S' }
   | { type: 'DEFINITION_RECEIVED'; definition: Definition }
@@ -89,6 +94,8 @@ function installationReducer(
         parentSessionId: state.parentSessionId,
         stages: state.stages,
         language: state.language,
+        // Consent is per-visitor — always reset to null
+        voiceCloneConsent: null,
       };
 
     // --- State transitions ---
@@ -99,6 +106,10 @@ function installationReducer(
 
     case 'TIMER_3S': {
       if (state.screen !== 'welcome') return state;
+      // Consent gate: voice clone programs require explicit GDPR consent first
+      if (state.stages.consentRequired) {
+        return { ...state, screen: 'consent' };
+      }
       // Stage-driven routing: textReading → text_display, termPrompt → term_prompt, else → conversation
       if (state.stages.textReading) {
         return { ...state, screen: 'text_display' };
@@ -107,6 +118,29 @@ function installationReducer(
         return { ...state, screen: 'term_prompt' };
       }
       return { ...state, screen: 'conversation' };
+    }
+
+    case 'CONSENT_ACCEPTED': {
+      if (state.screen !== 'consent') return state;
+      const next = { ...state, voiceCloneConsent: true };
+      console.log('[Machine] Voice clone consent accepted');
+      // After consent: follow normal stage routing
+      if (next.stages.textReading) {
+        return { ...next, screen: 'text_display' };
+      }
+      if (next.stages.termPrompt) {
+        return { ...next, screen: 'term_prompt' };
+      }
+      return { ...next, screen: 'conversation' };
+    }
+
+    case 'CONSENT_DECLINED': {
+      if (state.screen !== 'consent') return state;
+      console.log('[Machine] Voice clone consent declined');
+      // Declined: proceed to conversation but flag consent as false.
+      // The voice chain program will still run but the audio should not be
+      // submitted for voice cloning (handled in App.tsx submitVoiceChainData gate).
+      return { ...state, voiceCloneConsent: false, screen: 'conversation' };
     }
 
     case 'READY': {

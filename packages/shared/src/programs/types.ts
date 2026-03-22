@@ -14,6 +14,11 @@ export interface StageConfig {
   portrait: boolean;
   /** Whether the result is printed on a thermal card. */
   printing: boolean;
+  /**
+   * Whether a GDPR consent screen is shown before the conversation.
+   * Required for any program that records or clones the visitor's voice.
+   */
+  consentRequired?: boolean;
 }
 
 // ============================================================

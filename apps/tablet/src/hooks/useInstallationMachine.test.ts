@@ -28,6 +28,7 @@ const initialState: InstallationState = {
   conversationId: null,
   language: 'de',
   stages: { textReading: true, termPrompt: false, portrait: true, printing: true },
+  voiceCloneConsent: null,
 };
 
 function reducer(state: InstallationState, action: InstallationAction): InstallationState {
@@ -375,6 +376,7 @@ describe('useInstallationMachine reducer', () => {
         conversationId: 'conv-123',
         language: 'en',
         stages: { textReading: true, termPrompt: true, portrait: true, printing: true },
+        voiceCloneConsent: true,
       };
       const next = reducer(dirty, { type: 'RESET' });
       expect(next).toEqual(initialState);

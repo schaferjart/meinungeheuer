@@ -16,6 +16,7 @@ export type Role = z.infer<typeof RoleSchema>;
 export const StateNameSchema = z.enum([
   'sleep',
   'welcome',
+  'consent',
   'text_display',
   'term_prompt',
   'conversation',
