@@ -761,7 +761,7 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
   printBtn.type = 'button';
   printBtn.textContent = 'Print';
   printBtn.style.cssText =
-    'padding:7px 16px;background:#ffffff;color:#fff;border:none;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-right:8px;margin-bottom:8px;';
+    'padding:7px 16px;background:#ffffff;color:#000000;border:none;border-radius:5px;font-size:13px;font-family:system-ui,sans-serif;cursor:pointer;margin-right:8px;margin-bottom:8px;';
   printBtn.addEventListener('click', () => {
     void handlePrint();
   });
