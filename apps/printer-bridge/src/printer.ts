@@ -36,59 +36,91 @@ export async function renderAndPrint(
     return;
   }
 
-  // Step 1: Call render-api to get PNG
-  const renderBody = {
-    word: payload.term,
-    definition: payload.definition_text,
-    citations: payload.citations,
-    template: payload.template ?? 'dictionary',
-  };
+  // Step 1: Try cloud render-api, fall back to legacy POS server rendering
+  let imageBlob: Blob | null = null;
 
-  const renderHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (renderApiKey) {
-    renderHeaders['X-Api-Key'] = renderApiKey;
+  try {
+    const renderBody = {
+      word: payload.term,
+      definition: payload.definition_text,
+      citations: payload.citations,
+      template: payload.template ?? 'dictionary',
+    };
+
+    const renderHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (renderApiKey) {
+      renderHeaders['X-Api-Key'] = renderApiKey;
+    }
+
+    const renderRes = await fetch(`${rendererUrl.replace(/\/+$/, '')}/render/dictionary`, {
+      method: 'POST',
+      headers: renderHeaders,
+      body: JSON.stringify(renderBody),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!renderRes.ok) {
+      throw new Error(`Render API ${renderRes.status}`);
+    }
+
+    imageBlob = await renderRes.blob();
+  } catch (err) {
+    console.warn(`[printer] Render API unavailable (${err instanceof Error ? err.message : err}), falling back to legacy POS rendering`);
   }
 
-  const renderRes = await fetch(`${rendererUrl.replace(/\/+$/, '')}/render/dictionary`, {
-    method: 'POST',
-    headers: renderHeaders,
-    body: JSON.stringify(renderBody),
-    signal: AbortSignal.timeout(15_000),
-  });
+  if (imageBlob) {
+    // New flow: send pre-rendered PNG to /print/image
+    const printUrl = `${posServerUrl.replace(/\/+$/, '')}/print/image`;
 
-  if (!renderRes.ok) {
-    const text = await renderRes.text().catch(() => '');
-    throw new Error(`Render API error: ${renderRes.status} ${text}`);
-  }
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const form = new FormData();
+        form.append('file', imageBlob, 'card.png');
 
-  const imageBlob = await renderRes.blob();
+        const printRes = await fetch(printUrl, {
+          method: 'POST',
+          body: form,
+          signal: AbortSignal.timeout(10_000),
+        });
 
-  // Step 2: Send PNG to POS server
-  const printUrl = `${posServerUrl.replace(/\/+$/, '')}/print/image`;
+        if (!printRes.ok) {
+          const text = await printRes.text().catch(() => '');
+          throw new Error(`POS server responded ${printRes.status}: ${text}`);
+        }
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const form = new FormData();
-      form.append('file', imageBlob, 'card.png');
-
-      const printRes = await fetch(printUrl, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(10_000),
-      });
-
-      if (!printRes.ok) {
-        const text = await printRes.text().catch(() => '');
-        throw new Error(`POS server responded ${printRes.status}: ${text}`);
+        return;
+      } catch (err) {
+        if (attempt === 1) {
+          console.warn(`[printer] First attempt failed, retrying… (${err instanceof Error ? err.message : err})`);
+          continue;
+        }
+        throw err;
       }
+    }
+  } else {
+    // Legacy fallback: send JSON to POS server's /print/dictionary (it renders text itself)
+    const legacyUrl = `${posServerUrl.replace(/\/+$/, '')}/print/dictionary`;
+    const legacyBody = {
+      word: payload.term,
+      definition: payload.definition_text,
+      citations: payload.citations,
+      template: payload.template ?? 'dictionary',
+      timestamp: payload.timestamp,
+      session_number: payload.session_number,
+      chain_ref: payload.chain_ref,
+      language: payload.language,
+    };
 
-      return;
-    } catch (err) {
-      if (attempt === 1) {
-        console.warn(`[printer] First attempt failed, retrying… (${err instanceof Error ? err.message : err})`);
-        continue;
-      }
-      throw err;
+    const res = await fetch(legacyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(legacyBody),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`Legacy POS server responded ${res.status}: ${text}`);
     }
   }
 }
