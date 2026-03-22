@@ -42,6 +42,19 @@ importers:
         specifier: ^3.0.5
         version: 3.2.4(@types/node@22.19.11)(happy-dom@20.8.3)(jiti@2.6.1)(jsdom@28.1.0)(lightningcss@1.31.1)(tsx@4.21.0)
 
+  apps/config:
+    dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.49.4
+        version: 2.97.0
+    devDependencies:
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+      vite:
+        specifier: ^6.3.1
+        version: 6.4.1(@types/node@22.19.11)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)
+
   apps/printer-bridge:
     dependencies:
       '@meinungeheuer/shared':
