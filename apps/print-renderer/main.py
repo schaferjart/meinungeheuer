@@ -16,7 +16,7 @@ import json
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, UploadFile, File, HTTPException, Header, Depends
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -191,19 +191,19 @@ def _get_supabase():
 # ── Slice rendering ──────────────────────────────────────
 
 @app.post("/render/slice", dependencies=[Depends(verify_api_key)])
-async def render_slice(
+def render_slice(
     file: UploadFile = File(...),
-    direction: str = "vertical",
-    count: int = 10,
-    labels: str = "[]",
-    label_position: str = "above",
-    dither_mode: str | None = None,
-    paper_px: int | None = None,
+    direction: str = Form("vertical"),
+    count: int = Form(10),
+    labels: str = Form("[]"),
+    label_position: str = Form("above"),
+    dither_mode: str | None = Form(None),
+    paper_px: int | None = Form(None),
 ):
     """Slice an image into strips, optionally dither, add labels, return as base64 PNGs."""
     from PIL import Image, ImageDraw, ImageFont
 
-    image_bytes = await file.read()
+    image_bytes = file.file.read()
     img = open_image(image_bytes)
     w, h = img.size
 
