@@ -1,0 +1,18 @@
+[Unit]
+Description=MeinUngeheuer Printer Bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=skander
+WorkingDirectory=/home/skander/meinungeheuer/apps/printer-bridge
+ExecStart=/usr/bin/npx tsx src/index.ts
+EnvironmentFile=/home/skander/meinungeheuer/apps/printer-bridge/.env
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
