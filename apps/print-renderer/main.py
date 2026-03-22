@@ -23,6 +23,8 @@ from pydantic import BaseModel
 load_dotenv()
 
 from supabase_config import get_render_config, get_active_template, get_paper_px
+from helpers import open_image
+from dithering import _prepare, _apply_blur, dither_image
 
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
 
@@ -184,6 +186,110 @@ def _get_supabase():
         from supabase import create_client
         _supabase = create_client(url, key)
     return _supabase
+
+
+# ── Slice rendering ──────────────────────────────────────
+
+@app.post("/render/slice", dependencies=[Depends(verify_api_key)])
+async def render_slice(
+    file: UploadFile = File(...),
+    direction: str = "vertical",
+    count: int = 10,
+    labels: str = "[]",
+    label_position: str = "above",
+    dither_mode: str | None = None,
+    paper_px: int | None = None,
+):
+    """Slice an image into strips, optionally dither, add labels, return as base64 PNGs."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    image_bytes = await file.read()
+    img = open_image(image_bytes)
+    w, h = img.size
+
+    config = get_render_config(_CONFIG_PATH)
+    _paper_px = paper_px or get_paper_px(config)
+    _dither_mode = dither_mode or config.get("halftone", {}).get("mode", "floyd")
+    halftone_cfg = config.get("halftone", {})
+
+    label_list = json.loads(labels)
+
+    # Slice
+    strips = []
+    if direction == "vertical":
+        strip_w = w // count
+        for i in range(count):
+            x0 = i * strip_w
+            x1 = w if i == count - 1 else (i + 1) * strip_w
+            strip = img.crop((x0, 0, x1, h))
+            ratio = _paper_px / strip.size[0]
+            strip = strip.resize((_paper_px, int(strip.size[1] * ratio)), Image.LANCZOS)
+            strips.append(strip)
+    else:
+        ratio = _paper_px / w
+        img = img.resize((_paper_px, int(h * ratio)), Image.LANCZOS)
+        w, h = img.size
+        strip_h = h // count
+        for i in range(count):
+            y0 = i * strip_h
+            y1 = h if i == count - 1 else (i + 1) * strip_h
+            strips.append(img.crop((0, y0, w, y1)))
+
+    # Dither + label each strip
+    results = []
+    for i, strip in enumerate(strips):
+        # Dither
+        contrast = halftone_cfg.get("contrast", 1.3)
+        brightness = halftone_cfg.get("brightness", 1.0)
+        sharpness = halftone_cfg.get("sharpness", 1.2)
+        blur = halftone_cfg.get("blur", 0)
+
+        grey = _prepare(strip, _paper_px, contrast, brightness, sharpness)
+        if blur:
+            grey = _apply_blur(grey, blur)
+        dithered = dither_image(grey, _dither_mode)
+
+        # Convert to RGB for labeling
+        labeled = dithered.convert("RGB")
+
+        # Add label if provided
+        label = label_list[i] if i < len(label_list) else ""
+        if label:
+            draw = ImageDraw.Draw(labeled)
+            try:
+                font = ImageFont.truetype("fonts/DejaVuSans.ttf", 16)
+            except Exception:
+                font = ImageFont.load_default()
+            bbox = draw.textbbox((0, 0), label, font=font)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            x = (_paper_px - tw) // 2
+            if label_position == "above":
+                # Prepend label area
+                new_img = Image.new("RGB", (_paper_px, labeled.size[1] + th + 10), (255, 255, 255))
+                draw2 = ImageDraw.Draw(new_img)
+                draw2.text((x, 2), label, fill=(0, 0, 0), font=font)
+                new_img.paste(labeled, (0, th + 10))
+                labeled = new_img
+            else:
+                # Append label area
+                new_img = Image.new("RGB", (_paper_px, labeled.size[1] + th + 10), (255, 255, 255))
+                new_img.paste(labeled, (0, 0))
+                draw2 = ImageDraw.Draw(new_img)
+                draw2.text((x, labeled.size[1] + 2), label, fill=(0, 0, 0), font=font)
+                labeled = new_img
+
+        # Encode as base64 PNG
+        buf = io.BytesIO()
+        labeled.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        results.append({
+            "name": f"slice_{i}",
+            "label": label,
+            "image_b64": b64,
+        })
+
+    return {"slices": results, "count": len(results), "direction": direction}
 
 
 # ── Health ────────────────────────────────────────────────
