@@ -179,12 +179,16 @@ CREATE TABLE render_config (
     "line_spacing": 1.4, "gap_after_word": 30, "gap_before_cite": 20, "margin": 20
   }'::jsonb,
 
+  -- NOTE: Helvetica Neue is macOS-only. The Docker image (Linux) needs a bundled
+  -- alternative. Implementation task: bundle a Helvetica-like font in fonts/ or
+  -- use DejaVu Sans as the Linux fallback. The defaults below use DejaVuSans as
+  -- a safe cross-platform fallback. Operators on macOS can override via config page.
   helv_config     jsonb NOT NULL DEFAULT '{
-    "font_word": "/System/Library/Fonts/HelveticaNeue.ttc", "font_word_index": 1,
-    "font_body": "/System/Library/Fonts/HelveticaNeue.ttc", "font_body_index": 7,
-    "font_bold": "/System/Library/Fonts/HelveticaNeue.ttc", "font_bold_index": 1,
-    "font_cite": "/System/Library/Fonts/HelveticaNeue.ttc", "font_cite_index": 12,
-    "font_date": "/System/Library/Fonts/HelveticaNeue.ttc", "font_date_index": 5,
+    "font_word": "fonts/DejaVuSans-Bold.ttf",
+    "font_body": "fonts/DejaVuSans.ttf",
+    "font_bold": "fonts/DejaVuSans-Bold.ttf",
+    "font_cite": "fonts/DejaVuSans.ttf",
+    "font_date": "fonts/DejaVuSans.ttf",
     "size_word": 36, "size_body": 22, "size_cite": 19, "size_date": 17,
     "line_spacing": 1.5, "gap_after_word": 29, "gap_before_cite": 19, "margin": 24
   }'::jsonb,
@@ -205,9 +209,12 @@ CREATE TABLE render_config (
   }'::jsonb,
 
   -- Portrait pipeline config
+  -- NOTE: style_prompt is seeded in the migration via a DO $$ block with
+  -- dollar-quoting (it's ~185 lines). The default here is a placeholder;
+  -- the INSERT seed row overrides it with the full prompt from config.yaml.
   portrait_config jsonb NOT NULL DEFAULT '{
     "selection_model": "google/gemini-3.1-flash-image-preview",
-    "style_prompt": null,
+    "style_prompt": "Transform this portrait into a monochrome wax sculpture.",
     "dither_mode": "bayer", "blur": 10,
     "z0_pad_top": 0.3, "z0_pad_bottom": 0.8, "z0_aspect": 0.67,
     "z1_pad_top": 0.15, "z1_pad_bottom": 0.15,
@@ -627,11 +634,11 @@ One Supabase migration creates the new tables and extends `installation_config`:
 1. `UPDATE installation_config SET id = '00000000-0000-0000-0000-000000000000'` (normalize existing row's id)
 2. `ALTER TABLE installation_config ADD CONSTRAINT single_row CHECK (id = '00000000-0000-0000-0000-000000000000')`
 3. `ALTER TABLE installation_config ADD COLUMN ...` for all new columns with defaults
-3. `CREATE TABLE secrets` with single seed row (empty — keys entered via config page)
-4. `CREATE TABLE render_config` with single seed row (all defaults match current `config.yaml` values exactly)
-5. `CREATE TABLE prompts` with 3 seed rows — system prompt templates extracted from `aphorism.ts`, `free-association.ts`, `voice-chain.ts` with runtime values replaced by `{{placeholders}}`
-6. `CREATE OR REPLACE FUNCTION update_timestamp()` + triggers on all config tables
-7. Updated RLS policies: anon reads non-secret tables, authenticated reads/writes all tables
+4. `CREATE TABLE secrets` with single seed row (empty — keys entered via config page)
+5. `CREATE TABLE render_config` with single seed row — JSONB defaults from config.yaml. The `portrait_config.style_prompt` is seeded with the full 185-line prompt via `DO $$ ... $$` dollar-quoting (no null window).
+6. `CREATE TABLE prompts` with 3 seed rows — system prompt templates extracted from `aphorism.ts`, `free-association.ts`, `voice-chain.ts` with runtime values replaced by `{{placeholders}}`
+7. `CREATE OR REPLACE FUNCTION update_timestamp()` + triggers on all config tables
+8. Updated RLS policies: anon reads non-secret tables, authenticated reads/writes all tables
 
 The seed values ensure the installation works identically to today with zero manual configuration. Every new column/JSONB default matches the current hardcoded value.
 
@@ -644,12 +651,11 @@ The seed values ensure the installation works identically to today with zero man
 The config page depends on the print-renderer being deployed and the migration being applied. Strict order:
 
 1. **Deploy print-renderer** to cloud (Coolify/Railway) — already built, needs first deploy
-2. **Apply Supabase migration** — creates tables, extends schema, updates RLS
+2. **Apply Supabase migration** — creates tables, extends schema, seeds all config including full style prompt, updates RLS
 3. **Create admin user** in Supabase Auth dashboard (email + password)
 4. **Deploy config page** (`apps/config/` build output) — static files to any host
 5. **Update tablet/backend** — code changes to read config from Supabase instead of constants
-6. **Seed style prompt** — paste the full portrait style prompt into `render_config.portrait_config` via the config page (it's ~185 lines, too large for a SQL default literal)
-7. **Verify** — use the config page to confirm all settings match current behavior, send a test print
+6. **Verify** — use the config page to confirm all settings match current behavior, send a test print
 
 Steps 1–3 can happen without breaking anything (new tables, no code depends on them yet). Step 5 is the breaking change — deploy tablet/backend together.
 
