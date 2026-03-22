@@ -20,6 +20,7 @@
       --surface: #0a0a0a;
       --surface2: #141414;
       --border: #2a2a2a;
+      --border2: #333333;
       --text: #e0e0e0;
       --text-muted: #777777;
       --accent: #ffffff;
@@ -64,7 +65,49 @@
       font-weight: 600;
       letter-spacing: 0.04em;
       color: var(--text);
+      white-space: nowrap;
+    }
+
+    /* ── Mode bar ── */
+    #mode-bar {
+      display: flex;
+      align-items: stretch;
       flex: 1;
+      gap: 0;
+      padding: 0 16px;
+    }
+
+    .mode-btn {
+      padding: 6px 18px;
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: var(--font);
+      font-weight: 500;
+      letter-spacing: 0.03em;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+      white-space: nowrap;
+    }
+
+    .mode-btn:hover {
+      color: var(--text);
+    }
+
+    .mode-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Header right ── */
+    #header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
     }
 
     #connection-status {
@@ -93,6 +136,24 @@
     .conn-dot .dot.disconnected { background: var(--danger); }
     .conn-dot .dot.checking { background: var(--warning); }
 
+    #system-btn {
+      padding: 5px 12px;
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 13px;
+      font-family: var(--font);
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    #system-btn:hover,
+    #system-btn.active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
     #logout-btn {
       padding: 5px 14px;
       background: transparent;
@@ -108,40 +169,6 @@
     #logout-btn:hover {
       border-color: var(--danger);
       color: var(--danger);
-    }
-
-    /* ── Tab bar ── */
-    #tab-bar {
-      display: flex;
-      align-items: stretch;
-      padding: 0 24px;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
-    .tab-btn {
-      padding: 10px 20px;
-      background: transparent;
-      color: var(--text-muted);
-      border: none;
-      border-bottom: 2px solid transparent;
-      cursor: pointer;
-      font-size: 13px;
-      font-family: var(--font);
-      font-weight: 500;
-      letter-spacing: 0.03em;
-      transition: color 0.15s, border-color 0.15s;
-      margin-bottom: -1px;
-    }
-
-    .tab-btn:hover {
-      color: var(--text);
-    }
-
-    .tab-btn.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
     }
 
     /* ── Main content ── */
@@ -242,7 +269,7 @@
       margin-top: 8px;
       padding: 10px;
       background: var(--accent);
-      color: #fff;
+      color: #000000;
       border: none;
       border-radius: var(--radius);
       font-size: 14px;
@@ -273,31 +300,33 @@
     <!-- Header -->
     <header id="header">
       <h1>MeinUngeheuer Control</h1>
-      <div id="connection-status">
-        <span class="conn-dot" id="dot-supabase">
-          <span class="dot checking"></span>
-          Supabase
-        </span>
-        <span class="conn-dot" id="dot-pos">
-          <span class="dot checking"></span>
-          POS
-        </span>
-        <span class="conn-dot" id="dot-renderer">
-          <span class="dot checking"></span>
-          Renderer
-        </span>
-      </div>
-      <button id="logout-btn" type="button">Logout</button>
-    </header>
 
-    <!-- Tab bar -->
-    <nav id="tab-bar">
-      <button class="tab-btn active" data-tab="installation" type="button">Installation</button>
-      <button class="tab-btn" data-tab="conversation" type="button">Conversation</button>
-      <button class="tab-btn" data-tab="printing" type="button">Printing</button>
-      <button class="tab-btn" data-tab="tools" type="button">Tools</button>
-      <button class="tab-btn" data-tab="system" type="button">System</button>
-    </nav>
+      <!-- Mode switcher -->
+      <nav id="mode-bar">
+        <button class="mode-btn active" data-mode="programs" type="button">Programs</button>
+        <button class="mode-btn" data-mode="workbench" type="button">Workbench</button>
+      </nav>
+
+      <!-- Right side -->
+      <div id="header-right">
+        <div id="connection-status">
+          <span class="conn-dot" id="dot-supabase">
+            <span class="dot checking"></span>
+            Supabase
+          </span>
+          <span class="conn-dot" id="dot-pos">
+            <span class="dot checking"></span>
+            POS
+          </span>
+          <span class="conn-dot" id="dot-renderer">
+            <span class="dot checking"></span>
+            Renderer
+          </span>
+        </div>
+        <button id="system-btn" type="button">System</button>
+        <button id="logout-btn" type="button">Logout</button>
+      </div>
+    </header>
 
     <!-- Main content -->
     <main id="content"></main>
