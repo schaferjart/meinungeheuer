@@ -52,6 +52,7 @@ export const voiceChainProgram: ConversationProgram = {
     termPrompt: false,
     portrait: true,
     printing: true,
+    consentRequired: true,
   },
   printLayout: 'dictionary',
   resultDisplay: 'aphorism',

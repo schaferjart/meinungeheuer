@@ -38,6 +38,7 @@ import { Admin } from './pages/Admin';
 
 import { SleepScreen } from './components/screens/SleepScreen';
 import { WelcomeScreen } from './components/screens/WelcomeScreen';
+import { ConsentScreen } from './components/screens/ConsentScreen';
 import { TextDisplayScreen } from './components/screens/TextDisplayScreen';
 import { TermPromptScreen } from './components/screens/TermPromptScreen';
 import { ConversationScreen } from './components/screens/ConversationScreen';
@@ -237,10 +238,16 @@ function InstallationApp() {
       // Persist transcript to Supabase
       void persistTranscript(conversationIdRef.current, transcriptRef.current);
 
-      // Voice chain: stop recording and submit captured data to backend
+      // Voice chain: stop recording and submit captured data to backend.
+      // Only submit if the visitor explicitly consented to voice cloning.
       if (programRef.current.id === 'voice_chain') {
         void (async () => {
           const audioBlob = await stopRecording();
+
+          if (state.voiceCloneConsent === false) {
+            console.log('[App] Voice clone consent was declined — skipping audio submission');
+            return;
+          }
 
           // Only submit audio large enough to clone (>50KB = ~5s of speech)
           if (audioBlob && audioBlob.size > 50_000) {
@@ -271,7 +278,7 @@ function InstallationApp() {
         setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
       }
     },
-    [dispatch, state.screen, state.definition, state.sessionId, term, language, stopRecording],
+    [dispatch, state.screen, state.definition, state.sessionId, state.voiceCloneConsent, term, language, stopRecording],
   );
 
   const voiceChain = voiceChainRef.current;
@@ -414,6 +421,9 @@ function InstallationApp() {
 
       case 'welcome':
         return <WelcomeScreen dispatch={dispatch} language={language} />;
+
+      case 'consent':
+        return <ConsentScreen dispatch={dispatch} language={language} />;
 
       case 'text_display':
         return (
