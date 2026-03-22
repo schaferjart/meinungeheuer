@@ -9,9 +9,14 @@ ARG VITE_SUPABASE_ANON_KEY
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
-# Install dependencies
+# Copy all package.json files for install (pnpm needs workspace structure)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/karaoke-reader/package.json packages/karaoke-reader/
 COPY apps/config/package.json apps/config/
+COPY apps/tablet/package.json apps/tablet/
+COPY apps/backend/package.json apps/backend/
+COPY apps/printer-bridge/package.json apps/printer-bridge/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build
