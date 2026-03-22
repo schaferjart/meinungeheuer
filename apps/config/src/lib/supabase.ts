@@ -12,7 +12,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
       flex-direction:column;gap:12px;
     ">
       <strong>Configuration error</strong>
-      <span style="color:#888899;font-size:13px;">
+      <span style="color:#777777;font-size:13px;">
         VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in .env
       </span>
     </div>

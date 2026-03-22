@@ -96,7 +96,7 @@ function injectSystemStyles(): void {
       font-size: 12px;
       min-height: 18px;
       font-family: system-ui, sans-serif;
-      color: #888899;
+      color: #777777;
       margin-bottom: 12px;
     }
     .cf-password-field {
@@ -110,13 +110,13 @@ function injectSystemStyles(): void {
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: #888899;
+      color: #777777;
     }
     .cf-password-input {
       padding: 8px 10px;
-      background: #12121f;
+      background: #0a0a0a;
       color: #e0e0e0;
-      border: 1px solid #2a2a40;
+      border: 1px solid #2a2a2a;
       border-radius: 5px;
       font-size: 13px;
       font-family: system-ui, sans-serif;
@@ -126,7 +126,7 @@ function injectSystemStyles(): void {
       box-sizing: border-box;
     }
     .cf-password-input:focus {
-      border-color: #5b6cf0;
+      border-color: #ffffff;
     }
     .cf-health-row {
       display: flex;
@@ -154,15 +154,15 @@ function injectSystemStyles(): void {
       margin-bottom: 2px;
     }
     .cf-health-detail {
-      color: #888899;
+      color: #777777;
       font-size: 12px;
       line-height: 1.4;
     }
     .cf-refresh-btn {
       padding: 6px 14px;
       background: transparent;
-      color: #888899;
-      border: 1px solid #2a2a40;
+      color: #777777;
+      border: 1px solid #2a2a2a;
       border-radius: 5px;
       font-size: 12px;
       font-family: system-ui, sans-serif;
@@ -172,14 +172,14 @@ function injectSystemStyles(): void {
     }
     .cf-refresh-btn:hover {
       color: #e0e0e0;
-      border-color: #5b6cf0;
+      border-color: #ffffff;
     }
     .cf-print-jobs-title {
       font-size: 11px;
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: #888899;
+      color: #777777;
       margin-bottom: 8px;
     }
     .cf-print-job-row {
@@ -187,21 +187,21 @@ function injectSystemStyles(): void {
       align-items: center;
       gap: 10px;
       padding: 6px 0;
-      border-bottom: 1px solid #1a1a2e;
+      border-bottom: 1px solid #141414;
       font-size: 12px;
       font-family: system-ui, sans-serif;
     }
     .cf-print-job-row:last-child { border-bottom: none; }
-    .cf-pj-id   { color: #888899; font-variant-numeric: tabular-nums; width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cf-pj-id   { color: #777777; font-variant-numeric: tabular-nums; width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .cf-pj-status {
       width: 70px;
       font-weight: 600;
     }
     .cf-pj-status.pending   { color: #f5a623; }
-    .cf-pj-status.printing  { color: #5b6cf0; }
+    .cf-pj-status.printing  { color: #ffffff; }
     .cf-pj-status.done      { color: #5bba6f; }
     .cf-pj-status.failed    { color: #e05b5b; }
-    .cf-pj-time { color: #888899; flex: 1; }
+    .cf-pj-time { color: #777777; flex: 1; }
     .cf-pj-word { color: #e0e0e0; }
   `;
   document.head.appendChild(style);
@@ -239,7 +239,7 @@ function createPasswordInput(
 function makeStatusEl(): { el: HTMLElement; set: (msg: string, color?: string) => void } {
   const el = document.createElement('div');
   el.className = 'cf-status-msg';
-  function set(msg: string, color = '#888899'): void {
+  function set(msg: string, color = '#777777'): void {
     el.textContent = msg;
     el.style.color = color;
   }
@@ -297,7 +297,7 @@ export function render(container: HTMLElement): void {
   // Loading indicator
   const loadingEl = document.createElement('div');
   loadingEl.textContent = 'Loading...';
-  loadingEl.style.cssText = 'color:#888899;font-size:14px;font-family:system-ui,sans-serif;';
+  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:system-ui,sans-serif;';
   container.appendChild(loadingEl);
 
   // ── Build UI ────────────────────────────────────────────────────────────────
@@ -350,7 +350,7 @@ export function render(container: HTMLElement): void {
 
     const noteEl = document.createElement('p');
     noteEl.textContent = 'Stored in the secrets table (authenticated access only). Values are write-only once saved.';
-    noteEl.style.cssText = 'font-size:12px;color:#888899;margin-bottom:14px;line-height:1.5;font-family:system-ui,sans-serif;';
+    noteEl.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:system-ui,sans-serif;';
     body2.appendChild(noteEl);
 
     body2.appendChild(
@@ -443,7 +443,7 @@ export function render(container: HTMLElement): void {
 
     const displayNote = document.createElement('p');
     displayNote.textContent = 'Controls karaoke text reader appearance on the tablet.';
-    displayNote.style.cssText = 'font-size:12px;color:#888899;margin-bottom:14px;line-height:1.5;font-family:system-ui,sans-serif;';
+    displayNote.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:system-ui,sans-serif;';
     body4.appendChild(displayNote);
 
     body4.appendChild(
@@ -626,7 +626,7 @@ export function render(container: HTMLElement): void {
 
     if (!data || data.length === 0) {
       const emptyEl = document.createElement('div');
-      emptyEl.style.cssText = 'font-size:12px;color:#888899;font-family:system-ui,sans-serif;';
+      emptyEl.style.cssText = 'font-size:12px;color:#777777;font-family:system-ui,sans-serif;';
       emptyEl.textContent = 'No print jobs found.';
       container.appendChild(emptyEl);
       return;
@@ -675,7 +675,7 @@ export function render(container: HTMLElement): void {
   ): Promise<void> {
     const btnEl = btn as HTMLButtonElement;
     btnEl.disabled = true;
-    setStatus('Saving...', '#888899');
+    setStatus('Saving...', '#777777');
 
     const payload = {
       backend_url: urlForm.backend_url || null,
@@ -707,7 +707,7 @@ export function render(container: HTMLElement): void {
   ): Promise<void> {
     const btnEl = btn as HTMLButtonElement;
     btnEl.disabled = true;
-    setStatus('Saving...', '#888899');
+    setStatus('Saving...', '#777777');
 
     // Only include fields that have a non-empty value to avoid overwriting with blanks
     const payload: Partial<Secrets> = {};
@@ -739,7 +739,7 @@ export function render(container: HTMLElement): void {
   ): Promise<void> {
     const btnEl = btn as HTMLButtonElement;
     btnEl.disabled = true;
-    setStatus('Saving...', '#888899');
+    setStatus('Saving...', '#777777');
 
     const payload = {
       display_highlight_color: displayForm.display_highlight_color,

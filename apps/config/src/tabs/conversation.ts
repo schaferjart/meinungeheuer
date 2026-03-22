@@ -113,9 +113,9 @@ export function render(container: HTMLElement): void {
   // Status elements
   const configStatusEl = document.createElement('div');
   configStatusEl.style.cssText =
-    'font-size:12px;margin-bottom:12px;min-height:18px;font-family:system-ui,sans-serif;color:#888899;';
+    'font-size:12px;margin-bottom:12px;min-height:18px;font-family:system-ui,sans-serif;color:#777777;';
 
-  function setConfigStatus(msg: string, color = '#888899'): void {
+  function setConfigStatus(msg: string, color = '#777777'): void {
     configStatusEl.textContent = msg;
     configStatusEl.style.color = color;
   }
@@ -123,7 +123,7 @@ export function render(container: HTMLElement): void {
   // Loading placeholder
   const loadingEl = document.createElement('div');
   loadingEl.textContent = 'Loading...';
-  loadingEl.style.cssText = 'color:#888899;font-size:14px;font-family:system-ui,sans-serif;';
+  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:system-ui,sans-serif;';
   container.appendChild(loadingEl);
 
   // ── Helper: create sub-heading ─────────────────────────────────────────────
@@ -133,7 +133,7 @@ export function render(container: HTMLElement): void {
     el.textContent = text;
     el.style.cssText =
       'font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;' +
-      'color:#5b6cf0;margin:0 0 12px 0;font-family:system-ui,sans-serif;';
+      'color:#ffffff;margin:0 0 12px 0;font-family:system-ui,sans-serif;';
     return el;
   }
 
@@ -141,7 +141,7 @@ export function render(container: HTMLElement): void {
 
   function makeDivider(): HTMLElement {
     const el = document.createElement('div');
-    el.style.cssText = 'border-top:1px solid #2a2a40;margin:16px 0;';
+    el.style.cssText = 'border-top:1px solid #2a2a2a;margin:16px 0;';
     return el;
   }
 
@@ -151,7 +151,7 @@ export function render(container: HTMLElement): void {
     const el = document.createElement('p');
     el.textContent = text;
     el.style.cssText =
-      'font-size:11px;color:#888899;margin:0 0 10px 0;line-height:1.5;font-family:system-ui,sans-serif;';
+      'font-size:11px;color:#777777;margin:0 0 10px 0;line-height:1.5;font-family:system-ui,sans-serif;';
     return el;
   }
 
@@ -160,7 +160,7 @@ export function render(container: HTMLElement): void {
   function makePromptStatusEl(): HTMLElement {
     const el = document.createElement('div');
     el.style.cssText =
-      'font-size:12px;min-height:16px;margin-bottom:8px;font-family:system-ui,sans-serif;color:#888899;';
+      'font-size:12px;min-height:16px;margin-bottom:8px;font-family:system-ui,sans-serif;color:#777777;';
     return el;
   }
 
@@ -403,7 +403,7 @@ export function render(container: HTMLElement): void {
     const btnEl = btn as HTMLButtonElement;
     btnEl.disabled = true;
     statusEl.textContent = 'Saving...';
-    statusEl.style.color = '#888899';
+    statusEl.style.color = '#777777';
 
     const row = promptsByProgram[program];
     const { error } = await supabase.from('prompts').upsert({
@@ -430,7 +430,7 @@ export function render(container: HTMLElement): void {
   async function handleSaveConfig(btn: HTMLElement): Promise<void> {
     const btnEl = btn as HTMLButtonElement;
     btnEl.disabled = true;
-    setConfigStatus('Saving...', '#888899');
+    setConfigStatus('Saving...', '#777777');
 
     const payload: ConversationConfig = {
       elevenlabs_agent_id: form.elevenlabs_agent_id || null,
