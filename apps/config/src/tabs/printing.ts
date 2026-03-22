@@ -840,8 +840,8 @@ function buildComposerSection(rendererUrl: string): HTMLElement {
       });
 
       const { error } = await supabase.from('print_queue').insert({
-        type: 'composer',
         payload: {
+          type: 'composer',
           image: dataUrl,
           direction,
           slice_count: sliceCount,
@@ -918,12 +918,15 @@ function buildTestPrintingSection(): HTMLElement {
     status.set('Queueing test card...', '#777777');
 
     const { error } = await supabase.from('print_queue').insert({
-      type: 'definition',
       payload: {
-        word: 'TEST',
-        definition: 'A test card generated from the config app.',
+        term: 'TEST',
+        definition_text: 'A test card generated from the config app.',
         citations: ['MeinUngeheuer Config, 2026'],
         language: 'en',
+        session_number: 0,
+        chain_ref: null,
+        timestamp: new Date().toISOString(),
+        template: 'dictionary',
       },
       status: 'pending',
     });
@@ -956,8 +959,7 @@ function buildTestPrintingSection(): HTMLElement {
       });
 
       const { error } = await supabase.from('print_queue').insert({
-        type: 'image',
-        payload: { image: dataUrl },
+        payload: { type: 'image', image: dataUrl },
         status: 'pending',
       });
 
@@ -984,8 +986,7 @@ function buildTestPrintingSection(): HTMLElement {
     status.set('Queueing markdown print...', '#777777');
 
     const { error } = await supabase.from('print_queue').insert({
-      type: 'markdown',
-      payload: { text: customText },
+      payload: { type: 'markdown', text: customText },
       status: 'pending',
     });
 
