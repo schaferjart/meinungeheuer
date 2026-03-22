@@ -1,8 +1,8 @@
 # Unified Config Page — Design Spec
 
-**Goal:** A single standalone HTML file that serves as the control panel for the entire MeinUngeheuer installation. Reads and writes all configuration to Supabase. Absorbs all scattered config files, standalone HTML tools, and hardcoded constants into one operator workbench.
+**Goal:** A unified control panel for the entire MeinUngeheuer installation. Reads and writes all configuration to Supabase. Absorbs all scattered config files, standalone HTML tools, and hardcoded constants into one operator workbench.
 
-**Approach:** Standalone HTML file, no build step. Uses Supabase JS client directly. Supabase email/password auth for access control. Tabbed interface with 5 tabs covering 100+ configurable values plus interactive tools.
+**Approach:** Minimal Vite app (`apps/config/`) with vanilla TypeScript — no React, no framework. Builds to static files deployable anywhere. Supabase email/password auth for access control. Tabbed interface with 5 tabs covering 100+ configurable values plus interactive tools.
 
 **Prerequisites:** The print-renderer plan is already implemented — all rendering lives in `apps/print-renderer/` (cloud), POS server is a dumb image printer.
 
@@ -11,7 +11,7 @@
 ## Architecture
 
 ```
-Config Page (HTML)
+Config Page (apps/config/, Vite + vanilla TS)
   ├── writes to ──→ Supabase tables (installation_config, render_config, prompts, secrets)
   ├── calls ──→ Print Renderer API (previews, test prints, slicing)
   ├── pings ──→ POS Server /health (status only)
@@ -153,97 +153,71 @@ The backend uses the service role key (bypasses RLS) to read secrets and passes 
 
 Replaces `apps/print-renderer/config.yaml`. The print-renderer reads this table on each request instead of a local file.
 
-All defaults match the actual values in `apps/print-renderer/config.yaml` exactly.
+Uses **JSONB columns per section** instead of flat columns. This makes it easy to add new templates (one new JSONB column) without migrations for individual fields. The config page validates the JSON shape client-side before saving.
+
+All default JSONB values match the actual values in `apps/print-renderer/config.yaml` exactly.
 
 ```sql
 CREATE TABLE render_config (
   id              boolean PRIMARY KEY DEFAULT true CHECK (id),  -- single-row trick
   updated_at      timestamptz DEFAULT now(),
 
-  -- Active template
+  -- Active template name
   template        text NOT NULL DEFAULT 'dictionary',           -- dictionary | helvetica | acidic
 
   -- Paper
   paper_px        int NOT NULL DEFAULT 576,
 
-  -- Dictionary template (defaults from config.yaml dictionary section)
-  dict_font_word      text NOT NULL DEFAULT 'fonts/Burra-Bold.ttf',
-  dict_font_body      text NOT NULL DEFAULT 'fonts/Burra-Thin.ttf',
-  dict_font_cite      text NOT NULL DEFAULT 'fonts/Burra-Thin.ttf',
-  dict_font_date      text NOT NULL DEFAULT 'fonts/Burra-Thin.ttf',
-  dict_font_word_size int NOT NULL DEFAULT 32,
-  dict_font_body_size int NOT NULL DEFAULT 20,
-  dict_font_cite_size int NOT NULL DEFAULT 18,
-  dict_font_date_size int NOT NULL DEFAULT 16,
-  dict_line_spacing   float NOT NULL DEFAULT 1.4,
-  dict_gap_after_word int NOT NULL DEFAULT 30,
-  dict_gap_before_cite int NOT NULL DEFAULT 20,
-  dict_margin         int NOT NULL DEFAULT 20,
+  -- Template configs (JSONB, one per template)
+  -- Adding a new template = one new column, no field-level migration
+  dict_config     jsonb NOT NULL DEFAULT '{
+    "font_word": "fonts/Burra-Bold.ttf",
+    "font_body": "fonts/Burra-Thin.ttf",
+    "font_cite": "fonts/Burra-Thin.ttf",
+    "font_date": "fonts/Burra-Thin.ttf",
+    "size_word": 32, "size_body": 20, "size_cite": 18, "size_date": 16,
+    "line_spacing": 1.4, "gap_after_word": 30, "gap_before_cite": 20, "margin": 20
+  }'::jsonb,
 
-  -- Helvetica template (defaults from config.yaml helvetica section)
-  helv_font_word        text NOT NULL DEFAULT '/System/Library/Fonts/HelveticaNeue.ttc',
-  helv_font_word_index  int NOT NULL DEFAULT 1,
-  helv_font_body        text NOT NULL DEFAULT '/System/Library/Fonts/HelveticaNeue.ttc',
-  helv_font_body_index  int NOT NULL DEFAULT 7,
-  helv_font_bold        text NOT NULL DEFAULT '/System/Library/Fonts/HelveticaNeue.ttc',
-  helv_font_bold_index  int NOT NULL DEFAULT 1,
-  helv_font_cite        text NOT NULL DEFAULT '/System/Library/Fonts/HelveticaNeue.ttc',
-  helv_font_cite_index  int NOT NULL DEFAULT 12,
-  helv_font_date        text NOT NULL DEFAULT '/System/Library/Fonts/HelveticaNeue.ttc',
-  helv_font_date_index  int NOT NULL DEFAULT 5,
-  helv_font_word_size   int NOT NULL DEFAULT 36,
-  helv_font_body_size   int NOT NULL DEFAULT 22,
-  helv_font_cite_size   int NOT NULL DEFAULT 19,
-  helv_font_date_size   int NOT NULL DEFAULT 17,
-  helv_line_spacing     float NOT NULL DEFAULT 1.5,
-  helv_gap_after_word   int NOT NULL DEFAULT 29,
-  helv_gap_before_cite  int NOT NULL DEFAULT 19,
-  helv_margin           int NOT NULL DEFAULT 24,
+  helv_config     jsonb NOT NULL DEFAULT '{
+    "font_word": "/System/Library/Fonts/HelveticaNeue.ttc", "font_word_index": 1,
+    "font_body": "/System/Library/Fonts/HelveticaNeue.ttc", "font_body_index": 7,
+    "font_bold": "/System/Library/Fonts/HelveticaNeue.ttc", "font_bold_index": 1,
+    "font_cite": "/System/Library/Fonts/HelveticaNeue.ttc", "font_cite_index": 12,
+    "font_date": "/System/Library/Fonts/HelveticaNeue.ttc", "font_date_index": 5,
+    "size_word": 36, "size_body": 22, "size_cite": 19, "size_date": 17,
+    "line_spacing": 1.5, "gap_after_word": 29, "gap_before_cite": 19, "margin": 24
+  }'::jsonb,
 
-  -- Acidic template (defaults from config.yaml acidic section)
-  acid_font_word      text NOT NULL DEFAULT 'fonts/Acidic.TTF',
-  acid_font_body      text NOT NULL DEFAULT 'fonts/Acidic.TTF',
-  acid_font_bold      text NOT NULL DEFAULT 'fonts/Acidic.TTF',
-  acid_font_cite      text NOT NULL DEFAULT 'fonts/Acidic.TTF',
-  acid_font_date      text NOT NULL DEFAULT 'fonts/Acidic.TTF',
-  acid_font_word_size int NOT NULL DEFAULT 240,
-  acid_font_body_size int NOT NULL DEFAULT 200,
-  acid_font_cite_size int NOT NULL DEFAULT 180,
-  acid_font_date_size int NOT NULL DEFAULT 140,
-  acid_line_spacing   float NOT NULL DEFAULT 1.2,
-  acid_gap_after_word int NOT NULL DEFAULT 80,
-  acid_gap_before_cite int NOT NULL DEFAULT 60,
-  acid_margin         int NOT NULL DEFAULT 20,
-  acid_hard_wrap      boolean NOT NULL DEFAULT true,
+  acid_config     jsonb NOT NULL DEFAULT '{
+    "font_word": "fonts/Acidic.TTF", "font_body": "fonts/Acidic.TTF",
+    "font_bold": "fonts/Acidic.TTF", "font_cite": "fonts/Acidic.TTF",
+    "font_date": "fonts/Acidic.TTF",
+    "size_word": 240, "size_body": 200, "size_cite": 180, "size_date": 140,
+    "line_spacing": 1.2, "gap_after_word": 80, "gap_before_cite": 60,
+    "margin": 20, "hard_wrap": true
+  }'::jsonb,
 
-  -- Dithering (for images)
-  dither_mode           text NOT NULL DEFAULT 'floyd',          -- floyd | bayer | halftone
-  dither_dot_size       int NOT NULL DEFAULT 6,
-  dither_contrast       float NOT NULL DEFAULT 1.3,
-  dither_brightness     float NOT NULL DEFAULT 1.0,
-  dither_sharpness      float NOT NULL DEFAULT 1.2,
-  dither_blur           float NOT NULL DEFAULT 0,
+  -- Dithering config
+  halftone_config jsonb NOT NULL DEFAULT '{
+    "mode": "floyd", "dot_size": 6,
+    "contrast": 1.3, "brightness": 1.0, "sharpness": 1.2, "blur": 0
+  }'::jsonb,
 
-  -- Portrait pipeline
-  portrait_selection_model  text NOT NULL DEFAULT 'google/gemini-3.1-flash-image-preview',
-  portrait_style_prompt     text,                                 -- AI style transfer prompt (~185 lines)
-  portrait_dither_mode      text NOT NULL DEFAULT 'bayer',
-  portrait_blur             float NOT NULL DEFAULT 10,
-
-  -- Portrait crop — zoom_0 (full portrait, shoulders to hairline)
-  portrait_z0_pad_top       float NOT NULL DEFAULT 0.3,
-  portrait_z0_pad_bottom    float NOT NULL DEFAULT 0.8,
-  portrait_z0_aspect        float NOT NULL DEFAULT 0.67,
-  -- Portrait crop — zoom_1 (face close-up)
-  portrait_z1_pad_top       float NOT NULL DEFAULT 0.15,
-  portrait_z1_pad_bottom    float NOT NULL DEFAULT 0.15,
-  -- Portrait crop — zoom_3 (narrow vertical strip)
-  portrait_z3_strip_width   float NOT NULL DEFAULT 0.25,
+  -- Portrait pipeline config
+  portrait_config jsonb NOT NULL DEFAULT '{
+    "selection_model": "google/gemini-3.1-flash-image-preview",
+    "style_prompt": null,
+    "dither_mode": "bayer", "blur": 10,
+    "z0_pad_top": 0.3, "z0_pad_bottom": 0.8, "z0_aspect": 0.67,
+    "z1_pad_top": 0.15, "z1_pad_bottom": 0.15,
+    "z3_strip_width": 0.25
+  }'::jsonb,
 
   -- Image slicing defaults
-  slice_direction     text NOT NULL DEFAULT 'vertical',         -- vertical | horizontal
-  slice_count         int NOT NULL DEFAULT 10,
-  slice_dot_size      int NOT NULL DEFAULT 4
+  slice_config    jsonb NOT NULL DEFAULT '{
+    "direction": "vertical", "count": 10, "dot_size": 4
+  }'::jsonb
 );
 
 -- RLS: anon can read, authenticated can write
@@ -332,13 +306,31 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON secrets
 
 ---
 
-## HTML Page Structure
+## App Structure
 
-Single file: `config.html` at repo root (or `tools/config.html`).
+Minimal Vite app in `apps/config/`. Vanilla TypeScript, no React. Builds to static files.
 
-Dependencies loaded via CDN (no build step):
-- Supabase JS client (`@supabase/supabase-js`)
-- No framework — vanilla JS with template literals for rendering
+```
+apps/config/
+  index.html              ← shell: tab bar, auth gate, header
+  src/
+    main.ts               ← auth flow, tab routing, dirty-state tracking
+    tabs/
+      installation.ts     ← mode, program, timers, face detection
+      conversation.ts     ← prompts, voice, embeddings
+      printing.ts         ← templates, dithering, portrait, composer, test print
+      tools.ts            ← raster painter, text management, definition browser
+      system.ts           ← URLs, secrets, health, display styling, hardware
+    lib/
+      supabase.ts         ← Supabase client, auth helpers, typed table accessors
+      forms.ts            ← slider/input/textarea/color-picker builders
+      render-api.ts       ← print-renderer API client (preview, slice, test print)
+  vite.config.ts
+  package.json
+  tsconfig.json
+```
+
+Dependencies: `@supabase/supabase-js`, `vite`, `typescript`. No UI framework.
 
 ### Header
 
@@ -402,7 +394,8 @@ AI behavior, prompts, voice settings.
 - Each has: large textarea for system prompt template, text inputs for first_message_de and first_message_en
 - Template variables (`{{term}}`, `{{contextText}}`, `{{language}}`, `{{speechProfile}}`) are documented above the textarea
 - Reads from / writes to `prompts` table
-- "Reset to default" button loads the original prompt template from the codebase (hardcoded as reference in the HTML)
+- "Reset to default" button loads the original prompt template from the codebase (bundled as reference constants in the app)
+- **Validation:** before saving, the config page checks that required placeholders exist for each program (e.g., aphorism requires `{{term}}` and `{{contextText}}`). Shows a warning if missing but does not hard-block — the operator may intentionally omit a placeholder
 
 **ElevenLabs**
 - Agent ID: text input
@@ -587,7 +580,7 @@ The print-renderer needs modifications to support this design:
 
 ### 1. Read config from Supabase instead of local config.yaml
 
-On each render request, fetch the latest `render_config` row from Supabase. Cache for 5 seconds to avoid excessive DB calls. Fall back to local `config.yaml` if Supabase is unreachable (resilience during network issues).
+On each render request, fetch the latest `render_config` row from Supabase. Cache for 5 seconds to avoid excessive DB calls. **Required fallback:** if Supabase is unreachable, the renderer MUST fall back to local `config.yaml` and continue operating. Thermal prints are time-sensitive — a Supabase outage must not block printing. The fallback is not optional behavior.
 
 ### 2. New endpoint: `POST /render/slice`
 
@@ -640,7 +633,25 @@ One Supabase migration creates the new tables and extends `installation_config`:
 6. `CREATE OR REPLACE FUNCTION update_timestamp()` + triggers on all config tables
 7. Updated RLS policies: anon reads non-secret tables, authenticated reads/writes all tables
 
-The seed values ensure the installation works identically to today with zero manual configuration. Every new column has a default matching the current hardcoded value.
+The seed values ensure the installation works identically to today with zero manual configuration. Every new column/JSONB default matches the current hardcoded value.
+
+**Migration safety:** The entire migration runs in a single transaction (`BEGIN; ... COMMIT;`). If any step fails, everything rolls back and the installation continues working with the old schema. Test against a Supabase branch database before applying to production.
+
+---
+
+## Deployment Order
+
+The config page depends on the print-renderer being deployed and the migration being applied. Strict order:
+
+1. **Deploy print-renderer** to cloud (Coolify/Railway) — already built, needs first deploy
+2. **Apply Supabase migration** — creates tables, extends schema, updates RLS
+3. **Create admin user** in Supabase Auth dashboard (email + password)
+4. **Deploy config page** (`apps/config/` build output) — static files to any host
+5. **Update tablet/backend** — code changes to read config from Supabase instead of constants
+6. **Seed style prompt** — paste the full portrait style prompt into `render_config.portrait_config` via the config page (it's ~185 lines, too large for a SQL default literal)
+7. **Verify** — use the config page to confirm all settings match current behavior, send a test print
+
+Steps 1–3 can happen without breaking anything (new tables, no code depends on them yet). Step 5 is the breaking change — deploy tablet/backend together.
 
 ---
 
@@ -687,14 +698,14 @@ After the config page is confirmed working:
 | `apps/pos-server/opencv_tuner.html` | Delete — obsolete (mediapipe in cloud, no OpenCV) |
 | `apps/pos-server/test_output/crop_tuner.html` | Delete — portrait crop calibration is in config page |
 | `apps/tablet/src/pages/Admin.tsx` | Delete — fully replaced by config page |
-| `apps/print-renderer/config.yaml` | Keep as fallback — primary config is Supabase |
+| `apps/print-renderer/config.yaml` | Keep as required fallback — used when Supabase is unreachable |
 | `tools/raster-painter/index.html` | Keep as standalone backup, but primary usage is config page |
 
 ---
 
 ## File Location
 
-`config.html` at repository root. Can be opened directly from disk (`file://`) or served from any HTTP server. The only requirement is network access to Supabase and the print-renderer.
+`apps/config/` in the monorepo. Build output is static files (HTML + JS + CSS) deployable to any HTTP server — Coolify, S3, `python -m http.server`, or even a local `pnpm dev:config` during the exhibition. Add to `pnpm dev` in the root `package.json` for parallel dev startup.
 
 ---
 
