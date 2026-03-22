@@ -1,0 +1,213 @@
+*,
+*::before,
+*::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --line: rgba(255, 255, 255, 0.15);
+  --dim: rgba(255, 255, 255, 0.5);
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+#app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* Header */
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 1.5rem;
+}
+
+.header h1 {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.lang-toggle {
+  background: none;
+  border: 1px solid var(--fg);
+  color: var(--fg);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.lang-toggle:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* Search */
+
+.search-wrap {
+  margin-bottom: 2rem;
+}
+
+.search-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--dim);
+}
+
+.search-input:focus {
+  border-bottom-color: var(--fg);
+}
+
+/* Definition entries */
+
+.entries {
+  display: flex;
+  flex-direction: column;
+}
+
+.entry {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.entry:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.entry-term {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+
+.entry-definition {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--fg);
+  margin-bottom: 0.5rem;
+}
+
+.entry-citations {
+  font-size: 0.8125rem;
+  color: var(--dim);
+  font-style: italic;
+  margin-bottom: 0.5rem;
+}
+
+.entry-date {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.6875rem;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+
+/* Single definition view */
+
+.single {
+  padding-top: 1rem;
+}
+
+.back-link {
+  display: inline-block;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.75rem;
+  color: var(--dim);
+  text-decoration: none;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+}
+
+.back-link:hover {
+  color: var(--fg);
+}
+
+.single .entry-term {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.single .entry-definition {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+
+.single .entry-citations {
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.single .entry-date {
+  font-size: 0.75rem;
+}
+
+/* States */
+
+.loading,
+.empty,
+.error {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.875rem;
+  color: var(--dim);
+  padding: 3rem 0;
+  text-align: center;
+}
+
+/* Responsive */
+
+@media (max-width: 480px) {
+  #app {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .header h1 {
+    font-size: 1.25rem;
+  }
+
+  .single .entry-term {
+    font-size: 1.5rem;
+  }
+}
