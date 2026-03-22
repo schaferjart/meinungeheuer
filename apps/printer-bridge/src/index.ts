@@ -100,30 +100,35 @@ async function processJob(rowId: string, rawPayload: Record<string, unknown>): P
   }
 }
 
-// ─── Realtime subscription ────────────────────────────────────────────────────
+// ─── Poll for pending jobs ───────────────────────────────────────────────────
 
-async function drainPendingJobs(): Promise<void> {
-  console.log('[bridge] Draining pre-existing pending jobs…');
+const POLL_INTERVAL_MS = 5000;
+let polling = false;
 
-  const { data, error } = await supabase
-    .from('print_queue')
-    .select('id, payload')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true });
+async function pollPendingJobs(): Promise<void> {
+  if (polling) return; // prevent overlapping polls
+  polling = true;
 
-  if (error) {
-    console.error('[bridge] Failed to query pending jobs:', error.message);
-    return;
-  }
+  try {
+    const { data, error } = await supabase
+      .from('print_queue')
+      .select('id, payload')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true });
 
-  if (!data || data.length === 0) {
-    console.log('[bridge] No pending jobs found.');
-    return;
-  }
+    if (error) {
+      console.error('[bridge] Poll error:', error.message);
+      return;
+    }
 
-  console.log(`[bridge] Found ${data.length} pending job(s) to process.`);
-  for (const row of data) {
-    await processJob(row.id, row.payload as Record<string, unknown>);
+    if (!data || data.length === 0) return;
+
+    console.log(`[bridge] Found ${data.length} pending job(s).`);
+    for (const row of data) {
+      await processJob(row.id, row.payload as Record<string, unknown>);
+    }
+  } finally {
+    polling = false;
   }
 }
 
@@ -158,6 +163,7 @@ function startRealtimeSubscription(): void {
         console.log('[bridge] Realtime subscription active.');
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         console.error(`[bridge] Realtime subscription error (${status}):`, err?.message ?? err);
+        console.log(`[bridge] Falling back to polling every ${POLL_INTERVAL_MS / 1000}s.`);
       } else {
         console.log(`[bridge] Realtime status: ${status}`);
       }
@@ -183,9 +189,20 @@ process.on('SIGTERM', () => shutdown('SIGTERM'));
 // ─── Startup ──────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
-  await drainPendingJobs();
+  // Initial drain
+  await pollPendingJobs();
+
+  // Try Realtime, but always start polling as backup
   startRealtimeSubscription();
-  console.log('[bridge] Ready. Listening for print jobs.');
+
+  // Poll every 5s — works even when Realtime is down
+  setInterval(() => {
+    pollPendingJobs().catch((err: unknown) => {
+      console.error('[bridge] Poll error:', err);
+    });
+  }, POLL_INTERVAL_MS);
+
+  console.log('[bridge] Ready. Listening for print jobs (Realtime + polling).');
 }
 
 main().catch((err: unknown) => {
