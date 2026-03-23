@@ -792,31 +792,39 @@ function buildDitherSection(body: HTMLElement): void {
   }
 
   async function handlePrint(): Promise<void> {
-    if (!uploadedFile) {
-      setStatus(statusEl, 'Select an image file first.', '#cc4444');
+    if (!previewImg.src || previewImg.style.display === 'none') {
+      setStatus(statusEl, 'Preview first, then print.', '#cc4444');
       return;
     }
     printBtn.disabled = true;
-    setStatus(statusEl, 'Queueing print job...', '#777777');
+    setStatus(statusEl, 'Sending to printer...', '#777777');
 
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(uploadedFile!);
-      });
+      // Fetch the preview image (already rendered by the renderer)
+      const imgRes = await fetch(previewImg.src);
+      const imageBlob = await imgRes.blob();
+
+      // Upload to Supabase Storage, then insert a portrait-style print job
+      // that the bridge knows how to handle (download image URL → send to POS)
+      const fileName = `workbench/dither-${Date.now()}.png`;
+      const { error: uploadError } = await supabase.storage
+        .from('prints')
+        .upload(fileName, imageBlob, { contentType: 'image/png' });
+
+      if (uploadError) {
+        setStatus(statusEl, 'Upload failed: ' + uploadError.message, '#cc4444');
+        printBtn.disabled = false;
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
 
       const { error } = await supabase.from('print_queue').insert({
         payload: {
-          type: 'dither',
-          image: dataUrl,
-          mode: ditherMode,
-          dot_size: dotSize,
-          contrast,
-          brightness,
-          sharpness,
-          blur,
+          type: 'portrait',
+          image_urls: [{ name: 'dithered', url: urlData.publicUrl }],
+          job_id: `workbench-${Date.now()}`,
+          timestamp: new Date().toISOString(),
         },
         status: 'pending',
       });
@@ -948,28 +956,39 @@ function buildSliceSection(body: HTMLElement): void {
   }
 
   async function handlePrint(): Promise<void> {
-    if (!uploadedFile) {
-      setStatus(statusEl, 'Select an image file first.', '#cc4444');
+    if (previewUrls.length === 0) {
+      setStatus(statusEl, 'Preview slices first, then print.', '#cc4444');
       return;
     }
     printBtn.disabled = true;
-    setStatus(statusEl, 'Queueing print job...', '#777777');
+    setStatus(statusEl, 'Uploading slices and queuing print...', '#777777');
 
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(uploadedFile!);
-      });
+      // Upload each slice preview to Supabase Storage
+      const imageUrlEntries: { name: string; url: string }[] = [];
+      for (let i = 0; i < previewUrls.length; i++) {
+        const imgRes = await fetch(previewUrls[i]!);
+        const blob = await imgRes.blob();
+        const fileName = `workbench/slice-${Date.now()}-${i}.png`;
+        const { error: upErr } = await supabase.storage
+          .from('prints')
+          .upload(fileName, blob, { contentType: 'image/png' });
+        if (upErr) {
+          setStatus(statusEl, `Upload failed for slice ${i}: ` + upErr.message, '#cc4444');
+          printBtn.disabled = false;
+          return;
+        }
+        const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
+        imageUrlEntries.push({ name: `slice_${i}`, url: urlData.publicUrl });
+      }
 
+      // Insert as portrait-type job (bridge downloads images and sends to POS)
       const { error } = await supabase.from('print_queue').insert({
         payload: {
-          type: 'slice',
-          image: dataUrl,
-          direction,
-          slice_count: sliceCount,
-          dot_size: dotSize,
+          type: 'portrait',
+          image_urls: imageUrlEntries,
+          job_id: `workbench-slice-${Date.now()}`,
+          timestamp: new Date().toISOString(),
         },
         status: 'pending',
       });
@@ -977,7 +996,7 @@ function buildSliceSection(body: HTMLElement): void {
       if (error) {
         setStatus(statusEl, 'Error: ' + error.message, '#cc4444');
       } else {
-        setStatus(statusEl, 'Print job queued.', '#66aa66');
+        setStatus(statusEl, `${imageUrlEntries.length} slices queued for printing.`, '#66aa66');
       }
     } catch {
       setStatus(statusEl, 'Failed to queue print job.', '#cc4444');
@@ -1209,34 +1228,39 @@ function buildPortraitSection(body: HTMLElement): void {
   }
 
   async function handlePrint(): Promise<void> {
-    if (!uploadedFile) {
-      setStatus(statusEl, 'Select a photo first.', '#cc4444');
+    const cropImages = previewGrid.querySelectorAll('img');
+    if (cropImages.length === 0) {
+      setStatus(statusEl, 'Preview crops first, then print.', '#cc4444');
       return;
     }
     printBtn.disabled = true;
-    setStatus(statusEl, 'Queueing print job...', '#777777');
+    setStatus(statusEl, 'Uploading crops and queuing print...', '#777777');
 
     try {
-      const reader = new FileReader();
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(reader.error);
-        reader.readAsDataURL(uploadedFile!);
-      });
+      const imageUrlEntries: { name: string; url: string }[] = [];
+      for (let i = 0; i < cropImages.length; i++) {
+        const imgEl = cropImages[i] as HTMLImageElement;
+        const imgRes = await fetch(imgEl.src);
+        const blob = await imgRes.blob();
+        const fileName = `workbench/portrait-${Date.now()}-zoom${i}.png`;
+        const { error: upErr } = await supabase.storage
+          .from('prints')
+          .upload(fileName, blob, { contentType: 'image/png' });
+        if (upErr) {
+          setStatus(statusEl, `Upload failed for crop ${i}: ` + upErr.message, '#cc4444');
+          printBtn.disabled = false;
+          return;
+        }
+        const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
+        imageUrlEntries.push({ name: `zoom_${i}`, url: urlData.publicUrl });
+      }
 
       const { error } = await supabase.from('print_queue').insert({
         payload: {
           type: 'portrait',
-          image: dataUrl,
-          style_prompt: stylePrompt,
-          dither_mode: ditherMode,
-          blur,
-          zoom0_pad_top: z0PadTop,
-          zoom0_pad_bottom: z0PadBottom,
-          zoom0_aspect: z0Aspect,
-          zoom1_pad_top: z1PadTop,
-          zoom1_pad_bottom: z1PadBottom,
-          zoom3_strip_width: z3StripWidth,
+          image_urls: imageUrlEntries,
+          job_id: `workbench-portrait-${Date.now()}`,
+          timestamp: new Date().toISOString(),
         },
         status: 'pending',
       });
@@ -1244,7 +1268,7 @@ function buildPortraitSection(body: HTMLElement): void {
       if (error) {
         setStatus(statusEl, 'Error: ' + error.message, '#cc4444');
       } else {
-        setStatus(statusEl, 'Print job queued.', '#66aa66');
+        setStatus(statusEl, `${imageUrlEntries.length} crops queued for printing.`, '#66aa66');
       }
     } catch {
       setStatus(statusEl, 'Failed to queue print job.', '#cc4444');
