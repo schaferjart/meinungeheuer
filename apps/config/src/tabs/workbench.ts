@@ -210,6 +210,36 @@ const WB_CSS = `
     border: 1px solid #2a2a2a;
     border-radius: 4px;
   }
+  .compare-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .compare-item {
+    flex: 1;
+    min-width: 200px;
+    max-width: 300px;
+  }
+  .compare-item img {
+    width: 100%;
+    border: 1px solid #333333;
+    border-radius: 4px;
+  }
+  .compare-label {
+    font-size: 11px;
+    color: #777777;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 4px;
+    font-family: system-ui, sans-serif;
+  }
+  .compare-item-failed {
+    font-size: 12px;
+    color: #cc4444;
+    font-family: system-ui, sans-serif;
+    padding: 8px 0;
+  }
 `;
 
 let wbStylesInjected = false;
@@ -222,6 +252,18 @@ function injectWbStyles(): void {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+interface ProgramRow {
+  id: string;
+  name: string;
+  config: {
+    conversation?: {
+      prompt_template?: string;
+      first_message_de?: string;
+      first_message_en?: string;
+    };
+  };
+}
 
 interface TextRow {
   id: string;
@@ -1621,6 +1663,251 @@ function buildDefinitionBrowserSection(body: HTMLElement): void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Section 8: Prompts
+// ═══════════════════════════════════════════════════════════════════════════
+
+function buildPromptsSection(body: HTMLElement): void {
+  const statusEl = makeStatusEl();
+  body.appendChild(statusEl);
+
+  let programs: ProgramRow[] = [];
+  let selectedId = '';
+  let promptTemplate = '';
+  let firstMessageDe = '';
+  let firstMessageEn = '';
+
+  // — Program selector placeholder (replaced after load) —
+  const selectorWrap = document.createElement('div');
+  selectorWrap.style.cssText = 'margin-bottom:14px;';
+  body.appendChild(selectorWrap);
+
+  // — Template variables reference —
+  const refBox = document.createElement('div');
+  refBox.style.cssText =
+    'background:#0a0a0a;border:1px solid #2a2a2a;border-radius:5px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-family:monospace;color:#777777;line-height:1.7;';
+  refBox.innerHTML =
+    '<span style="font-family:system-ui,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;display:block;margin-bottom:6px;">Template variables</span>' +
+    '{{term}} &nbsp; {{contextText}} &nbsp; {{language}} &nbsp; {{speechProfile}}';
+  body.appendChild(refBox);
+
+  // — System prompt textarea —
+  let promptTextarea: HTMLTextAreaElement | null = null;
+  const promptWrap = document.createElement('div');
+  body.appendChild(promptWrap);
+
+  // — First messages —
+  let firstDe = '';
+  let firstEn = '';
+  const firstDeWrap = document.createElement('div');
+  const firstEnWrap = document.createElement('div');
+  body.appendChild(firstDeWrap);
+  body.appendChild(firstEnWrap);
+
+  body.appendChild(makeDivider());
+
+  // — Test interpolation —
+  body.appendChild(makeSubLabel('Test Interpolation'));
+
+  let sampleTerm = '';
+  let sampleContext = '';
+  let sampleLanguage = 'de';
+
+  body.appendChild(createTextInput('Term (sample)', '', (v) => { sampleTerm = v; }));
+  body.appendChild(createTextInput('Context text (sample)', '', (v) => { sampleContext = v; }));
+  body.appendChild(createTextInput('Language (sample)', 'de', (v) => { sampleLanguage = v; }));
+
+  const previewBtnRow = document.createElement('div');
+  previewBtnRow.className = 'wb-btn-row';
+  const previewBtn = makeButton('Preview');
+  previewBtnRow.appendChild(previewBtn);
+  body.appendChild(previewBtnRow);
+
+  const previewWrap = document.createElement('div');
+  previewWrap.style.cssText = 'margin-bottom:14px;display:none;';
+  const previewLabel = document.createElement('div');
+  previewLabel.className = 'wb-sublabel';
+  previewLabel.textContent = 'Preview result';
+  previewLabel.style.marginTop = '0';
+  const previewOutput = document.createElement('textarea');
+  previewOutput.className = 'cf-textarea';
+  previewOutput.rows = 14;
+  previewOutput.readOnly = true;
+  previewOutput.style.cssText += 'color:#777777;resize:none;';
+  previewWrap.appendChild(previewLabel);
+  previewWrap.appendChild(previewOutput);
+  body.appendChild(previewWrap);
+
+  previewBtn.addEventListener('click', () => {
+    const template = promptTextarea?.value ?? promptTemplate;
+    let preview = template;
+    preview = preview.replace(/\{\{term\}\}/g, sampleTerm);
+    preview = preview.replace(/\{\{contextText\}\}/g, sampleContext);
+    preview = preview.replace(/\{\{language\}\}/g, sampleLanguage);
+    preview = preview.replace(/\{\{speechProfile\}\}/g, '');
+    previewOutput.value = preview;
+    previewWrap.style.display = 'block';
+  });
+
+  body.appendChild(makeDivider());
+
+  // — Save button —
+  const saveBtnRow = document.createElement('div');
+  saveBtnRow.className = 'wb-btn-row';
+  const saveBtn = makeButton('Save', 'primary');
+  saveBtnRow.appendChild(saveBtn);
+  body.appendChild(saveBtnRow);
+
+  saveBtn.addEventListener('click', () => { void handleSave(); });
+
+  // — Render program selector —
+  function renderSelector(): void {
+    selectorWrap.innerHTML = '';
+    const label = document.createElement('div');
+    label.className = 'wb-sublabel';
+    label.textContent = 'Program';
+    label.style.marginTop = '0';
+    selectorWrap.appendChild(label);
+
+    if (programs.length === 0) {
+      const empty = document.createElement('div');
+      empty.textContent = 'No programs found.';
+      empty.style.cssText = 'color:#777777;font-size:13px;font-family:system-ui,sans-serif;';
+      selectorWrap.appendChild(empty);
+      return;
+    }
+
+    const sel = document.createElement('select');
+    sel.className = 'cf-select';
+    for (const p of programs) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      if (p.id === selectedId) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => {
+      selectedId = sel.value;
+      loadFromSelected();
+    });
+    selectorWrap.appendChild(sel);
+  }
+
+  // — Render editable fields from selected program —
+  function loadFromSelected(): void {
+    const prog = programs.find((p) => p.id === selectedId);
+    if (!prog) return;
+
+    promptTemplate = prog.config.conversation?.prompt_template ?? '';
+    firstMessageDe = prog.config.conversation?.first_message_de ?? '';
+    firstMessageEn = prog.config.conversation?.first_message_en ?? '';
+
+    // Re-render prompt textarea
+    promptWrap.innerHTML = '';
+    const ta = document.createElement('div');
+    ta.className = 'cf-field';
+    const taLabel = document.createElement('label');
+    taLabel.className = 'cf-label';
+    taLabel.textContent = 'System prompt template';
+    const taId = `cf-textarea-${Math.random().toString(36).slice(2)}`;
+    taLabel.htmlFor = taId;
+    promptTextarea = document.createElement('textarea');
+    promptTextarea.id = taId;
+    promptTextarea.className = 'cf-textarea';
+    promptTextarea.rows = 20;
+    promptTextarea.value = promptTemplate;
+    promptTextarea.addEventListener('input', () => { promptTemplate = promptTextarea!.value; });
+    ta.appendChild(taLabel);
+    ta.appendChild(promptTextarea);
+    promptWrap.appendChild(ta);
+
+    // Re-render first messages
+    firstDe = firstMessageDe;
+    firstEn = firstMessageEn;
+    firstDeWrap.innerHTML = '';
+    firstEnWrap.innerHTML = '';
+    firstDeWrap.appendChild(
+      createTextInput('First message (DE)', firstMessageDe, (v) => { firstDe = v; })
+    );
+    firstEnWrap.appendChild(
+      createTextInput('First message (EN)', firstMessageEn, (v) => { firstEn = v; })
+    );
+
+    // Hide preview when switching programs
+    previewWrap.style.display = 'none';
+  }
+
+  // — Save handler —
+  async function handleSave(): Promise<void> {
+    if (!selectedId) {
+      setStatus(statusEl, 'No program selected.', '#cc4444');
+      return;
+    }
+
+    saveBtn.disabled = true;
+    setStatus(statusEl, 'Saving...', '#777777');
+
+    const prog = programs.find((p) => p.id === selectedId);
+    if (!prog) {
+      setStatus(statusEl, 'Program not found.', '#cc4444');
+      saveBtn.disabled = false;
+      return;
+    }
+
+    // Merge into existing config, preserving non-conversation keys
+    const updatedConfig = {
+      ...prog.config,
+      conversation: {
+        ...(prog.config.conversation ?? {}),
+        prompt_template: promptTextarea?.value ?? promptTemplate,
+        first_message_de: firstDe || firstMessageDe,
+        first_message_en: firstEn || firstMessageEn,
+      },
+    };
+
+    const { error } = await supabase
+      .from('programs')
+      .update({ config: updatedConfig })
+      .eq('id', selectedId);
+
+    if (error) {
+      setStatus(statusEl, 'Save failed: ' + error.message, '#cc4444');
+    } else {
+      // Update local cache
+      prog.config = updatedConfig;
+      setStatus(statusEl, 'Saved.', '#66aa66');
+    }
+
+    saveBtn.disabled = false;
+  }
+
+  // — Initial load —
+  async function loadPrograms(): Promise<void> {
+    setStatus(statusEl, 'Loading programs...', '#777777');
+
+    const { data, error } = await supabase
+      .from('programs')
+      .select('id, name, config')
+      .order('name', { ascending: true });
+
+    if (error) {
+      setStatus(statusEl, 'Load failed: ' + error.message, '#cc4444');
+      return;
+    }
+
+    programs = (data ?? []) as ProgramRow[];
+    if (programs.length > 0) {
+      selectedId = programs[0]!.id;
+    }
+
+    setStatus(statusEl, '', '#777777');
+    renderSelector();
+    loadFromSelected();
+  }
+
+  void loadPrograms();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Main render
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1655,4 +1942,8 @@ export function render(container: HTMLElement): void {
   const { section: sec7, body: body7 } = createSection('Definitions', true);
   buildDefinitionBrowserSection(body7);
   container.appendChild(sec7);
+
+  const { section: sec8, body: body8 } = createSection('Prompts', true);
+  buildPromptsSection(body8);
+  container.appendChild(sec8);
 }
