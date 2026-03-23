@@ -386,12 +386,20 @@ function buildPrintCardSection(body: HTMLElement): void {
   let citations = '';
   let language = 'de';
   let template = 'dictionary';
+  let renderMode: 'dictionary' | 'markdown' = 'dictionary';
   let compareMode = false;
 
   const templateRadioWrap = document.createElement('div');
   const compareGrid = document.createElement('div');
   compareGrid.className = 'compare-grid';
   compareGrid.style.display = 'none';
+
+  body.appendChild(createRadioGroup(
+    'Render mode',
+    [{ value: 'dictionary', label: 'Dictionary (word + definition)' }, { value: 'markdown', label: 'Markdown (free-form text)' }],
+    'dictionary',
+    (v) => { renderMode = v as 'dictionary' | 'markdown'; },
+  ));
 
   body.appendChild(createToggle('Compare mode', false, (v) => {
     compareMode = v;
@@ -401,7 +409,7 @@ function buildPrintCardSection(body: HTMLElement): void {
   }));
 
   body.appendChild(createTextInput('Word / Term', '', (v) => { word = v; }));
-  body.appendChild(createTextarea('Definition', '', 6, (v) => { definition = v; }));
+  body.appendChild(createTextarea('Definition / Text', '', 6, (v) => { definition = v; }));
   body.appendChild(createTextInput('Citations (comma-separated)', '', (v) => { citations = v; }));
   body.appendChild(
     createRadioGroup(
@@ -455,15 +463,20 @@ function buildPrintCardSection(body: HTMLElement): void {
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 
-      const res = await fetch(`${creds.rendererUrl}/render/dictionary`, {
+      const endpoint = renderMode === 'markdown' ? '/render/markdown' : '/render/dictionary';
+      const reqBody = renderMode === 'markdown'
+        ? { text: definition || '# Example\nSample markdown text.', style: tmpl }
+        : {
+            word: word || 'BEISPIEL',
+            definition: definition || 'Ein Beispiel ist ein Leuchtturm im Nebel der Abstraktion.',
+            citations: citationsArray.length > 0 ? citationsArray : ['Workbench, 2026'],
+            template: tmpl,
+          };
+
+      const res = await fetch(`${creds.rendererUrl}${endpoint}`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          word: word || 'BEISPIEL',
-          definition: definition || 'Ein Beispiel ist ein Leuchtturm im Nebel der Abstraktion.',
-          citations: citationsArray.length > 0 ? citationsArray : ['Workbench, 2026'],
-          template: tmpl,
-        }),
+        body: JSON.stringify(reqBody),
       });
 
       if (!res.ok) return null;
@@ -528,15 +541,20 @@ function buildPrintCardSection(body: HTMLElement): void {
           .map((s) => s.trim())
           .filter((s) => s.length > 0);
 
-        const res = await fetch(`${creds.rendererUrl}/render/dictionary`, {
+        const endpoint = renderMode === 'markdown' ? '/render/markdown' : '/render/dictionary';
+        const reqBody = renderMode === 'markdown'
+          ? { text: definition || '# Example\nSample markdown text.', style: template }
+          : {
+              word: word || 'BEISPIEL',
+              definition: definition || 'Ein Beispiel ist ein Leuchtturm im Nebel der Abstraktion.',
+              citations: citationsArray.length > 0 ? citationsArray : ['Workbench, 2026'],
+              template,
+            };
+
+        const res = await fetch(`${creds.rendererUrl}${endpoint}`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            word: word || 'BEISPIEL',
-            definition: definition || 'Ein Beispiel ist ein Leuchtturm im Nebel der Abstraktion.',
-            citations: citationsArray.length > 0 ? citationsArray : ['Workbench, 2026'],
-            template,
-          }),
+          body: JSON.stringify(reqBody),
         });
 
         if (!res.ok) {
@@ -679,8 +697,8 @@ function buildDitherSection(body: HTMLElement): void {
     if (!uploadedFile) return null;
     try {
       const fd = new FormData();
-      fd.append('image', uploadedFile);
-      fd.append('mode', mode);
+      fd.append('file', uploadedFile);
+      fd.append('dither_mode', mode);
       fd.append('dot_size', String(dotSize));
       fd.append('contrast', String(contrast));
       fd.append('brightness', String(brightness));
@@ -755,8 +773,8 @@ function buildDitherSection(body: HTMLElement): void {
 
       try {
         const fd = new FormData();
-        fd.append('image', uploadedFile);
-        fd.append('mode', ditherMode);
+        fd.append('file', uploadedFile);
+        fd.append('dither_mode', ditherMode);
         fd.append('dot_size', String(dotSize));
         fd.append('contrast', String(contrast));
         fd.append('brightness', String(brightness));
