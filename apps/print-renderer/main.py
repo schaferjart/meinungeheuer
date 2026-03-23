@@ -82,6 +82,31 @@ def render_dictionary(req: DictionaryRequest):
     return _image_response(img)
 
 
+# ── Dither rendering ──────────────────────────────────────
+
+
+@app.post("/render/dither", dependencies=[Depends(verify_api_key)])
+def render_dither(
+    file: UploadFile = File(...),
+    dither_mode: str = Form("floyd"),
+    contrast: float = Form(1.3),
+    brightness: float = Form(1.0),
+    sharpness: float = Form(1.2),
+    blur: float = Form(0),
+    paper_px: int = Form(576),
+):
+    """Dither an uploaded image and return the result as PNG."""
+    image_bytes = file.file.read()
+    img = open_image(image_bytes)
+
+    grey = _prepare(img, paper_px, contrast, brightness, sharpness)
+    if blur > 0:
+        grey = _apply_blur(grey, blur)
+    dithered = dither_image(grey, dither_mode)
+
+    return _image_response(dithered)
+
+
 # ── Markdown rendering ────────────────────────────────────
 
 class MarkdownRequest(BaseModel):
