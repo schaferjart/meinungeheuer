@@ -19,6 +19,7 @@ import {
   createNumberInput,
   createSection,
   createSaveButton,
+  createToggle,
 } from '../lib/forms.js';
 import { supabase } from '../lib/supabase.js';
 
@@ -385,6 +386,19 @@ function buildPrintCardSection(body: HTMLElement): void {
   let citations = '';
   let language = 'de';
   let template = 'dictionary';
+  let compareMode = false;
+
+  const templateRadioWrap = document.createElement('div');
+  const compareGrid = document.createElement('div');
+  compareGrid.className = 'compare-grid';
+  compareGrid.style.display = 'none';
+
+  body.appendChild(createToggle('Compare mode', false, (v) => {
+    compareMode = v;
+    templateRadioWrap.style.display = v ? 'none' : '';
+    compareGrid.style.display = v ? '' : 'none';
+    previewImg.style.display = 'none';
+  }));
 
   body.appendChild(createTextInput('Word / Term', '', (v) => { word = v; }));
   body.appendChild(createTextarea('Definition', '', 6, (v) => { definition = v; }));
@@ -397,7 +411,8 @@ function buildPrintCardSection(body: HTMLElement): void {
       (v) => { language = v; }
     )
   );
-  body.appendChild(
+
+  templateRadioWrap.appendChild(
     createRadioGroup(
       'Template',
       [
@@ -409,6 +424,7 @@ function buildPrintCardSection(body: HTMLElement): void {
       (v) => { template = v; }
     )
   );
+  body.appendChild(templateRadioWrap);
 
   const previewImg = document.createElement('img');
   previewImg.className = 'wb-preview-img';
@@ -426,15 +442,10 @@ function buildPrintCardSection(body: HTMLElement): void {
   btnRow.appendChild(printBtn);
   body.appendChild(btnRow);
   body.appendChild(previewImg);
+  body.appendChild(compareGrid);
   body.appendChild(statusEl);
 
-  async function handlePreview(): Promise<void> {
-    previewBtn.disabled = true;
-    setStatus(statusEl, 'Rendering...', '#777777');
-    previewImg.style.display = 'none';
-
-    const creds = await fetchRenderCredentials();
-
+  async function renderOneTemplate(tmpl: string, creds: RenderCredentials): Promise<string | null> {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
@@ -451,23 +462,97 @@ function buildPrintCardSection(body: HTMLElement): void {
           word: word || 'BEISPIEL',
           definition: definition || 'Ein Beispiel ist ein Leuchtturm im Nebel der Abstraktion.',
           citations: citationsArray.length > 0 ? citationsArray : ['Workbench, 2026'],
-          template,
+          template: tmpl,
         }),
       });
 
-      if (!res.ok) {
-        setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
-        previewBtn.disabled = false;
-        return;
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch {
+      return null;
+    }
+  }
+
+  async function handlePreview(): Promise<void> {
+    previewBtn.disabled = true;
+
+    if (compareMode) {
+      setStatus(statusEl, 'Rendering all templates...', '#777777');
+      compareGrid.innerHTML = '';
+      previewImg.style.display = 'none';
+
+      const creds = await fetchRenderCredentials();
+      const templates = ['dictionary', 'helvetica', 'acidic'];
+      const results = await Promise.all(templates.map((t) => renderOneTemplate(t, creds)));
+
+      compareGrid.innerHTML = '';
+      for (let i = 0; i < templates.length; i++) {
+        const item = document.createElement('div');
+        item.className = 'compare-item';
+
+        const labelEl = document.createElement('div');
+        labelEl.className = 'compare-label';
+        labelEl.textContent = templates[i]!;
+        item.appendChild(labelEl);
+
+        const url = results[i];
+        if (url) {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = templates[i]!;
+          item.appendChild(img);
+        } else {
+          const failEl = document.createElement('div');
+          failEl.className = 'compare-item-failed';
+          failEl.textContent = 'Failed';
+          item.appendChild(failEl);
+        }
+
+        compareGrid.appendChild(item);
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      previewImg.src = url;
-      previewImg.style.display = 'block';
       setStatus(statusEl, '', '#777777');
-    } catch {
-      setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+    } else {
+      setStatus(statusEl, 'Rendering...', '#777777');
+      previewImg.style.display = 'none';
+
+      const creds = await fetchRenderCredentials();
+
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
+
+        const citationsArray = citations
+          .split(',')
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0);
+
+        const res = await fetch(`${creds.rendererUrl}/render/dictionary`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            word: word || 'BEISPIEL',
+            definition: definition || 'Ein Beispiel ist ein Leuchtturm im Nebel der Abstraktion.',
+            citations: citationsArray.length > 0 ? citationsArray : ['Workbench, 2026'],
+            template,
+          }),
+        });
+
+        if (!res.ok) {
+          setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
+          previewBtn.disabled = false;
+          return;
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        previewImg.src = url;
+        previewImg.style.display = 'block';
+        setStatus(statusEl, '', '#777777');
+      } catch {
+        setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      }
     }
 
     previewBtn.disabled = false;
@@ -525,10 +610,23 @@ function buildDitherSection(body: HTMLElement): void {
   let brightness = 1.0;
   let sharpness = 1.2;
   let blur = 0;
+  let compareMode = false;
+
+  const modeRadioWrap = document.createElement('div');
+  const compareGrid = document.createElement('div');
+  compareGrid.className = 'compare-grid';
+  compareGrid.style.display = 'none';
+
+  body.appendChild(createToggle('Compare mode', false, (v) => {
+    compareMode = v;
+    modeRadioWrap.style.display = v ? 'none' : '';
+    compareGrid.style.display = v ? '' : 'none';
+    previewImg.style.display = 'none';
+  }));
 
   body.appendChild(makeFileField('Image', 'image/*', (f) => { uploadedFile = f; }));
 
-  body.appendChild(
+  modeRadioWrap.appendChild(
     createRadioGroup(
       'Mode',
       [
@@ -540,6 +638,8 @@ function buildDitherSection(body: HTMLElement): void {
       (v) => { ditherMode = v; }
     )
   );
+  body.appendChild(modeRadioWrap);
+
   body.appendChild(
     createSlider('Dot size (halftone only)', 2, 12, 1, dotSize, (v) => { dotSize = v; })
   );
@@ -572,23 +672,15 @@ function buildDitherSection(body: HTMLElement): void {
   btnRow.appendChild(printBtn);
   body.appendChild(btnRow);
   body.appendChild(previewImg);
+  body.appendChild(compareGrid);
   body.appendChild(statusEl);
 
-  async function handlePreview(): Promise<void> {
-    if (!uploadedFile) {
-      setStatus(statusEl, 'Select an image file first.', '#cc4444');
-      return;
-    }
-    previewBtn.disabled = true;
-    setStatus(statusEl, 'Dithering...', '#777777');
-    previewImg.style.display = 'none';
-
-    const creds = await fetchRenderCredentials();
-
+  async function renderOneDitherMode(mode: string, creds: RenderCredentials): Promise<string | null> {
+    if (!uploadedFile) return null;
     try {
       const fd = new FormData();
       fd.append('image', uploadedFile);
-      fd.append('mode', ditherMode);
+      fd.append('mode', mode);
       fd.append('dot_size', String(dotSize));
       fd.append('contrast', String(contrast));
       fd.append('brightness', String(brightness));
@@ -604,19 +696,96 @@ function buildDitherSection(body: HTMLElement): void {
         body: fd,
       });
 
-      if (!res.ok) {
-        setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
-        previewBtn.disabled = false;
-        return;
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    } catch {
+      return null;
+    }
+  }
+
+  async function handlePreview(): Promise<void> {
+    if (!uploadedFile) {
+      setStatus(statusEl, 'Select an image file first.', '#cc4444');
+      return;
+    }
+    previewBtn.disabled = true;
+
+    if (compareMode) {
+      setStatus(statusEl, 'Dithering with all modes...', '#777777');
+      compareGrid.innerHTML = '';
+      previewImg.style.display = 'none';
+
+      const creds = await fetchRenderCredentials();
+      const modes = ['floyd', 'bayer', 'halftone'];
+      const results = await Promise.all(modes.map((m) => renderOneDitherMode(m, creds)));
+
+      compareGrid.innerHTML = '';
+      for (let i = 0; i < modes.length; i++) {
+        const item = document.createElement('div');
+        item.className = 'compare-item';
+
+        const labelEl = document.createElement('div');
+        labelEl.className = 'compare-label';
+        labelEl.textContent = modes[i]!;
+        item.appendChild(labelEl);
+
+        const url = results[i];
+        if (url) {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = modes[i]!;
+          item.appendChild(img);
+        } else {
+          const failEl = document.createElement('div');
+          failEl.className = 'compare-item-failed';
+          failEl.textContent = 'Failed';
+          item.appendChild(failEl);
+        }
+
+        compareGrid.appendChild(item);
       }
 
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      previewImg.src = url;
-      previewImg.style.display = 'block';
       setStatus(statusEl, '', '#777777');
-    } catch {
-      setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+    } else {
+      setStatus(statusEl, 'Dithering...', '#777777');
+      previewImg.style.display = 'none';
+
+      const creds = await fetchRenderCredentials();
+
+      try {
+        const fd = new FormData();
+        fd.append('image', uploadedFile);
+        fd.append('mode', ditherMode);
+        fd.append('dot_size', String(dotSize));
+        fd.append('contrast', String(contrast));
+        fd.append('brightness', String(brightness));
+        fd.append('sharpness', String(sharpness));
+        fd.append('blur', String(blur));
+
+        const headers: Record<string, string> = {};
+        if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
+
+        const res = await fetch(`${creds.rendererUrl}/render/dither`, {
+          method: 'POST',
+          headers,
+          body: fd,
+        });
+
+        if (!res.ok) {
+          setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
+          previewBtn.disabled = false;
+          return;
+        }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        previewImg.src = url;
+        previewImg.style.display = 'block';
+        setStatus(statusEl, '', '#777777');
+      } catch {
+        setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      }
     }
 
     previewBtn.disabled = false;
@@ -836,6 +1005,17 @@ function buildPortraitSection(body: HTMLElement): void {
   let z1PadTop = 0.05;
   let z1PadBottom = 0.05;
   let z3StripWidth = 0.25;
+  let compareMode = false;
+
+  const compareGrid = document.createElement('div');
+  compareGrid.className = 'compare-grid';
+  compareGrid.style.cssText = 'display:none;flex-wrap:wrap;';
+
+  body.appendChild(createToggle('Compare mode', false, (v) => {
+    compareMode = v;
+    compareGrid.style.display = v ? '' : 'none';
+    previewGrid.style.display = v ? 'none' : '';
+  }));
 
   body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => { uploadedFile = f; }));
 
@@ -883,19 +1063,19 @@ function buildPortraitSection(body: HTMLElement): void {
   btnRow.appendChild(printBtn);
   body.appendChild(btnRow);
   body.appendChild(previewGrid);
+  body.appendChild(compareGrid);
   body.appendChild(statusEl);
 
-  async function handlePreview(): Promise<void> {
-    if (!uploadedFile) {
-      setStatus(statusEl, 'Select a photo first.', '#cc4444');
-      return;
-    }
-    previewBtn.disabled = true;
-    setStatus(statusEl, 'Processing portrait...', '#777777');
-    previewGrid.innerHTML = '';
+  function b64ToObjectUrl(b64: string): string {
+    const byteStr = atob(b64);
+    const arr = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
+    const blob = new Blob([arr], { type: 'image/png' });
+    return URL.createObjectURL(blob);
+  }
 
-    const creds = await fetchRenderCredentials();
-
+  async function fetchAllCrops(creds: RenderCredentials): Promise<string[] | null> {
+    if (!uploadedFile) return null;
     try {
       const fd = new FormData();
       fd.append('image', uploadedFile);
@@ -918,31 +1098,111 @@ function buildPortraitSection(body: HTMLElement): void {
         body: fd,
       });
 
-      if (!res.ok) {
-        setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
+      if (!res.ok) return null;
+      const json = (await res.json()) as { crops: string[] };
+      return json.crops ?? [];
+    } catch {
+      return null;
+    }
+  }
+
+  async function handlePreview(): Promise<void> {
+    if (!uploadedFile) {
+      setStatus(statusEl, 'Select a photo first.', '#cc4444');
+      return;
+    }
+    previewBtn.disabled = true;
+    setStatus(statusEl, 'Processing portrait...', '#777777');
+
+    const creds = await fetchRenderCredentials();
+
+    if (compareMode) {
+      compareGrid.innerHTML = '';
+      previewGrid.innerHTML = '';
+
+      const crops = await fetchAllCrops(creds);
+
+      if (!crops) {
+        setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
         previewBtn.disabled = false;
         return;
       }
 
-      const json = (await res.json()) as { crops: string[] };
-      const crops = json.crops ?? [];
-      previewGrid.innerHTML = '';
+      const zoomLabels = ['zoom_0', 'zoom_1', 'zoom_2', 'zoom_3'];
+      for (let i = 0; i < zoomLabels.length; i++) {
+        const item = document.createElement('div');
+        item.className = 'compare-item';
 
-      for (const b64 of crops) {
-        const byteStr = atob(b64);
-        const arr = new Uint8Array(byteStr.length);
-        for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
-        const blob = new Blob([arr], { type: 'image/png' });
-        const url = URL.createObjectURL(blob);
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = 'crop';
-        previewGrid.appendChild(img);
+        const labelEl = document.createElement('div');
+        labelEl.className = 'compare-label';
+        labelEl.textContent = zoomLabels[i]!;
+        item.appendChild(labelEl);
+
+        const b64 = crops[i];
+        if (b64) {
+          const img = document.createElement('img');
+          img.src = b64ToObjectUrl(b64);
+          img.alt = zoomLabels[i]!;
+          item.appendChild(img);
+        } else {
+          const failEl = document.createElement('div');
+          failEl.className = 'compare-item-failed';
+          failEl.textContent = 'Not available';
+          item.appendChild(failEl);
+        }
+
+        compareGrid.appendChild(item);
       }
 
-      setStatus(statusEl, `${crops.length} crops rendered.`, '#66aa66');
-    } catch {
-      setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      setStatus(statusEl, `${Math.min(crops.length, 4)} zoom levels rendered.`, '#66aa66');
+    } else {
+      previewGrid.innerHTML = '';
+      compareGrid.innerHTML = '';
+
+      try {
+        const fd = new FormData();
+        fd.append('image', uploadedFile);
+        fd.append('style_prompt', stylePrompt);
+        fd.append('dither_mode', ditherMode);
+        fd.append('blur', String(blur));
+        fd.append('z0_pad_top', String(z0PadTop));
+        fd.append('z0_pad_bottom', String(z0PadBottom));
+        fd.append('z0_aspect', String(z0Aspect));
+        fd.append('z1_pad_top', String(z1PadTop));
+        fd.append('z1_pad_bottom', String(z1PadBottom));
+        fd.append('z3_strip_width', String(z3StripWidth));
+
+        const headers: Record<string, string> = {};
+        if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
+
+        const res = await fetch(`${creds.rendererUrl}/render/portrait`, {
+          method: 'POST',
+          headers,
+          body: fd,
+        });
+
+        if (!res.ok) {
+          setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
+          previewBtn.disabled = false;
+          return;
+        }
+
+        const json = (await res.json()) as { crops: string[] };
+        const crops = json.crops ?? [];
+        previewGrid.innerHTML = '';
+
+        for (const b64 of crops) {
+          const url = b64ToObjectUrl(b64);
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = 'crop';
+          previewGrid.appendChild(img);
+        }
+
+        setStatus(statusEl, `${crops.length} crops rendered.`, '#66aa66');
+      } catch {
+        setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      }
     }
 
     previewBtn.disabled = false;
