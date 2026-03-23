@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { TIMERS } from '@meinungeheuer/shared';
 import type { Definition } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
@@ -8,7 +9,11 @@ interface DefinitionScreenProps {
   definition: Definition;
 }
 
+const ARCHIVE_BASE = 'https://archive.baufer.beauty/#/definition';
+
 export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
   useEffect(() => {
     const id = setTimeout(() => {
       dispatch({ type: 'TIMER_10S' });
@@ -16,11 +21,33 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
     return () => clearTimeout(id);
   }, [dispatch]);
 
+  // Generate QR code once definition ID is known
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const url = definition.id
+      ? `${ARCHIVE_BASE}/${definition.id}`
+      : ARCHIVE_BASE;
+
+    QRCode.toCanvas(canvas, url, {
+      width: 120,
+      margin: 1,
+      color: {
+        dark: '#ffffff',
+        light: '#000000',
+      },
+      errorCorrectionLevel: 'M',
+    }).catch((err) => {
+      console.warn('[DefinitionScreen] QR generation failed:', err);
+    });
+  }, [definition.id]);
+
   const citations = definition.citations ?? [];
 
   return (
     <div
-      className="flex flex-col items-start justify-center w-full h-full bg-black"
+      className="flex flex-col w-full h-full bg-black"
       style={{ padding: 'clamp(2rem, 6vw, 5rem) clamp(2.5rem, 8vw, 7rem)' }}
     >
       {/* Term */}
@@ -33,6 +60,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
           letterSpacing: '0.18em',
           textTransform: 'uppercase',
           margin: '0 0 clamp(1.2rem, 3vw, 2rem) 0',
+          flexShrink: 0,
         }}
       >
         {definition.term}
@@ -45,6 +73,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
           height: '1px',
           backgroundColor: 'rgba(255,255,255,0.25)',
           marginBottom: 'clamp(1.2rem, 3vw, 2rem)',
+          flexShrink: 0,
         }}
       />
 
@@ -58,6 +87,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
           lineHeight: '1.75',
           margin: '0 0 clamp(2rem, 4vw, 3rem) 0',
           maxWidth: '65ch',
+          flexShrink: 0,
         }}
       >
         {definition.definition_text}
@@ -69,6 +99,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
           style={{
             borderLeft: '1px solid rgba(255,255,255,0.15)',
             paddingLeft: 'clamp(1rem, 2vw, 1.5rem)',
+            flexShrink: 0,
           }}
         >
           {citations.map((citation, i) => (
@@ -88,6 +119,19 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
           ))}
         </div>
       )}
+
+      {/* Spacer */}
+      <div style={{ flex: 1 }} />
+
+      {/* QR code */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block',
+          imageRendering: 'pixelated',
+          flexShrink: 0,
+        }}
+      />
     </div>
   );
 }

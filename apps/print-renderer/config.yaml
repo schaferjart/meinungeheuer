@@ -39,6 +39,22 @@ helvetica:
   margin: 24
   paper_px: 576
 
+# Serif template (Times New Roman style — DejaVu Serif)
+serif:
+  font_word: "fonts/DejaVuSerif-Bold.ttf"
+  font_body: "fonts/DejaVuSerif.ttf"
+  font_cite: "fonts/DejaVuSerif.ttf"
+  font_date: "fonts/DejaVuSerif.ttf"
+  size_word: 34
+  size_body: 21
+  size_cite: 18
+  size_date: 16
+  line_spacing: 1.5
+  gap_after_word: 28
+  gap_before_cite: 20
+  margin: 22
+  paper_px: 576
+
 # Halftone image printing
 halftone:
   paper_px: 576
