@@ -201,5 +201,6 @@ export function buildTestPayload(): PrintPayload {
     session_number: 47,
     chain_ref: '#0046 "FLUG"',
     timestamp: new Date().toISOString(),
+    definition_id: '00000000-0000-0000-0000-000000000047',
   };
 }

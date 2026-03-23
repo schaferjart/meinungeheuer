@@ -195,6 +195,7 @@ webhookRoutes.post('/definition', async (c) => {
     session_number: sessionNumber,
     chain_ref: null as string | null,
     timestamp: new Date().toISOString(),
+    definition_id: definitionId,
   };
 
   // For Mode C, attach the parent definition text as the chain reference
