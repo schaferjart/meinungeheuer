@@ -17,6 +17,14 @@ import {
   createSaveButton,
 } from '../lib/forms.js';
 import { supabase } from '../lib/supabase.js';
+import {
+  createTextDisplayPreview,
+  createTermPromptPreview,
+  createConversationPreview,
+  createDefinitionPreview,
+  createWelcomePreview,
+  createFarewellPreview,
+} from '../lib/tablet-preview.js';
 
 // ── CSS ───────────────────────────────────────────────────────────────────────
 
@@ -585,6 +593,31 @@ function buildBlockConfigForm(
   return container;
 }
 
+// ── Block preview dispatcher ──────────────────────────────────────────────────
+
+function buildBlockPreview(blockId: string, cfg: BlockConfig): HTMLElement | null {
+  switch (blockId) {
+    case 'text_display':
+      return createTextDisplayPreview(cfg);
+    case 'term_prompt':
+      return createTermPromptPreview(cfg);
+    case 'conversation':
+      return createConversationPreview(cfg);
+    case 'print_card':
+      return createDefinitionPreview(cfg);
+    case 'face_detect':
+      return createWelcomePreview();
+    case 'consent':
+      return createWelcomePreview();
+    case 'voice_chain':
+      return createConversationPreview(cfg);
+    case 'farewell':
+      return createFarewellPreview();
+    default:
+      return null;
+  }
+}
+
 function addSubLabel(container: HTMLElement, text: string): void {
   const el = document.createElement('div');
   el.textContent = text;
@@ -804,6 +837,29 @@ export function render(container: HTMLElement): void {
 
       const form = buildBlockConfigForm(selectedBlockId, blockCfg, texts);
       panel.appendChild(form);
+
+      // ── Tablet preview ──────────────────────────────────────────────────
+      const preview = buildBlockPreview(selectedBlockId, blockCfg);
+      if (preview) {
+        panel.appendChild(preview);
+
+        // Rebuild preview on any input/change inside the form (debounced)
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+        form.addEventListener('input', () => {
+          if (debounceTimer !== null) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            const fresh = buildBlockPreview(selectedBlockId!, blockCfg);
+            if (fresh) preview.replaceWith(fresh);
+          }, 300);
+        });
+        form.addEventListener('change', () => {
+          if (debounceTimer !== null) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            const fresh = buildBlockPreview(selectedBlockId!, blockCfg);
+            if (fresh) preview.replaceWith(fresh);
+          }, 300);
+        });
+      }
 
       blockDetailArea.appendChild(panel);
     }
