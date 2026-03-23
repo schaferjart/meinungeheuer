@@ -85,10 +85,7 @@ function reducer(state: InstallationState, action: InstallationAction): Installa
 
     case 'TIMER_10S':
       if (state.screen !== 'definition') return state;
-      if (!state.stages.printing) {
-        return { ...state, screen: 'farewell' };
-      }
-      return { ...state, screen: 'printing' };
+      return { ...state, screen: 'farewell' };
 
     case 'PRINT_DONE':
       if (state.screen !== 'printing') return state;
@@ -252,12 +249,12 @@ describe('useInstallationMachine reducer', () => {
   describe('DEFINITION state', () => {
     const definition: InstallationState = { ...initialState, screen: 'definition', definition: makeDefinition() };
 
-    it('TIMER_10S transitions definition -> printing when stages.printing=true', () => {
+    it('TIMER_10S transitions definition -> farewell directly (printing screen skipped)', () => {
       const next = reducer(definition, { type: 'TIMER_10S' });
-      expect(next.screen).toBe('printing');
+      expect(next.screen).toBe('farewell');
     });
 
-    it('TIMER_10S transitions definition -> farewell when stages.printing=false', () => {
+    it('TIMER_10S transitions definition -> farewell even when stages.printing=false', () => {
       const s: InstallationState = { ...definition, stages: { textReading: true, termPrompt: false, portrait: true, printing: false } };
       const next = reducer(s, { type: 'TIMER_10S' });
       expect(next.screen).toBe('farewell');
@@ -305,8 +302,7 @@ describe('useInstallationMachine reducer', () => {
         { type: 'READY' },                                                     // → conversation (skips term_prompt)
         { type: 'DEFINITION_RECEIVED', definition: def },                     // → synthesizing
         { type: 'DEFINITION_READY' },                                          // → definition
-        { type: 'TIMER_10S' },                                                 // → printing
-        { type: 'PRINT_DONE' },                                                // → farewell
+        { type: 'TIMER_10S' },                                                 // → farewell (printing screen skipped)
         { type: 'TIMER_15S' },                                                 // → sleep
       );
       expect(final.screen).toBe('sleep');

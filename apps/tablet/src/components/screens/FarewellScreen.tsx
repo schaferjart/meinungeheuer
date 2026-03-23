@@ -1,26 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import QRCode from 'qrcode';
 import { TIMERS } from '@meinungeheuer/shared';
+import type { Definition } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface FarewellScreenProps {
   dispatch: React.Dispatch<InstallationAction>;
   language: 'de' | 'en';
+  definition: Definition | null;
 }
 
-export function FarewellScreen({ dispatch, language }: FarewellScreenProps) {
-  const [subtitleVisible, setSubtitleVisible] = useState(false);
+const ARCHIVE_BASE = 'https://archive.baufer.beauty/#/definition';
 
-  const mainText = language === 'de' ? 'Danke.' : 'Thank you.';
-  const subText =
-    language === 'de'
-      ? 'Ihr Beitrag ist Teil des Archivs.'
-      : 'Your contribution is part of the archive.';
-
-  // Subtitle fades in after 3s
-  useEffect(() => {
-    const id = setTimeout(() => setSubtitleVisible(true), 3000);
-    return () => clearTimeout(id);
-  }, []);
+export function FarewellScreen({ dispatch, definition }: FarewellScreenProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Transition to SLEEP after FAREWELL_DURATION_MS
   useEffect(() => {
@@ -30,37 +23,37 @@ export function FarewellScreen({ dispatch, language }: FarewellScreenProps) {
     return () => clearTimeout(id);
   }, [dispatch]);
 
-  return (
-    <div className="flex flex-col items-center justify-center w-full h-full bg-black select-none">
-      <p
-        style={{
-          fontFamily: "Georgia, 'Times New Roman', serif",
-          fontSize: 'clamp(2.5rem, 8vw, 5.5rem)',
-          fontWeight: 400,
-          color: '#ffffff',
-          margin: 0,
-          letterSpacing: '0.02em',
-          textAlign: 'center',
-        }}
-      >
-        {mainText}
-      </p>
+  // Generate QR code on canvas once definition ID is known
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-      <p
+    const url = definition?.id
+      ? `${ARCHIVE_BASE}/${definition.id}`
+      : ARCHIVE_BASE;
+
+    QRCode.toCanvas(canvas, url, {
+      width: 220,
+      margin: 2,
+      color: {
+        dark: '#ffffff',
+        light: '#000000',
+      },
+      errorCorrectionLevel: 'M',
+    }).catch((err) => {
+      console.warn('[FarewellScreen] QR generation failed:', err);
+    });
+  }, [definition]);
+
+  return (
+    <div className="flex items-center justify-center w-full h-full bg-black select-none">
+      <canvas
+        ref={canvasRef}
         style={{
-          fontFamily: "Georgia, 'Times New Roman', serif",
-          fontSize: 'clamp(0.85rem, 1.8vw, 1.1rem)',
-          fontWeight: 400,
-          color: 'rgba(255,255,255,0.4)',
-          marginTop: 'clamp(1.5rem, 3vw, 2.5rem)',
-          letterSpacing: '0.06em',
-          textAlign: 'center',
-          opacity: subtitleVisible ? 1 : 0,
-          transition: 'opacity 0.8s ease',
+          display: 'block',
+          imageRendering: 'pixelated',
         }}
-      >
-        {subText}
-      </p>
+      />
     </div>
   );
 }

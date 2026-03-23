@@ -213,7 +213,6 @@ function InstallationApp() {
       const def = makeClientDefinition(result);
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
-      void persistPrintJob(result, state.sessionId ?? null, programRef.current.printLayout, def.id);
 
       // Fire-and-forget portrait upload to POS server (only if program uses portraits).
       // Definition card prints via Supabase print_queue (fast, ~2s).
@@ -414,6 +413,31 @@ function InstallationApp() {
     }
   }, [screen, captureFrame]);
 
+  // Trigger print job when entering the definition screen.
+  // The definition object is guaranteed to be set when screen === 'definition'
+  // (the reducer only transitions to definition after DEFINITION_READY which
+  // requires definition to already be in state).
+  const printJobFiredRef = useRef(false);
+  useEffect(() => {
+    if (screen === 'definition' && definition && !printJobFiredRef.current) {
+      printJobFiredRef.current = true;
+      void persistPrintJob(
+        {
+          term: definition.term,
+          definition_text: definition.definition_text,
+          citations: definition.citations ?? [],
+          language: definition.language,
+        },
+        state.sessionId ?? null,
+        programRef.current.printLayout,
+        definition.id,
+      );
+    }
+    if (screen !== 'definition') {
+      printJobFiredRef.current = false;
+    }
+  }, [screen, definition, state.sessionId]);
+
   function renderScreen() {
     switch (screen) {
       case 'sleep':
@@ -463,7 +487,7 @@ function InstallationApp() {
         return <PrintingScreen dispatch={dispatch} language={language} />;
 
       case 'farewell':
-        return <FarewellScreen dispatch={dispatch} language={language} />;
+        return <FarewellScreen dispatch={dispatch} language={language} definition={definition} />;
 
       default: {
         // Exhaustiveness guard

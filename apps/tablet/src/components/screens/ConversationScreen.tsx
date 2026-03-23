@@ -40,32 +40,11 @@ export function ConversationScreen({
 
   return (
     <div className="flex flex-col w-full h-full bg-black">
-      {/* Term badge — top-left */}
-      <div
-        style={{
-          padding: 'clamp(1rem, 2.5vw, 1.5rem) clamp(1.5rem, 3vw, 2rem)',
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'system-ui, sans-serif',
-            fontSize: 'clamp(0.75rem, 1.4vw, 0.95rem)',
-            fontWeight: 600,
-            color: 'rgba(255,255,255,0.4)',
-            letterSpacing: '0.2em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {term}
-        </span>
-      </div>
-
       {/* Transcript */}
       <div
         className="flex-1 overflow-y-auto"
         style={{
-          padding: '0 clamp(1.5rem, 5vw, 4rem)',
+          padding: 'clamp(1.5rem, 3vw, 2.5rem) clamp(1.5rem, 5vw, 4rem) 0',
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
         }}
