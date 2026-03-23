@@ -11,6 +11,16 @@ interface Definition {
   created_at: string;
 }
 
+interface Turn {
+  id: string;
+  session_id: string;
+  turn_number: number;
+  role: 'visitor' | 'agent';
+  content: string;
+  language: string;
+  created_at: string;
+}
+
 type Language = 'de' | 'en';
 
 let currentLang: Language = 'de';
@@ -39,6 +49,21 @@ async function fetchDefinitions(): Promise<Definition[]> {
   }
 
   return (data ?? []) as Definition[];
+}
+
+async function fetchTurns(sessionId: string): Promise<Turn[]> {
+  const { data, error } = await supabase
+    .from('turns')
+    .select('id, session_id, turn_number, role, content, language, created_at')
+    .eq('session_id', sessionId)
+    .order('turn_number', { ascending: true });
+
+  if (error) {
+    console.error('Failed to fetch turns:', error.message);
+    return [];
+  }
+
+  return (data ?? []) as Turn[];
 }
 
 function formatDate(iso: string): string {
@@ -139,7 +164,48 @@ function renderList(): void {
   });
 }
 
-function renderSingle(id: string): void {
+function renderTranscriptHtml(turns: Turn[]): string {
+  const visitorLabel = currentLang === 'de' ? 'Besucher' : 'Visitor';
+  const agentLabel = currentLang === 'de' ? 'Ungeheuer' : 'Ungeheuer';
+
+  return turns
+    .map(
+      (t) => `
+      <div class="turn turn-${t.role}">
+        <div class="turn-role">${t.role === 'visitor' ? escapeHtml(visitorLabel) : escapeHtml(agentLabel)}</div>
+        <div class="turn-content">${escapeHtml(t.content)}</div>
+      </div>
+    `,
+    )
+    .join('');
+}
+
+function setupPanelSwipe(wrapper: HTMLElement): void {
+  const track = wrapper.querySelector('.panels-track') as HTMLElement | null;
+  const dots = wrapper.querySelectorAll('.panel-dot');
+  if (!track || dots.length === 0) return;
+
+  function updateDots(): void {
+    if (!track) return;
+    const scrollLeft = track.scrollLeft;
+    const panelWidth = track.clientWidth;
+    const activeIndex = Math.round(scrollLeft / panelWidth);
+    dots.forEach((dot, i) => {
+      dot.classList.toggle('active', i === activeIndex);
+    });
+  }
+
+  track.addEventListener('scroll', updateDots, { passive: true });
+
+  dots.forEach((dot, i) => {
+    dot.addEventListener('click', () => {
+      if (!track) return;
+      track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
+    });
+  });
+}
+
+async function renderSingle(id: string): Promise<void> {
   const def = allDefinitions.find((d) => d.id === id);
 
   if (!def) {
@@ -152,20 +218,62 @@ function renderSingle(id: string): void {
   }
 
   const backLabel = currentLang === 'de' ? 'Zur\u00fcck zum Archiv' : 'Back to archive';
+  const conversationLabel = currentLang === 'de' ? 'Gespr\u00e4ch' : 'Conversation';
 
+  // Render the definition panel immediately
+  const definitionPanelHtml = `
+    <div class="entry-term">${escapeHtml(def.term)}</div>
+    <div class="entry-definition">${escapeHtml(def.definition_text)}</div>
+    ${
+      def.citations && def.citations.length > 0
+        ? `<div class="entry-citations">${def.citations.map((c) => escapeHtml(c)).join(' / ')}</div>`
+        : ''
+    }
+    <div class="entry-date">${formatDate(def.created_at)}</div>
+  `;
+
+  // First render without conversation (show definition immediately)
   app.innerHTML = `
     <div class="single">
       <a href="#/" class="back-link">&larr; ${backLabel}</a>
-      <div class="entry-term">${escapeHtml(def.term)}</div>
-      <div class="entry-definition">${escapeHtml(def.definition_text)}</div>
-      ${
-        def.citations && def.citations.length > 0
-          ? `<div class="entry-citations">${def.citations.map((c) => escapeHtml(c)).join(' / ')}</div>`
-          : ''
-      }
-      <div class="entry-date">${formatDate(def.created_at)}</div>
+      ${definitionPanelHtml}
     </div>
   `;
+
+  // Fetch turns in background
+  const turns = await fetchTurns(def.session_id);
+
+  // If no turns, leave as-is (no swipe)
+  if (turns.length === 0) return;
+
+  // Re-render with swipeable panels
+  app.innerHTML = `
+    <div class="single">
+      <a href="#/" class="back-link">&larr; ${backLabel}</a>
+      <div class="panels-wrapper">
+        <div class="panels-track">
+          <div class="panel panel-definition">
+            ${definitionPanelHtml}
+          </div>
+          <div class="panel panel-conversation">
+            <div class="entry-term" style="margin-bottom: 1.5rem;">${escapeHtml(conversationLabel)}</div>
+            <div class="transcript">
+              ${renderTranscriptHtml(turns)}
+            </div>
+          </div>
+        </div>
+        <div class="panel-indicators">
+          <button class="panel-dot active" aria-label="Definition"></button>
+          <button class="panel-dot" aria-label="${escapeHtml(conversationLabel)}"></button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const wrapper = app.querySelector('.panels-wrapper') as HTMLElement | null;
+  if (wrapper) {
+    setupPanelSwipe(wrapper);
+  }
 }
 
 function renderLoading(): void {
@@ -190,7 +298,7 @@ async function render(): Promise<void> {
   }
 
   if (route.view === 'single') {
-    renderSingle(route.id);
+    await renderSingle(route.id);
   } else {
     renderList();
   }

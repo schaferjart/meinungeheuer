@@ -11,6 +11,8 @@
   --fg: #fff;
   --line: rgba(255, 255, 255, 0.15);
   --dim: rgba(255, 255, 255, 0.5);
+  --font-body: Georgia, 'Times New Roman', serif;
+  --font-meta: system-ui, sans-serif;
 }
 
 html {
@@ -20,7 +22,7 @@ html {
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  font-family: var(--font-body);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100dvh;
@@ -45,7 +47,7 @@ body {
 }
 
 .header h1 {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-body);
   font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: 0.2em;
@@ -56,7 +58,7 @@ body {
   background: none;
   border: 1px solid var(--fg);
   color: var(--fg);
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-meta);
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   cursor: pointer;
@@ -82,7 +84,7 @@ body {
   border: none;
   border-bottom: 1px solid var(--line);
   color: var(--fg);
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-body);
   font-size: 0.875rem;
   padding: 0.5rem 0;
   outline: none;
@@ -114,7 +116,7 @@ body {
 }
 
 .entry-term {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-body);
   font-size: 1.25rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -123,6 +125,7 @@ body {
 }
 
 .entry-definition {
+  font-family: var(--font-body);
   font-size: 0.9375rem;
   line-height: 1.6;
   color: var(--fg);
@@ -130,6 +133,7 @@ body {
 }
 
 .entry-citations {
+  font-family: var(--font-body);
   font-size: 0.8125rem;
   color: var(--dim);
   font-style: italic;
@@ -137,7 +141,7 @@ body {
 }
 
 .entry-date {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-meta);
   font-size: 0.6875rem;
   color: var(--dim);
   letter-spacing: 0.05em;
@@ -151,7 +155,7 @@ body {
 
 .back-link {
   display: inline-block;
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-meta);
   font-size: 0.75rem;
   color: var(--dim);
   text-decoration: none;
@@ -184,12 +188,114 @@ body {
   font-size: 0.75rem;
 }
 
+/* Swipeable panels */
+
+.panels-wrapper {
+  overflow-x: hidden;
+  position: relative;
+}
+
+.panels-track {
+  display: flex;
+  scroll-snap-type: x mandatory;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.panels-track::-webkit-scrollbar {
+  display: none;
+}
+
+.panel {
+  flex: 0 0 100%;
+  width: 100%;
+  scroll-snap-align: start;
+  min-height: 0;
+}
+
+.panel-conversation {
+  padding-top: 1rem;
+}
+
+/* Conversation transcript */
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.turn {
+  max-width: 85%;
+}
+
+.turn-visitor {
+  align-self: flex-end;
+  text-align: right;
+}
+
+.turn-agent {
+  align-self: flex-start;
+  text-align: left;
+}
+
+.turn-content {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.turn-visitor .turn-content {
+  color: var(--fg);
+}
+
+.turn-agent .turn-content {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.turn-role {
+  font-family: var(--font-meta);
+  font-size: 0.6875rem;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+/* Panel indicators */
+
+.panel-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 1.5rem 0 0.5rem;
+}
+
+.panel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dim);
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.panel-dot.active {
+  background: var(--fg);
+}
+
 /* States */
 
 .loading,
 .empty,
 .error {
-  font-family: 'Courier New', Courier, monospace;
+  font-family: var(--font-meta);
   font-size: 0.875rem;
   color: var(--dim);
   padding: 3rem 0;
