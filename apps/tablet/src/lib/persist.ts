@@ -123,24 +123,13 @@ export async function uploadBlurredPortrait(blob: Blob): Promise<string | null> 
  * Fire-and-forget.
  */
 export async function persistTranscript(
-  conversationId: string | undefined,
+  sessionId: string | null,
   transcript: Array<{ role: 'visitor' | 'agent'; content: string }>,
 ): Promise<void> {
   if (!transcript.length) return;
 
   try {
     const supabase = getSupabaseClient();
-
-    // Try to find a session with this conversation ID
-    let sessionId: string | null = null;
-    if (conversationId) {
-      const { data } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('elevenlabs_conversation_id', conversationId)
-        .maybeSingle();
-      sessionId = data?.id ?? null;
-    }
 
     const turns = transcript.map((t, i) => ({
       session_id: sessionId,
