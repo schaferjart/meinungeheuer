@@ -577,11 +577,56 @@ function buildPrintCardSection(body: HTMLElement): void {
   }
 
   async function handlePrint(): Promise<void> {
-    if (!word.trim()) {
-      setStatus(statusEl, 'Word / term is required.', '#cc4444');
+    printBtn.disabled = true;
+
+    if (renderMode === 'markdown') {
+      // Markdown mode: render via API, upload PNG, queue as portrait job
+      if (!previewImg.src || previewImg.style.display === 'none') {
+        setStatus(statusEl, 'Preview first, then print.', '#cc4444');
+        printBtn.disabled = false;
+        return;
+      }
+      setStatus(statusEl, 'Uploading rendered card...', '#777777');
+      try {
+        const imgRes = await fetch(previewImg.src);
+        const imageBlob = await imgRes.blob();
+        const fileName = `workbench/card-${Date.now()}.png`;
+        const { error: upErr } = await supabase.storage
+          .from('prints')
+          .upload(fileName, imageBlob, { contentType: 'image/png' });
+        if (upErr) {
+          setStatus(statusEl, 'Upload failed: ' + upErr.message, '#cc4444');
+          printBtn.disabled = false;
+          return;
+        }
+        const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
+        const { error } = await supabase.from('print_queue').insert({
+          payload: {
+            type: 'portrait',
+            image_urls: [{ name: 'card', url: urlData.publicUrl }],
+            job_id: `workbench-card-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+          },
+          status: 'pending',
+        });
+        if (error) {
+          setStatus(statusEl, 'Error: ' + error.message, '#cc4444');
+        } else {
+          setStatus(statusEl, 'Print job queued.', '#66aa66');
+        }
+      } catch {
+        setStatus(statusEl, 'Failed to queue print job.', '#cc4444');
+      }
+      printBtn.disabled = false;
       return;
     }
-    printBtn.disabled = true;
+
+    // Dictionary mode: insert standard payload
+    if (!word.trim()) {
+      setStatus(statusEl, 'Word / term is required.', '#cc4444');
+      printBtn.disabled = false;
+      return;
+    }
     setStatus(statusEl, 'Queueing print job...', '#777777');
 
     const citationsArray = citations
