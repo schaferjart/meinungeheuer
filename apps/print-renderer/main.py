@@ -201,7 +201,22 @@ def render_portrait_preview(
         dithered.save(buf, format="PNG")
         results.append(base64.b64encode(buf.getvalue()).decode())
 
-    return {"crops": results, "count": len(results), "face_detected": landmarks is not None, "errors": errors}
+    # Serialise landmarks (tuples → lists, ints stay ints) for JSON transport
+    serialised_landmarks = None
+    if landmarks:
+        serialised_landmarks = {
+            k: list(v) if isinstance(v, tuple) else v
+            for k, v in landmarks.items()
+        }
+
+    return {
+        "crops": results,
+        "count": len(results),
+        "face_detected": landmarks is not None,
+        "landmarks": serialised_landmarks,
+        "image_size": [w, h],
+        "errors": errors,
+    }
 
 
 # ── Markdown rendering ────────────────────────────────────
