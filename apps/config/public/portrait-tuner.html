@@ -107,13 +107,13 @@ input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; borde
         <div class="param-row">
           <div class="param-label">pad_top</div>
           <input type="range" class="param-slider" id="sl-pad-top" min="0" max="1000" value="300" step="1">
-          <input type="number" class="param-number" id="num-pad-top" value="0.30" step="0.01" min="0">
+          <input type="number" class="param-number" id="num-pad-top" value="0.300" step="0.001" min="0">
         </div>
 
         <div class="param-row">
           <div class="param-label">pad_bottom</div>
           <input type="range" class="param-slider" id="sl-pad-bottom" min="0" max="1000" value="800" step="1">
-          <input type="number" class="param-number" id="num-pad-bottom" value="0.80" step="0.01" min="0">
+          <input type="number" class="param-number" id="num-pad-bottom" value="0.800" step="0.001" min="0">
         </div>
 
         <div class="param-row">
@@ -129,25 +129,25 @@ input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; borde
         <div class="param-row">
           <div class="param-label zoom-color-0">zoom 0 width</div>
           <input type="range" class="param-slider" id="sl-w0" min="1" max="1000" value="670" step="1">
-          <input type="number" class="param-number" id="num-w0" value="0.67" step="0.01" min="0.01">
+          <input type="number" class="param-number" id="num-w0" value="0.670" step="0.001" min="0.001">
         </div>
 
         <div class="param-row">
           <div class="param-label zoom-color-1">zoom 1 width</div>
           <input type="range" class="param-slider" id="sl-w1" min="1" max="1000" value="500" step="1">
-          <input type="number" class="param-number" id="num-w1" value="0.50" step="0.01" min="0.01">
+          <input type="number" class="param-number" id="num-w1" value="0.500" step="0.001" min="0.001">
         </div>
 
         <div class="param-row">
           <div class="param-label zoom-color-2">zoom 2 width</div>
           <input type="range" class="param-slider" id="sl-w2" min="1" max="1000" value="300" step="1">
-          <input type="number" class="param-number" id="num-w2" value="0.30" step="0.01" min="0.01">
+          <input type="number" class="param-number" id="num-w2" value="0.300" step="0.001" min="0.001">
         </div>
 
         <div class="param-row">
           <div class="param-label zoom-color-3">zoom 3 width</div>
           <input type="range" class="param-slider" id="sl-w3" min="1" max="1000" value="150" step="1">
-          <input type="number" class="param-number" id="num-w3" value="0.15" step="0.01" min="0.01">
+          <input type="number" class="param-number" id="num-w3" value="0.150" step="0.001" min="0.001">
         </div>
       </div>
 
@@ -237,11 +237,11 @@ function bindParam(sl, num, scale, onChange) {
   });
 }
 
-bindParam(SL.padTop, NUM.padTop, 100, v => { padTop = v; render(); });
-bindParam(SL.padBottom, NUM.padBottom, 100, v => { padBottom = v; render(); });
+bindParam(SL.padTop, NUM.padTop, 1000, v => { padTop = v; render(); });
+bindParam(SL.padBottom, NUM.padBottom, 1000, v => { padBottom = v; render(); });
 bindParam(SL.centerX, NUM.centerX, 1000, v => { centerX = v; render(); });
 [0,1,2,3].forEach(i => {
-  bindParam(SL.w[i], NUM.w[i], 100, v => { widths[i] = v; render(); });
+  bindParam(SL.w[i], NUM.w[i], 1000, v => { widths[i] = v; render(); });
 });
 
 // ── File input ─────────────────────────────────────────────────────────────
