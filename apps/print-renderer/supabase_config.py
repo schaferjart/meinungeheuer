@@ -73,6 +73,7 @@ def _row_to_config(row: dict) -> dict[str, Any]:
         "dictionary": with_paper(row.get("dict_config", {})),
         "helvetica": with_paper(row.get("helv_config", {})),
         "acidic": with_paper(row.get("acid_config", {})),
+        "serif": with_paper(row.get("serif_config", {})),
         "halftone": row.get("halftone_config", {}),
         "portrait": row.get("portrait_config", {}),
         "_meta": {
