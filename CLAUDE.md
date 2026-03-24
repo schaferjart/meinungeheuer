@@ -152,10 +152,65 @@ Before marking any component done:
 - **Base Directory:** Apps that depend on `packages/shared/` (tablet, backend) need Base Directory `/`. Self-contained apps (print-renderer) can use their own dir.
 - **Inject Build Args:** Only enable for Vite apps (tablet, archive) that need `VITE_*` at build time. Disable for runtime-only services (backend, print-renderer).
 
+## Config App (`apps/config/`)
+
+Vanilla TypeScript Vite app. No React. Two modes:
+- **Programs**: pipeline view — each program is a sequence of blocks, edit config per block
+- **Workbench**: independent tools — print card, dither, slice, portrait, raster painter, texts, definitions, prompts
+
+Portrait crop tuner is a standalone HTML page at `apps/config/public/portrait-tuner.html` — browser-side MediaPipe, no backend needed for crop calibration.
+
+Deploy: Coolify, `config.baufer.beauty`, Dockerfile at `/apps/config/Dockerfile`. Needs `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as build args.
+
+Admin login: Supabase Auth (email/password).
+
+## Portrait Pipeline
+
+The crop model: **height is shared across all 4 zooms. Only width changes.** Parameters:
+- `pad_top`, `pad_bottom` (global — fraction of face height)
+- `center_x` (global — fraction of image width)
+- `zoom_N_width` (per-zoom — fraction of crop height)
+- `zoom_N_offset` (per-zoom — horizontal shift from center)
+
+Never add separate pad/aspect controls per zoom. The height is locked by pad_top/pad_bottom; each zoom only varies its width slice.
+
+## Creative Tool UX
+
+- **Never constrain slider ranges.** Set max to 10x the "sensible" default. The user decides the range. Default values can be conservative; maximums must not be.
+- **Always pair sliders with editable number inputs.** Sliders for fast exploration, number inputs for precision.
+- **Slider resolution matters.** For 0–1 values, use 1000 internal steps (0.001 precision).
+- **Client-side canvas for instant preview.** Don't call the API on every slider change. Detect landmarks once via API, then do all crop/preview math in the browser with canvas drawImage.
+- **Don't assume you know the artist's workflow.** Ask what the tool should do before building it.
+
 ## Print-Renderer Config
 
 - The renderer reads config from **Supabase `render_config` table first**, falling back to `config.yaml`. When adding a new template: (1) add JSONB column to `render_config`, (2) add mapping in `supabase_config.py` `_row_to_config()`, (3) add section to `config.yaml` as fallback.
 - The bridge needs `RENDER_API_KEY` in its `.env` or render requests return 401 silently.
+
+## FastAPI Endpoint Conventions
+
+- Multipart form fields: use `File(...)` for uploads, `Form(...)` for other fields. Field name in `FormData.append('name', value)` must match the Python parameter name exactly.
+- `async def` with blocking PIL/mediapipe calls kills uvicorn workers — use `def` (sync) so FastAPI runs it in a threadpool.
+
+## Print Queue Payloads
+
+The bridge handles two payload types:
+1. **Dictionary**: `{ term, definition_text, citations, language, session_number, chain_ref, timestamp, template }` — bridge renders via print-renderer, sends PNG to POS.
+2. **Portrait**: `{ type: 'portrait', image_urls: [{name, url}], job_id, timestamp }` — bridge downloads images from URLs, sends to POS.
+
+For image-based prints from the workbench: upload rendered PNG to Supabase Storage, then insert a portrait-type job with the public URL. Don't put base64 in JSONB.
+
+The bridge has a legacy fallback: if the print-renderer is unreachable, it sends JSON directly to POS server's `/print/dictionary`.
+
+## Supabase RLS Checklist
+
+The `authenticated` role (config page) needs explicit policies. When adding a table or changing write access:
+- `print_queue`: INSERT/UPDATE/SELECT for `authenticated`
+- `texts`: full CRUD for `authenticated`
+- `definitions`: SELECT for `authenticated`
+- `secrets`: authenticated-only (no anon SELECT)
+- `programs`: anon reads, authenticated writes
+- `render_config`, `installation_config`, `prompts`: anon reads, authenticated writes
 
 ## Silent Failures to Watch For
 
