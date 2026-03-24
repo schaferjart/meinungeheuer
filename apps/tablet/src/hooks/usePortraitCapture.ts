@@ -116,8 +116,15 @@ export function usePortraitCapture({
 
         const url = `${printRendererUrl.replace(/\/+$/, '')}/process/portrait`;
 
+        const headers: Record<string, string> = {};
+        const apiKey = import.meta.env['VITE_RENDER_API_KEY'] ?? '';
+        if (apiKey) {
+          headers['X-API-Key'] = apiKey;
+        }
+
         const res = await fetch(url, {
           method: 'POST',
+          headers,
           body: formData,
           // 5 min timeout: style transfer + face detection in cloud
           signal: AbortSignal.timeout(300_000),
