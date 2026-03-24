@@ -3,7 +3,6 @@ import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@meinungeheuer
 import type { Definition, ConversationProgram } from '@meinungeheuer/shared';
 
 /** Build a partial Definition object from conversation results (client-side only). */
-<<<<<<< Updated upstream
 function makeClientDefinition(
   d: {
     term: string;
@@ -13,14 +12,6 @@ function makeClientDefinition(
   },
   sessionId: string | null = null,
 ): Definition {
-=======
-function makeClientDefinition(d: {
-  term: string;
-  definition_text: string;
-  citations: string[];
-  language: string;
-}, sessionId: string | null): Definition {
->>>>>>> Stashed changes
   return {
     id: crypto.randomUUID(),
     session_id: sessionId,
@@ -228,11 +219,7 @@ function InstallationApp() {
 
   const handleDefinitionReceived = useCallback(
     (result: { term: string; definition_text: string; citations: string[]; language: string }) => {
-<<<<<<< Updated upstream
       const def = makeClientDefinition(result, sessionIdRef.current);
-=======
-      const def = makeClientDefinition(result, state.sessionId);
->>>>>>> Stashed changes
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
 
@@ -289,7 +276,6 @@ function InstallationApp() {
       if (state.screen === 'conversation' && !state.definition) {
         dispatch({
           type: 'DEFINITION_RECEIVED',
-<<<<<<< Updated upstream
           definition: makeClientDefinition(
             {
               term,
@@ -299,14 +285,6 @@ function InstallationApp() {
             },
             sessionIdRef.current,
           ),
-=======
-          definition: makeClientDefinition({
-            term,
-            definition_text: 'Die Unterhaltung wurde beendet.',
-            citations: [],
-            language,
-          }, state.sessionId),
->>>>>>> Stashed changes
         });
         setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
       }

@@ -241,6 +241,46 @@ const WB_CSS = `
     font-family: system-ui, sans-serif;
     padding: 8px 0;
   }
+  .portrait-live-label {
+    font-size: 11px;
+    color: #777777;
+    font-family: system-ui, sans-serif;
+    margin-bottom: 6px;
+    margin-top: 14px;
+    letter-spacing: 0.04em;
+  }
+  .portrait-canvas-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .portrait-canvas-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .portrait-canvas-item canvas {
+    width: 150px;
+    height: auto;
+    border: 1px solid #333333;
+    border-radius: 4px;
+    display: block;
+  }
+  .portrait-canvas-item .portrait-canvas-label {
+    font-size: 10px;
+    color: #555555;
+    font-family: system-ui, sans-serif;
+    text-align: center;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .portrait-no-face {
+    font-size: 12px;
+    color: #cc8800;
+    font-family: system-ui, sans-serif;
+    padding: 6px 0;
+  }
 `;
 
 let wbStylesInjected = false;
@@ -1098,6 +1138,155 @@ function buildSliceSection(body: HTMLElement): void {
 // Section 4: Portrait
 // ═══════════════════════════════════════════════════════════════════════════
 
+// ── Portrait landmarks type ────────────────────────────────────────────────────
+
+interface PortraitLandmarks {
+  forehead_top: [number, number];
+  chin: [number, number];
+  nose_tip: [number, number];
+  left_eye_outer: [number, number];
+  right_eye_outer: [number, number];
+  left_eye_center: [number, number];
+  right_eye_center: [number, number];
+  face_center_x: number;
+}
+
+interface PortraitPreviewResponse {
+  crops: string[];
+  count: number;
+  face_detected: boolean;
+  landmarks: PortraitLandmarks | null;
+  image_size: [number, number];
+  errors: string[];
+}
+
+// ── Client-side crop computation (mirrors main.py logic) ───────────────────────
+
+interface CropBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+function computeZ0Crop(
+  imgW: number, imgH: number,
+  lm: PortraitLandmarks,
+  padTop: number, padBottom: number, aspect: number,
+): CropBox {
+  const eyeY = Math.round((lm.left_eye_center[1] + lm.right_eye_center[1]) / 2);
+  const faceH = lm.chin[1] - lm.forehead_top[1];
+  const cx = lm.face_center_x;
+  const top = Math.max(0, Math.round(eyeY - faceH * (1 + padTop)));
+  const bottom = Math.min(imgH, Math.round(lm.chin[1] + faceH * padBottom));
+  const cropH = bottom - top;
+  const cropW = Math.round(cropH * aspect);
+  const left = Math.max(0, Math.min(cx - Math.floor(cropW / 2), imgW - cropW));
+  return { left, top, width: Math.min(cropW, imgW - left), height: cropH };
+}
+
+function computeZ1Crop(
+  imgW: number, imgH: number,
+  lm: PortraitLandmarks,
+  padTop: number, padBottom: number,
+): CropBox {
+  const faceH = lm.chin[1] - lm.forehead_top[1];
+  const cx = lm.face_center_x;
+  const top = Math.max(0, Math.round(lm.forehead_top[1] - faceH * padTop));
+  const bottom = Math.min(imgH, Math.round(lm.chin[1] + faceH * padBottom));
+  const cropH = bottom - top;
+  const cropW = cropH;
+  const left = Math.max(0, Math.min(cx - Math.floor(cropW / 2), imgW - cropW));
+  return { left, top, width: Math.min(cropW, imgW - left), height: cropH };
+}
+
+function computeZ2Crop(
+  imgW: number, imgH: number,
+  lm: PortraitLandmarks,
+): CropBox {
+  const eyeY = Math.round((lm.left_eye_center[1] + lm.right_eye_center[1]) / 2);
+  const eyeSpread = Math.abs(lm.left_eye_outer[0] - lm.right_eye_outer[0]);
+  const pad = Math.round(eyeSpread * 0.5);
+  const top = Math.max(0, eyeY - pad);
+  const bottom = Math.min(imgH, eyeY + pad);
+  const left = Math.max(0, lm.right_eye_outer[0] - pad);
+  const right = Math.min(imgW, lm.left_eye_outer[0] + pad);
+  return { left, top, width: right - left, height: bottom - top };
+}
+
+function computeZ3Crop(
+  imgW: number, imgH: number,
+  lm: PortraitLandmarks,
+  stripWidth: number,
+): CropBox {
+  const cx = lm.face_center_x;
+  const sw = Math.round(imgW * stripWidth);
+  const left = Math.max(0, Math.min(cx - Math.floor(sw / 2), imgW - sw));
+  return { left, top: 0, width: Math.min(sw, imgW - left), height: imgH };
+}
+
+// Fallback crops when no face detected
+function computeFallbackCrops(imgW: number, imgH: number, stripWidth: number): CropBox[] {
+  const sw = Math.round(imgW * stripWidth);
+  return [
+    { left: 0, top: 0, width: imgW, height: imgH },
+    { left: Math.floor(imgW / 4), top: Math.floor(imgH / 4), width: Math.floor(imgW / 2), height: Math.floor(imgH / 2) },
+    { left: Math.floor(imgW / 4), top: Math.floor(imgH / 6), width: Math.floor(imgW / 2), height: Math.floor(imgH / 3) },
+    { left: Math.floor(imgW / 2) - Math.floor(sw / 2), top: 0, width: sw, height: imgH },
+  ];
+}
+
+function drawCropOnCanvas(
+  canvas: HTMLCanvasElement,
+  img: HTMLImageElement,
+  box: CropBox,
+  lm: PortraitLandmarks | null,
+  showOverlay: boolean,
+): void {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Clamp to avoid zero-size draws
+  const sw = Math.max(1, box.width);
+  const sh = Math.max(1, box.height);
+
+  // Set canvas native resolution to match source crop
+  canvas.width = sw;
+  canvas.height = sh;
+
+  ctx.drawImage(img, box.left, box.top, sw, sh, 0, 0, sw, sh);
+
+  if (showOverlay && lm) {
+    const ox = -box.left;
+    const oy = -box.top;
+
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+
+    // Forehead line
+    const fhY = lm.forehead_top[1] + oy;
+    ctx.strokeStyle = 'rgba(0,255,0,0.6)';
+    ctx.beginPath(); ctx.moveTo(0, fhY); ctx.lineTo(sw, fhY); ctx.stroke();
+
+    // Chin line
+    const chY = lm.chin[1] + oy;
+    ctx.beginPath(); ctx.moveTo(0, chY); ctx.lineTo(sw, chY); ctx.stroke();
+
+    // Center line
+    ctx.strokeStyle = 'rgba(255,0,0,0.45)';
+    const cxL = lm.face_center_x + ox;
+    ctx.beginPath(); ctx.moveTo(cxL, 0); ctx.lineTo(cxL, sh); ctx.stroke();
+
+    // Eye dots
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(0,200,255,0.8)';
+    for (const key of ['left_eye_center', 'right_eye_center'] as const) {
+      const [ex, ey] = lm[key];
+      ctx.beginPath(); ctx.arc(ex + ox, ey + oy, 3, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+}
+
 function buildPortraitSection(body: HTMLElement): void {
   const statusEl = makeStatusEl();
   body.appendChild(statusEl);
@@ -1111,19 +1300,89 @@ function buildPortraitSection(body: HTMLElement): void {
   let z1PadTop = 0.05;
   let z1PadBottom = 0.05;
   let z3StripWidth = 0.25;
-  let compareMode = false;
+  let showOverlay = true;
 
+  // Stored after first API call
+  let storedLandmarks: PortraitLandmarks | null = null;
+  let storedImgW = 0;
+  let storedImgH = 0;
+  let sourceImage: HTMLImageElement | null = null;
+
+  // Canvas elements (created once, reused)
+  const canvasRow = document.createElement('div');
+  canvasRow.className = 'portrait-canvas-row';
+  canvasRow.style.display = 'none';
+
+  const zoomLabels = ['zoom_0 — full', 'zoom_1 — face', 'zoom_2 — eyes', 'zoom_3 — strip'];
+  const canvases: HTMLCanvasElement[] = [];
+  for (const label of zoomLabels) {
+    const item = document.createElement('div');
+    item.className = 'portrait-canvas-item';
+    const cv = document.createElement('canvas');
+    canvases.push(cv);
+    item.appendChild(cv);
+    const lbl = document.createElement('div');
+    lbl.className = 'portrait-canvas-label';
+    lbl.textContent = label;
+    item.appendChild(lbl);
+    canvasRow.appendChild(item);
+  }
+
+  const noFaceEl = document.createElement('div');
+  noFaceEl.className = 'portrait-no-face';
+  noFaceEl.style.display = 'none';
+  noFaceEl.textContent = 'No face detected — showing ratio-based fallback crops.';
+
+  // Compare grid (dithered output from API)
   const compareGrid = document.createElement('div');
   compareGrid.className = 'compare-grid';
-  compareGrid.style.cssText = 'display:none;flex-wrap:wrap;';
+  compareGrid.style.display = 'none';
 
-  body.appendChild(createToggle('Compare mode', false, (v) => {
-    compareMode = v;
-    compareGrid.style.display = v ? '' : 'none';
-    previewGrid.style.display = v ? 'none' : '';
+  // Dithered preview grid
+  const previewGrid = document.createElement('div');
+  previewGrid.className = 'wb-preview-grid';
+
+  function renderLiveCanvases(): void {
+    if (!sourceImage || storedImgW === 0) return;
+
+    let boxes: CropBox[];
+    if (storedLandmarks) {
+      boxes = [
+        computeZ0Crop(storedImgW, storedImgH, storedLandmarks, z0PadTop, z0PadBottom, z0Aspect),
+        computeZ1Crop(storedImgW, storedImgH, storedLandmarks, z1PadTop, z1PadBottom),
+        computeZ2Crop(storedImgW, storedImgH, storedLandmarks),
+        computeZ3Crop(storedImgW, storedImgH, storedLandmarks, z3StripWidth),
+      ];
+    } else {
+      boxes = computeFallbackCrops(storedImgW, storedImgH, z3StripWidth);
+    }
+
+    for (let i = 0; i < canvases.length; i++) {
+      drawCropOnCanvas(canvases[i]!, sourceImage, boxes[i]!, storedLandmarks, showOverlay);
+    }
+    canvasRow.style.display = 'flex';
+  }
+
+  function b64ToObjectUrl(b64: string): string {
+    const byteStr = atob(b64);
+    const arr = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
+    const blob = new Blob([arr], { type: 'image/png' });
+    return URL.createObjectURL(blob);
+  }
+
+  body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => {
+    uploadedFile = f;
+    // Reset stored state when a new file is chosen
+    storedLandmarks = null;
+    storedImgW = 0;
+    storedImgH = 0;
+    sourceImage = null;
+    canvasRow.style.display = 'none';
+    noFaceEl.style.display = 'none';
+    previewGrid.innerHTML = '';
+    compareGrid.innerHTML = '';
   }));
-
-  body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => { uploadedFile = f; }));
 
   body.appendChild(createTextarea('Style transfer prompt (used by full pipeline, not preview)', '', 8, () => { /* stored in program config */ }));
 
@@ -1142,24 +1401,32 @@ function buildPortraitSection(body: HTMLElement): void {
   body.appendChild(createSlider('Blur', 0, 30, 1, blur, (v) => { blur = v; }));
 
   body.appendChild(makeSubLabel('Zoom 0 Crop'));
-  body.appendChild(createSlider('Pad top', 0, 1, 0.01, z0PadTop, (v) => { z0PadTop = v; }));
-  body.appendChild(createSlider('Pad bottom', 0, 1, 0.01, z0PadBottom, (v) => { z0PadBottom = v; }));
-  body.appendChild(createSlider('Aspect', 0.4, 1.0, 0.01, z0Aspect, (v) => { z0Aspect = v; }));
+  body.appendChild(createSlider('Pad top', 0, 1, 0.01, z0PadTop, (v) => { z0PadTop = v; renderLiveCanvases(); }));
+  body.appendChild(createSlider('Pad bottom', 0, 1, 0.01, z0PadBottom, (v) => { z0PadBottom = v; renderLiveCanvases(); }));
+  body.appendChild(createSlider('Aspect', 0.4, 1.0, 0.01, z0Aspect, (v) => { z0Aspect = v; renderLiveCanvases(); }));
 
   body.appendChild(makeSubLabel('Zoom 1 Crop'));
-  body.appendChild(createSlider('Pad top', 0, 0.5, 0.01, z1PadTop, (v) => { z1PadTop = v; }));
-  body.appendChild(createSlider('Pad bottom', 0, 0.5, 0.01, z1PadBottom, (v) => { z1PadBottom = v; }));
+  body.appendChild(createSlider('Pad top', 0, 0.5, 0.01, z1PadTop, (v) => { z1PadTop = v; renderLiveCanvases(); }));
+  body.appendChild(createSlider('Pad bottom', 0, 0.5, 0.01, z1PadBottom, (v) => { z1PadBottom = v; renderLiveCanvases(); }));
 
   body.appendChild(makeSubLabel('Zoom 3 Crop'));
-  body.appendChild(createSlider('Strip width', 0.1, 0.5, 0.01, z3StripWidth, (v) => { z3StripWidth = v; }));
+  body.appendChild(createSlider('Strip width', 0.1, 0.5, 0.01, z3StripWidth, (v) => { z3StripWidth = v; renderLiveCanvases(); }));
 
-  const previewGrid = document.createElement('div');
-  previewGrid.className = 'wb-preview-grid';
+  body.appendChild(createToggle('Landmark overlay', showOverlay, (v) => { showOverlay = v; renderLiveCanvases(); }));
 
+  // Live canvas section
+  const liveLabel = document.createElement('div');
+  liveLabel.className = 'portrait-live-label';
+  liveLabel.textContent = 'Live crop preview (adjust sliders)';
+  body.appendChild(liveLabel);
+  body.appendChild(canvasRow);
+  body.appendChild(noFaceEl);
+
+  // Dithered preview section (from API)
   const btnRow = document.createElement('div');
   btnRow.className = 'wb-btn-row';
 
-  const previewBtn = makeButton('Preview Crops');
+  const previewBtn = makeButton('Preview Crops (dithered)');
   previewBtn.addEventListener('click', () => { void handlePreview(); });
 
   const printBtn = makeButton('Send to Printer', 'primary');
@@ -1172,25 +1439,16 @@ function buildPortraitSection(body: HTMLElement): void {
   body.appendChild(compareGrid);
   body.appendChild(statusEl);
 
-  // Auto-preview on slider change (debounced 500ms)
-  let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
-  function scheduleAutoPreview(): void {
-    if (!uploadedFile) return;
-    if (autoPreviewTimer) clearTimeout(autoPreviewTimer);
-    autoPreviewTimer = setTimeout(() => { void handlePreview(); }, 500);
-  }
-  body.addEventListener('input', scheduleAutoPreview);
+  async function handlePreview(): Promise<void> {
+    if (!uploadedFile) {
+      setStatus(statusEl, 'Select a photo first.', '#cc4444');
+      return;
+    }
+    previewBtn.disabled = true;
+    setStatus(statusEl, 'Processing portrait...', '#777777');
 
-  function b64ToObjectUrl(b64: string): string {
-    const byteStr = atob(b64);
-    const arr = new Uint8Array(byteStr.length);
-    for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
-    const blob = new Blob([arr], { type: 'image/png' });
-    return URL.createObjectURL(blob);
-  }
+    const creds = await fetchRenderCredentials();
 
-  async function fetchAllCrops(creds: RenderCredentials): Promise<string[] | null> {
-    if (!uploadedFile) return null;
     try {
       const fd = new FormData();
       fd.append('file', uploadedFile);
@@ -1212,141 +1470,89 @@ function buildPortraitSection(body: HTMLElement): void {
         body: fd,
       });
 
-      if (!res.ok) return null;
-      const json = (await res.json()) as { crops: string[]; face_detected?: boolean; errors?: string[] };
-      return json.crops ?? [];
-    } catch {
-      return null;
-    }
-  }
-
-  async function handlePreview(): Promise<void> {
-    if (!uploadedFile) {
-      setStatus(statusEl, 'Select a photo first.', '#cc4444');
-      return;
-    }
-    previewBtn.disabled = true;
-    setStatus(statusEl, 'Processing portrait...', '#777777');
-
-    const creds = await fetchRenderCredentials();
-
-    if (compareMode) {
-      compareGrid.innerHTML = '';
-      previewGrid.innerHTML = '';
-
-      const crops = await fetchAllCrops(creds);
-
-      if (!crops) {
-        setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      if (!res.ok) {
+        setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
         previewBtn.disabled = false;
         return;
       }
 
-      const zoomLabels = ['zoom_0', 'zoom_1', 'zoom_2', 'zoom_3'];
-      for (let i = 0; i < zoomLabels.length; i++) {
-        const item = document.createElement('div');
-        item.className = 'compare-item';
+      const json = (await res.json()) as PortraitPreviewResponse;
+      const crops = json.crops ?? [];
 
-        const labelEl = document.createElement('div');
-        labelEl.className = 'compare-label';
-        labelEl.textContent = zoomLabels[i]!;
-        item.appendChild(labelEl);
-
-        const b64 = crops[i];
-        if (b64) {
-          const img = document.createElement('img');
-          img.src = b64ToObjectUrl(b64);
-          img.alt = zoomLabels[i]!;
-          item.appendChild(img);
-        } else {
-          const failEl = document.createElement('div');
-          failEl.className = 'compare-item-failed';
-          failEl.textContent = 'Not available';
-          item.appendChild(failEl);
-        }
-
-        compareGrid.appendChild(item);
+      // Store landmarks + load source image for live canvas rendering
+      storedLandmarks = json.landmarks ?? null;
+      if (json.image_size) {
+        [storedImgW, storedImgH] = json.image_size;
       }
+      noFaceEl.style.display = storedLandmarks ? 'none' : '';
 
-      setStatus(statusEl, `${Math.min(crops.length, 4)} zoom levels rendered.`, '#66aa66');
-    } else {
+      // Load the original uploaded file into an HTMLImageElement for canvas use
+      const objectUrl = URL.createObjectURL(uploadedFile);
+      const img = new Image();
+      img.onload = () => {
+        sourceImage = img;
+        // image_size from server reflects the PIL image which may differ from browser decode;
+        // use the browser-decoded dimensions as the authoritative source
+        storedImgW = img.naturalWidth;
+        storedImgH = img.naturalHeight;
+        renderLiveCanvases();
+      };
+      img.src = objectUrl;
+
+      // Show dithered results in the preview grid
       previewGrid.innerHTML = '';
       compareGrid.innerHTML = '';
-
-      try {
-        const fd = new FormData();
-        fd.append('file', uploadedFile);
-        fd.append('dither_mode', ditherMode);
-        fd.append('blur_radius', String(blur));
-        fd.append('z0_pad_top', String(z0PadTop));
-        fd.append('z0_pad_bottom', String(z0PadBottom));
-        fd.append('z0_aspect', String(z0Aspect));
-        fd.append('z1_pad_top', String(z1PadTop));
-        fd.append('z1_pad_bottom', String(z1PadBottom));
-        fd.append('z3_strip_width', String(z3StripWidth));
-
-        const headers: Record<string, string> = {};
-        if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
-
-        const res = await fetch(`${creds.rendererUrl}/render/portrait-preview`, {
-          method: 'POST',
-          headers,
-          body: fd,
-        });
-
-        if (!res.ok) {
-          setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
-          previewBtn.disabled = false;
-          return;
-        }
-
-        const json = (await res.json()) as { crops: string[] };
-        const crops = json.crops ?? [];
-        previewGrid.innerHTML = '';
-
-        for (const b64 of crops) {
-          const url = b64ToObjectUrl(b64);
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = 'crop';
-          previewGrid.appendChild(img);
-        }
-
-        setStatus(statusEl, `${crops.length} crops rendered.`, '#66aa66');
-      } catch {
-        setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      for (const b64 of crops) {
+        const url = b64ToObjectUrl(b64);
+        const imgEl = document.createElement('img');
+        imgEl.src = url;
+        imgEl.alt = 'crop';
+        previewGrid.appendChild(imgEl);
       }
+
+      setStatus(statusEl, `${crops.length} crops rendered.${storedLandmarks ? '' : ' (no face detected, fallback crops)'}`, '#66aa66');
+    } catch {
+      setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
     }
 
     previewBtn.disabled = false;
   }
 
   async function handlePrint(): Promise<void> {
-    const cropImages = previewGrid.querySelectorAll('img');
-    if (cropImages.length === 0) {
+    // Collect images: prefer dithered API output if available, fall back to canvas snapshots
+    const apiCropImages = previewGrid.querySelectorAll('img');
+    const hasApiCrops = apiCropImages.length > 0;
+    const hasCanvasCrops = sourceImage !== null && canvasRow.style.display !== 'none';
+
+    if (!hasApiCrops && !hasCanvasCrops) {
       setStatus(statusEl, 'Preview crops first, then print.', '#cc4444');
       return;
     }
+
     printBtn.disabled = true;
     setStatus(statusEl, 'Uploading crops and queuing print...', '#777777');
 
     try {
       const imageUrlEntries: { name: string; url: string }[] = [];
-      for (let i = 0; i < cropImages.length; i++) {
-        const imgEl = cropImages[i] as HTMLImageElement;
-        const imgRes = await fetch(imgEl.src);
-        const blob = await imgRes.blob();
-        const fileName = `workbench/portrait-${Date.now()}-zoom${i}.png`;
-        const { error: upErr } = await supabase.storage
-          .from('prints')
-          .upload(fileName, blob, { contentType: 'image/png' });
-        if (upErr) {
-          setStatus(statusEl, `Upload failed for crop ${i}: ` + upErr.message, '#cc4444');
-          printBtn.disabled = false;
-          return;
+
+      if (hasApiCrops) {
+        // Use dithered API output
+        for (let i = 0; i < apiCropImages.length; i++) {
+          const imgEl = apiCropImages[i] as HTMLImageElement;
+          const imgRes = await fetch(imgEl.src);
+          const blob = await imgRes.blob();
+          const fileName = `workbench/portrait-${Date.now()}-zoom${i}.png`;
+          const { error: upErr } = await supabase.storage
+            .from('prints')
+            .upload(fileName, blob, { contentType: 'image/png' });
+          if (upErr) {
+            setStatus(statusEl, `Upload failed for crop ${i}: ` + upErr.message, '#cc4444');
+            printBtn.disabled = false;
+            return;
+          }
+          const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
+          imageUrlEntries.push({ name: `zoom_${i}`, url: urlData.publicUrl });
         }
-        const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
-        imageUrlEntries.push({ name: `zoom_${i}`, url: urlData.publicUrl });
       }
 
       const { error } = await supabase.from('print_queue').insert({
