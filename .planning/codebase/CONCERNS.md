@@ -2,189 +2,237 @@
 
 **Analysis Date:** 2026-03-24
 
+---
+
 ## Tech Debt
 
-**Silent fire-and-forget persistence patterns:**
-- Issue: `persistDefinition()`, `persistPrintJob()`, `persistTranscript()`, and `uploadBlurredPortrait()` in `apps/tablet/src/lib/persist.ts` all swallow errors silently. Errors are logged only to the browser console, never raised. When debugging missing data in Supabase, the tablet shows no error while the database transaction fails silently.
-- Files: `apps/tablet/src/lib/persist.ts`, `apps/backend/src/routes/webhook.ts`, `apps/backend/src/services/voiceChain.ts`
-- Impact: Data loss without visible indication. Visitor completes interaction, but definition/print job/transcript never reaches database due to RLS block or network timeout. Installation appears to work. Discovered only via manual Supabase query.
-- Fix approach: Add a lightweight persistence error queue (in-memory or IndexedDB) that logs failures to a dashboard widget or sends to sentry-like service. At minimum, display a subtle "offline" indicator if Supabase operations fail.
+**Dead package: `packages/core/`**
+- Issue: A `packages/core` package exists with compiled output (`dist/`) for `installationReducer`, `systemPrompt`, `firstMessage`, `tts/timestamps`, `api/client`, `conversation/types`. Zero source files remain — only dist + node_modules. Nothing in the monorepo imports from it.
+- Files: `packages/core/dist/`, `packages/core/node_modules/`
+- Impact: Confusing directory presence, node_modules consumed unnecessarily, pnpm install must process it.
+- Fix approach: Delete `packages/core/` entirely. Verify `pnpm-workspace.yaml` glob `packages/*` no longer picks it up after removal.
 
-**RLS policies are fragile and silent:**
-- Issue: The `turns` table required a public SELECT policy for the archive app to read conversations. The initial migration lacked this, causing archive to fail silently with empty results. Similar risk exists for `definitions` table: if RLS is misconfigured, the webhook receives no error, just a silent insert that succeeds at the API level but fails at the DB layer.
-- Files: `supabase/migrations/004_rls.sql`, `apps/backend/src/routes/webhook.ts` (line 99-105 where session fetch can silently miss), `apps/archive/` (not shown, but affected)
-- Impact: Data appears to be saved (webhook returns 200), but never persists. Auth token refresh or policy change breaks the system. No runtime check or log indicates RLS failure.
-- Fix approach: Before each webhook write, test a read with the same credentials to verify RLS is open. Add explicit logging: "Attempting to insert with role X — RLS policy must allow INSERT". For the archive, add a health check endpoint that verifies SELECT policy exists.
+**Deprecated prompt builders kept alive by tests**
+- Issue: `apps/tablet/src/lib/systemPrompt.ts` and `apps/tablet/src/lib/firstMessage.ts` are both `@deprecated` — they exist only for backward compat with tests. Production code has fully migrated to `program.buildSystemPrompt()` / `program.buildFirstMessage()` in `useConversation.ts`. However the deprecated files are 320+ lines of prompt logic that will silently diverge from the live program implementations over time.
+- Files: `apps/tablet/src/lib/systemPrompt.ts`, `apps/tablet/src/lib/firstMessage.ts`, `apps/tablet/src/lib/systemPrompt.test.ts`
+- Impact: Tests pass against the old implementations, not the programs that actually run. A change to `packages/shared/src/programs/aphorism.ts` will not be caught by those tests.
+- Fix approach: Migrate `systemPrompt.test.ts` to test `aphorismProgram.buildSystemPrompt()` directly. Delete deprecated files.
 
-**Config fetch failure is silent; tablet uses default with null context:**
-- Issue: If `/api/config` request fails (backend down, network error, or timeout), `fetchConfig()` in `apps/tablet/src/App.tsx` (line 171-174) catches the error and logs only to console. The tablet falls back to defaults: `DEFAULT_MODE`, `DEFAULT_TERM`, `contextText: null`. The ElevenLabs agent then receives no context text to reference, and conversations become generic term prompts with no text.
-- Files: `apps/tablet/src/App.tsx` (line 171-174), `apps/tablet/src/lib/api.ts` (line 137-143)
-- Impact: Visitors interact with the AI without the installation's curated text context. The experience degrades silently — no error message, just a boring interaction.
-- Fix approach: Retry `/api/config` 3 times with exponential backoff. If all retries fail, display a "Please check the backend service" message on the sleep screen and hold in that state until config succeeds.
+**`blurredPortraitBlobRef` is declared but never populated**
+- Issue: In `apps/tablet/src/App.tsx` line 103, `blurredPortraitBlobRef` is declared as a voice-chain feature ref. It is reset to null (line 442) but is never assigned a blob value — the actual `captureBlurredPortrait` import from `portraitBlur.ts` is imported but never called anywhere in `App.tsx`. The `portraitBlurredUrl` passed to `submitVoiceChainData` is hardcoded to `null` (line 266).
+- Files: `apps/tablet/src/App.tsx`, `apps/tablet/src/lib/portraitBlur.ts`
+- Impact: The blurred portrait feature of the voice chain program is entirely non-functional. Every voice chain submission sends `portrait_blurred_url: null`. The `uploadBlurredPortrait` function in `persist.ts` is also dead — never called.
+- Fix approach: Wire `captureBlurredPortrait(videoRef, ...)` into the portrait capture effect when `programRef.current.id === 'voice_chain'`. Store result in `blurredPortraitBlobRef`. Pass to `submitVoiceChainData`.
 
-**Zod validation strips unknown fields without warning:**
-- Issue: When the backend adds a field to a response schema, clients using older code won't include it in their Zod schema. The field gets silently dropped during validation. Example: if `/api/config` response gains a new field `newExperimentalSetting`, and a client's `ConfigResponseSchema` doesn't include it, the field vanishes during `schema.parse()`.
-- Files: `apps/tablet/src/lib/api.ts` (line 9-102, all `.optional()` fields are lenient), `apps/backend/src/routes/config.ts` (line 61-223 builds arbitrary response)
-- Impact: New features added to config (e.g., a new timer) won't reach old tablet clients. Operator assumes the setting is being applied; tablet ignores it. Hard to debug.
-- Fix approach: Use `.passthrough()` on response schemas to preserve unknown fields as-is. Log a warning if unknown fields appear: "Config response contains unexpected keys". For critical settings, make them required and fail-fast if missing.
+**`portraits-blurred` storage bucket has no migration**
+- Issue: `apps/tablet/src/lib/persist.ts` uploads to a `portraits-blurred` Supabase storage bucket, but no migration creates this bucket. The only storage migration (`011_prints_storage.sql`) creates the `prints` bucket only.
+- Files: `apps/tablet/src/lib/persist.ts:101-104`, `supabase/migrations/011_prints_storage.sql`
+- Impact: `uploadBlurredPortrait()` will silently fail with a storage error. Fire-and-forget swallows the error so no alert fires.
+- Fix approach: Add a migration that creates the `portraits-blurred` bucket with public read access, or remove the upload entirely if the feature is not needed.
 
-## Known Bugs & Edge Cases
+**Schema split: config in two places simultaneously**
+- Issue: `installation_config` was designed as the config store (migrations 002 and 012), but migration 013 adds a `programs` table with overlapping JSONB config for face detection, voice, portrait, and timing. The backend `/api/config` reads from `installation_config` columns AND the `programs` table independently. The `config app` writes to programs. The tablet reads from the backend which reads `installation_config`. A config change in the programs table does NOT propagate through `/api/config` response — the backend only looks up `voice_chain_config`, `faceDetection`, etc. from `installation_config` columns.
+- Files: `apps/backend/src/routes/config.ts`, `supabase/migrations/012_config_tables.sql`, `supabase/migrations/013_programs.sql`
+- Impact: Config changes made via the programs UI may be silently ignored by the tablet. There is no source of truth.
+- Fix approach: Decide on one config authority. Either have `/api/config` merge program JSONB config over `installation_config` columns, or deprecate `installation_config` columns in favor of programs.
 
-**Default voice restoration race condition:**
-- Issue: In `apps/tablet/src/hooks/useConversation.ts` (line 161-170), when the conversation ends, we attempt to restore the agent's default voice by PATCHing the ElevenLabs API. If two conversations overlap (unlikely but possible with WebSocket reconnect), the second one may succeed and change the voice while the first is still restoring default. The default voice ID is hardcoded: `'DLsHlh26Ugcm6ELvS0qi'`.
-- Files: `apps/tablet/src/hooks/useConversation.ts` (line 161-170)
-- Impact: Agent voice may be wrong for the next visitor if timing is unlucky. The voice clone ID set by the previous visitor lingers.
-- Fix approach: Store the actual current agent voice ID from config, not a hardcoded constant. Retry the PATCH once if it fails. Better: use a voice pool or per-session voice assignment, avoiding the need to restore globally.
+**Screen timer constants bypass runtime config**
+- Issue: All screen components use `TIMERS.*` from `@meinungeheuer/shared` constants directly:
+  - `DefinitionScreen.tsx:20` — `TIMERS.DEFINITION_DISPLAY_MS`
+  - `FarewellScreen.tsx:16` — `TIMERS.FAREWELL_DURATION_MS`
+  - `WelcomeScreen.tsx:22` — `TIMERS.WELCOME_DURATION_MS`
+  - `TermPromptScreen.tsx:15` — `TIMERS.TERM_PROMPT_DURATION_MS`
+  - `PrintingScreen.tsx:20,42` — `TIMERS.PRINT_TIMEOUT_MS`
 
-**Portrait capture may race with conversation end:**
-- Issue: In `apps/tablet/src/App.tsx` (line 355-370, not shown but inferred from line 97-100), portrait blob is captured during conversation but uploaded after definition is received. If the visitor closes the browser or the session times out before definition arrives, the portrait blob is lost. If the definition comes back but portrait upload fails, there's no retry.
-- Files: `apps/tablet/src/App.tsx`, `apps/tablet/src/hooks/usePortraitCapture.ts`
-- Impact: Voice chain mode depends on portrait for context. Missing portrait means no face reference for the next visitor. Silent failure.
-- Fix approach: Treat portrait upload as critical for voice chain mode; return to PrintingScreen until it succeeds or times out after 30s. Add explicit logging of portrait blob size and upload status.
+  The backend sends `timers: { welcomeMs, farewellMs, ... }` in `/api/config` and `App.tsx` stores them in `runtimeConfig`. But `useRuntimeConfig()` is only consumed by `TextReader.tsx`. All other screens ignore the runtime timers entirely.
+- Files: `apps/tablet/src/components/screens/*.tsx`, `apps/tablet/src/lib/configContext.ts`
+- Impact: Timer overrides from the database have no effect. The operator can change timer values in `installation_config` but the tablet will always use the hardcoded defaults.
+- Fix approach: Each screen should call `useRuntimeConfig()` and use `config.timers.*` rather than `TIMERS.*`.
 
-**Printer bridge polling can miss jobs if Realtime is down:**
-- Issue: In `apps/printer-bridge/src/index.ts` (line 135-171), the Realtime subscription is initiated with a 5-second polling fallback (line 199). If Realtime fails to subscribe (`CHANNEL_ERROR` or `TIMED_OUT`), the fallback starts polling. However, there's a window between startup and the first poll where an INSERT on `print_queue` arrives but is not processed: the job sits `pending` until the next poll interval (5 seconds later).
-- Files: `apps/printer-bridge/src/index.ts` (line 135-171, line 199-203)
-- Impact: Print jobs are delayed by up to 5 seconds during Realtime outages. Visitor watches the PrintingScreen for 10+ seconds while waiting for the card to print.
-- Fix approach: Reduce polling interval to 2 seconds. Store the last poll timestamp and immediately recheck on CHANNEL_ERROR to drain backlog faster.
+**Hardcoded default ElevenLabs voice ID in production code**
+- Issue: `apps/tablet/src/hooks/useConversation.ts:163` has a hardcoded voice ID `'DLsHlh26Ugcm6ELvS0qi'` used to "restore default agent voice" after a voice clone session ends.
+- Files: `apps/tablet/src/hooks/useConversation.ts:163`
+- Impact: If the agent's default voice is ever changed in the ElevenLabs dashboard, the restoration will silently set a wrong voice. This could persist across sessions if the next visitor gets a conversation with the previous visitor's default voice instead of the current default.
+- Fix approach: Pull the default voice ID from `VITE_ELEVENLABS_VOICE_ID` env var or from the runtime config returned by `/api/config`.
 
-**ElevenLabs voice clone deletion is fire-and-forget with no cleanup on error:**
-- Issue: In `apps/backend/src/services/voiceChain.ts` (line 105-131), `deleteVoiceClone()` is called fire-and-forget (line 480+, not shown). If the delete fails (quota reached, API error), the voice clone orphans in ElevenLabs and the account hits the clone limit. The error is logged but never surfaces to the admin.
-- Files: `apps/backend/src/services/voiceChain.ts`
-- Impact: After 10-15 voice chain cycles, voice clones max out. Subsequent conversations fail silently to get voice clones. The installation stops advancing the voice chain.
-- Fix approach: Log failed deletions to a `voice_clone_errors` table. Add an admin dashboard widget showing orphaned clones and offering a cleanup button. Set a maximum age for active clones (e.g., delete clones older than 24h).
+**`scripts/import-conversations.mjs` contains a hardcoded service role key**
+- Issue: The script at `scripts/import-conversations.mjs` has a hardcoded Supabase URL and **service role JWT** (REDACTED from this doc). This is a service role key with full database bypass access embedded directly in the source file and committed to git.
+- Files: `scripts/import-conversations.mjs:2-4`
+- Impact: The service role key is exposed in the git history. Anyone with repository access can use it to read, write, or delete all Supabase data including the `secrets` table. This is the highest-priority security concern in the codebase.
+- Fix approach: Revoke and rotate the Supabase service role key immediately. Rewrite the script to read credentials from env vars (`process.env.SUPABASE_URL`, `process.env.SUPABASE_SERVICE_ROLE_KEY`). Add the script to `.gitignore` or replace the key with a placeholder.
 
-## Security Considerations
+---
 
-**Webhook secret can be null in dev mode:**
-- Issue: In `apps/backend/src/routes/webhook.ts` (line 14-20), if `process.env['WEBHOOK_SECRET']` is not set, webhook authentication is skipped entirely. The same applies to `/api/config/update` in `apps/backend/src/routes/config.ts` (line 19-24). This is intentional for dev, but if a developer forgets to set the secret in production, anyone can call the webhook and create definitions, print jobs, or change config.
-- Files: `apps/backend/src/routes/webhook.ts` (line 14-20), `apps/backend/src/routes/config.ts` (line 19-24)
-- Impact: Unauthorized definition creation, print spam, config hijacking.
-- Fix approach: In production builds, always require `WEBHOOK_SECRET`. Throw an error during startup if it's missing. Add a build-time check in Coolify or CI/CD: `if [ -z "$WEBHOOK_SECRET" ]; then echo "WEBHOOK_SECRET required"; exit 1; fi`.
+## Security Concerns
 
-**Voice clone audio files stored in Supabase Storage without retention policy:**
-- Issue: Voice chain mode uploads audio to ElevenLabs for cloning, then stores the blurred portrait and metadata in Supabase Storage and `voice_chain_state` table. If an attacker gains access to Supabase Storage, they can download all visitor portraits (despite blur). No explicit retention or deletion policy exists.
-- Files: `apps/tablet/src/lib/persist.ts` (line 98-119, portrait upload), `apps/backend/src/services/voiceChain.ts` (voice processing)
-- Impact: Privacy breach: visitor portraits (even blurred) are indefinitely stored.
-- Fix approach: Add a retention policy: auto-delete voice chain portraits and audio blobs after 30 days. Implement explicit cleanup: `DELETE FROM storage.objects WHERE bucket_id='portraits-blurred' AND created_at < now() - interval '30 days'`. Display a privacy notice to visitors: "Your portrait will be deleted after 30 days."
+**Hardcoded Supabase service role key in git history**
+- Risk: Full RLS bypass on production Supabase instance.
+- Files: `scripts/import-conversations.mjs:2-4`
+- Current mitigation: None.
+- Recommendations: (1) Rotate the key immediately in the Supabase dashboard. (2) Audit git history for any other secrets. (3) Move to environment variable pattern.
 
-**Supabase Realtime auth token refresh not handled:**
-- Issue: The printer-bridge and tablet apps use Supabase Realtime channels but don't explicitly refresh the auth token. If the session lasts longer than the token's TTL (usually 1 hour for Supabase), the channel silently disconnects and falls back to polling.
-- Files: `apps/printer-bridge/src/index.ts` (line 138-160), `apps/tablet/src/` (various components using Supabase)
-- Impact: Realtime features (instant print notifications, config changes) degrade to polling after 1 hour. Silent failure.
-- Fix approach: Add token refresh logic to the Supabase client. Detect channel disconnection and re-subscribe with a fresh token.
+**Backend CORS wildcard `origin: '*'`**
+- Risk: Any webpage can make credentialed requests to the backend API.
+- Files: `apps/backend/src/app.ts:18-19`
+- Current mitigation: Some admin endpoints protected by `WEBHOOK_SECRET`. Voice chain `/process` endpoint has no auth check.
+- Recommendations: Restrict CORS origin to known tablet/config origins in production. Add authentication middleware to `/api/voice-chain/process`.
 
-## Performance Bottlenecks
+**`/api/voice-chain/process` is unauthenticated**
+- Risk: Any caller can submit audio and transcript to the voice chain processor, triggering ElevenLabs API calls (which cost money) and writing to `voice_chain_state`.
+- Files: `apps/backend/src/routes/voiceChain.ts:30-80`
+- Current mitigation: The endpoint requires `session_id` and `audio` but performs no token check.
+- Recommendations: Apply `WEBHOOK_SECRET` middleware to this route as is done for the definition webhook and admin endpoints.
 
-**Face detection runs at only 2 fps (500ms interval):**
-- Issue: In `apps/tablet/src/hooks/useFaceDetection.ts` (line 225), the detection loop runs every 500ms. This is intentionally low to reduce CPU on the tablet, but it introduces a 250ms average latency between a visitor's face appearing and the wake trigger firing.
-- Files: `apps/tablet/src/hooks/useFaceDetection.ts` (line 225)
-- Impact: Visitors wave at the camera and wait 1-2 seconds for the welcome screen to appear. Impression of lag.
-- Fix approach: Increase to 10 fps (100ms interval) on desktop, keep 2 fps on mobile (use screen.width detection). The tablet is typically desktop-class, so 100ms is safe. Measure CPU with DevTools to confirm.
+**Backend admin config endpoint bypasses auth when `WEBHOOK_SECRET` unset**
+- Risk: Without `WEBHOOK_SECRET` set, `POST /api/config/update` is fully open — anyone can change mode/term.
+- Files: `apps/backend/src/routes/config.ts:21-24`
+- Current mitigation: Only a concern if `WEBHOOK_SECRET` is absent. CLAUDE.md warns about this.
+- Recommendations: Ensure `WEBHOOK_SECRET` is always set in production. Consider making it mandatory (throw at startup) rather than optional.
 
-**Portrait JPEG encoding happens on main thread:**
-- Issue: In `apps/tablet/src/hooks/usePortraitCapture.ts` (not shown in detail), canvas-to-blob JPEG encoding with quality 0.85 (from config) is synchronous. Encoding a 1280×960 portrait takes ~50-100ms, blocking the render thread and audio processing.
-- Files: `apps/tablet/src/hooks/usePortraitCapture.ts`, `apps/tablet/src/lib/portraitBlur.ts`
-- Impact: Slight audio dropout or UI stutter during portrait capture.
-- Fix approach: Move JPEG encoding to a Web Worker. Use `canvas.convertToBlob()` with a timeout to avoid blocking.
+**`?admin=true` in tablet URL exposes admin panel**
+- Risk: The admin panel is accessible to anyone who knows the URL pattern. The `secret` param is optional when `WEBHOOK_SECRET` is unset.
+- Files: `apps/tablet/src/App.tsx:56-57`, `apps/tablet/src/pages/Admin.tsx:25`
+- Current mitigation: In production `WEBHOOK_SECRET` is set; requests without it return 401.
+- Recommendations: Document that `WEBHOOK_SECRET` is mandatory in production. Consider redirecting `?admin=true` without `secret` to a 401 page rather than showing the UI.
 
-**Embedding generation is serial, not batched:**
-- Issue: In `apps/backend/src/services/embeddings.ts`, `generateEmbedding()` is called fire-and-forget for each definition. If 10 definitions are saved in quick succession, 10 separate API calls to OpenRouter are made. No batching or queue.
-- Files: `apps/backend/src/services/embeddings.ts` (line 28-85), `apps/backend/src/routes/webhook.ts` (line 254)
-- Impact: Embeddings API quota is consumed linearly. If the installation is popular (50+ definitions/hour), API costs spike. Slow response times for embedding API.
-- Fix approach: Batch embeddings: queue up to 10 definition IDs, submit them in a single `embeddings.create({ input: [text1, text2, ...] })` call. Use a 5-second debounce window to accumulate.
+**Config app `secrets` table stores API keys in Supabase**
+- Risk: Secrets stored in the `secrets` table (ElevenLabs key, OpenRouter key, etc.) are accessible to any authenticated user of the config app.
+- Files: `apps/config/src/tabs/system.ts`, `supabase/migrations/012_config_tables.sql:81-100`
+- Current mitigation: RLS restricts `secrets` to `authenticated` role only. Not anon-readable.
+- Recommendations: This is acceptable for an operator-only config app, but ensure the Supabase auth is not configured with "anyone can sign up" enabled.
+
+---
+
+## Known Bugs
+
+**`FACE_LOST` action only resets from `farewell` state — not from other active screens**
+- Symptoms: If a visitor walks away mid-conversation or mid-text-display, the installation stays on the current screen indefinitely. `FACE_LOST` is handled only for `farewell → sleep`. All other screens ignore it.
+- Files: `apps/tablet/src/hooks/useInstallationMachine.ts:185-188`
+- Trigger: Visitor face disappears during conversation, text_display, synthesizing, definition, or printing.
+- Workaround: Manual tap on sleep screen or restart.
+
+**Dual definition persistence path with race condition potential**
+- Symptoms: `save_definition` fires as both a client tool (browser → Supabase directly) AND a webhook (ElevenLabs → backend → Supabase). Both paths try to insert the same definition. The client path uses a client-generated UUID (`crypto.randomUUID()`); the webhook generates a new UUID server-side. Result: two separate definition rows for the same conversation.
+- Files: `apps/tablet/src/lib/persist.ts:7-38`, `apps/backend/src/routes/webhook.ts:70-110`
+- Trigger: Every successful conversation where `save_definition` is a configured webhook tool.
+- Workaround: The code comments acknowledge both paths coexist. The duplicate error (`code === '23505'`) is caught but only relevant if the webhook and client use the same UUID, which they do not.
+
+**Consent declining skips audio submission but voice chain recording still runs**
+- Symptoms: When a visitor declines voice clone consent, `stopRecording()` is still called. The audio recording ran the whole conversation. The check `state.voiceCloneConsent === false` prevents submission but the microphone was open for the full session regardless.
+- Files: `apps/tablet/src/App.tsx:255-257`, `apps/tablet/src/hooks/useAudioCapture.ts`
+- Impact: Minor GDPR concern — audio is captured before consent check, though not transmitted.
+- Fix approach: Either cancel recording immediately on `CONSENT_DECLINED` dispatch, or do not start recording until consent is accepted.
+
+**Config workbench renderer URL defaults to `localhost:8000`**
+- Symptoms: When `print_renderer_url` is not set in `installation_config`, the workbench tab falls back to `http://localhost:8000`. This means the config app running in a browser or on Coolify will always fail renderer previews unless the operator also runs the renderer locally.
+- Files: `apps/config/src/tabs/workbench.ts:467`
+- Trigger: Any operator using the hosted config app without a local renderer.
+
+---
 
 ## Fragile Areas
 
-**Installation state machine depends on exact screen transitions:**
-- Issue: In `apps/tablet/src/hooks/useInstallationMachine.ts` (line 65-150+), each action checks the current screen before allowing a transition. If a timer fires twice or an event arrives out of order, the transition is ignored (e.g., `TIMER_3S` when screen is not 'welcome' returns the same state). This is correct, but the reducer is 550+ lines and has many conditional paths. A typo in a screen name or action type won't be caught until runtime.
-- Files: `apps/tablet/src/hooks/useInstallationMachine.ts`
-- Impact: Silent state machine jams if a action is dispatched to the wrong screen. Visitor presses "start" but nothing happens because the reducer expected 'welcome' and got 'sleep'.
-- Fix approach: Add exhaustiveness checks: use TypeScript's never type to ensure all action types are handled. Add a catch-all case that logs a warning if an unhandled transition is attempted. Consider a state machine library (xstate) for clearer visualization.
+**Voice clone agent patching is a shared global mutation**
+- Files: `apps/tablet/src/hooks/useConversation.ts:196-211`, `apps/backend/src/routes/voiceChain.ts:85-120`
+- Why fragile: `apply-voice` PATCHes the ElevenLabs agent to apply a cloned voice. This is a global mutation on the single agent. If two sessions start simultaneously (impossible in practice but possible in testing), they would race on the agent voice. The restoration PATCH in `onDisconnect` is also a fire-and-forget void fetch — if it fails, the next visitor gets the previous visitor's voice.
+- Safe modification: Never call `apply-voice` without also verifying the restoration completes. Consider logging the `apply-voice` calls to a DB table for auditability.
+- Test coverage: None.
 
-**ElevenLabs agent config can be stale:**
-- Issue: The ElevenLabs agent is configured via API and stored in the Hono backend environment variables. The system prompt and first message are built on the client and passed to the WebSocket session via `overrides` (line 236-243 in `apps/tablet/src/hooks/useConversation.ts`). If the agent's backend configuration drifts from what the code expects (e.g., tools are removed), the session overrides may not apply correctly.
-- Files: `apps/tablet/src/hooks/useConversation.ts` (line 235-243), `apps/backend/src/routes/voiceChain.ts` (line 131-146)
-- Impact: System prompt is ignored, agent doesn't call tools, definitions don't arrive.
-- Fix approach: Fetch the agent config from ElevenLabs API on startup and validate it. Log a warning if tools are missing or misconfigured. Add a health check endpoint `/api/agent-config` that validates the agent setup.
+**`persistPrintJob` uses a `count(sessions)` query for `session_number` but doesn't lock**
+- Files: `apps/tablet/src/lib/persist.ts:60-69`
+- Why fragile: The session count is read then used as `session_number` in the print payload. Under concurrent visitors this count can be stale, producing duplicate session numbers on printed cards.
+- Safe modification: Use a sequence or trigger in Postgres rather than reading count client-side.
 
-**Supabase schema assumes single installation_config row:**
-- Issue: In `apps/backend/src/routes/config.ts` (line 62-66), the code fetches the first installation_config row with `.limit(1).maybeSingle()`. If multiple rows exist (operator copy-pasted the config), the second one is ignored silently. No warning or error.
-- Files: `apps/backend/src/routes/config.ts` (line 62-66)
-- Impact: Configuration changes are ignored if there are duplicate rows. Operator thinks they updated the config, but the old row is still being served.
-- Fix approach: Add a check in the migration that enforces exactly one row: `ALTER TABLE installation_config ADD CONSTRAINT one_row CHECK (true);` won't work (CHECK can't count), but a trigger `BEFORE INSERT` can reject if count > 0.
+**`programs` table seeded with `ON CONFLICT (id) DO NOTHING` — config drifts silently**
+- Files: `supabase/migrations/013_programs.sql:37-153`
+- Why fragile: The seed uses `ON CONFLICT (id) DO NOTHING`, so any existing row is never updated when the migration re-runs. If the default program configs change in the migration file, production will silently keep the old values.
+- Fix approach: Use `ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, pipeline = EXCLUDED.pipeline, config = EXCLUDED.config` for seed rows, or add a separate script to refresh seeds.
 
-**Print renderer URL is not validated:**
-- Issue: In `apps/printer-bridge/src/index.ts` and `apps/tablet/src/hooks/usePortraitCapture.ts`, the `printRendererUrl` comes from environment variables or config with no runtime validation. If the URL is wrong (typo, service down), the POST request fails silently.
-- Files: `apps/printer-bridge/src/index.ts` (line 22), `apps/tablet/src/App.tsx` (line 90)
-- Impact: Prints fail silently. Visitor leaves thinking they'll get a card but nothing happens.
-- Fix approach: Add a health check on app startup: `GET {printRendererUrl}/health`. If it fails, log a critical error and hold the app in a "printer service unavailable" state.
+**`App.tsx` is 555 lines — all orchestration in one component**
+- Files: `apps/tablet/src/App.tsx`
+- Why fragile: Conversations, portrait capture, audio recording, config fetching, definition persistence, print job enqueue, voice chain state, and consent logic all live in one React component. Multiple `useRef` guards (`configFetchedRef`, `conversationStartedRef`, `audioRecordingStartedRef`, `printJobFiredRef`, `portraitCapturedRef`) prevent double-firing — adding any new effect risks triggering existing guards incorrectly.
+- Safe modification: Use consistent guard pattern (check the ref before and reset on leave), always add the guard ref to the cleanup block.
+- Test coverage: No unit tests for `App.tsx` itself — only state machine and hooks are tested.
+
+---
+
+## Performance Bottlenecks
+
+**TTS cache adapter makes two Supabase round trips per cache hit**
+- Problem: `supabaseCacheAdapter.ts` fetches the TTS audio data with a `select` then the component checks if it exists. For a cache miss, at minimum two network calls occur before ElevenLabs TTS is even attempted.
+- Files: `apps/tablet/src/lib/supabaseCacheAdapter.ts`
+- Cause: Architecture mismatch — karaoke-reader's cache interface was designed for local storage.
+
+**`/api/config` makes 3-5 Supabase queries sequentially on every request**
+- Problem: `config.ts` does: `installation_config` select, `prompts` select, optionally `texts` select, optionally chain state fetch, optionally dynamic import + `voice_chain_state` select. All sequential, no batching.
+- Files: `apps/backend/src/routes/config.ts:55-190`
+- Cause: Organic feature accretion.
+- Improvement path: Parallelize with `Promise.all` for the independent fetches (prompts + installation_config can run together, texts + chain state can run together). Consider caching the config response for ~30s since it changes only when an operator edits it.
+
+---
 
 ## Scaling Limits
 
-**Pi RAM constraint blocks monorepo builds:**
-- Issue: The README notes that `npx tsc` and full `pnpm install` will OOM-kill on the Pi (limited RAM). The workaround is to commit `packages/shared/dist/` to git so the Pi never needs to rebuild. However, if a developer forgets to run `pnpm build` and `git add -f packages/shared/dist/` after modifying `packages/shared/src/`, the Pi will fail silently (or crash).
-- Files: All apps that depend on `@meinungeheuer/shared`
-- Impact: Deployment to Pi fails with cryptic OOM messages. No clear error message tells the developer to rebuild shared.
-- Fix approach: Add a predeployment check: verify that `packages/shared/dist/` is committed and up-to-date with src. Add a git hook: `pre-push` validates that if src files changed, dist files were updated. Fail the push with a clear message.
+**`voice_chain_state` rows accumulate without cleanup**
+- Current capacity: No deletion policy on old voice chain rows.
+- Limit: ElevenLabs instant voice clones are charged per creation. Old clones are never deleted from ElevenLabs either (the `deleteVoiceClone` function exists in `apps/backend/src/services/voiceChain.ts` but its call site is unclear).
+- Scaling path: Add a cron or trigger to delete ElevenLabs voice clones after 2 chain positions and mark `voice_clone_status = 'deleted'`.
 
-**Polling interval creates print job latency:**
-- Issue: In `apps/printer-bridge/src/index.ts` (line 105, 199), the poll interval is 5 seconds. During Realtime outages, a print job sits in the queue for up to 5 seconds before being picked up.
-- Files: `apps/printer-bridge/src/index.ts`
-- Impact: Visitor waits longer for the card to print.
-- Fix approach: See Performance Bottlenecks section; reduce to 2 seconds.
+---
+
+## Dependencies at Risk
+
+**`@elevenlabs/react` pinned to exact `0.14.1` while `@elevenlabs/client` is `^0.15.0`**
+- Risk: Potential version mismatch between the React wrapper and the underlying client library. The react package is pinned exact while client allows minor updates.
+- Impact: SDK behavior changes if `@elevenlabs/client` auto-updates to a minor that breaks the `0.14.1` React wrapper.
+- Files: `apps/tablet/package.json:14-15`
+- Migration plan: Pin both to the same version family, or update `@elevenlabs/react` to match client.
+
+**`google/gemini-3.1-flash-image-preview` model ID in `render_config`**
+- Risk: This appears to be a pre-release model ID (`3.1-flash-image-preview`). Preview model IDs frequently change or are retired without notice.
+- Files: `supabase/migrations/012_config_tables.sql:119`, `apps/print-renderer/config.yaml:71`
+- Impact: Portrait style transfer fails silently when the model is retired.
+- Migration plan: Monitor for deprecation; update in both `render_config` seed and `config.yaml`.
+
+---
+
+## Missing Critical Features
+
+**Prompts table not seeded — fallback to TypeScript implementations**
+- Problem: Migration 012 creates the `prompts` table but explicitly does NOT seed it: "Seed prompts are NOT included here — they are 200+ lines each." The tablet code in `useConversation.ts` calls `program.buildSystemPrompt()` directly, not from DB. The backend `/api/config` fetches from `prompts` table and passes it down, but the tablet ignores the `prompt` field from config.
+- Blocks: Operators cannot change system prompts from the config UI without a developer deploying new TypeScript code.
+
+**`archive.baufer.beauty` URL hardcoded in tablet**
+- Problem: `DefinitionScreen.tsx:12` has `const ARCHIVE_BASE = 'https://archive.baufer.beauty/#/definition'` hardcoded. This URL is baked into every QR code generated on the definition screen.
+- Files: `apps/tablet/src/components/screens/DefinitionScreen.tsx:12`
+- Impact: Changing the archive domain requires a code change and redeployment.
+
+---
 
 ## Test Coverage Gaps
 
-**No tests for webhook race conditions:**
-- Issue: Two rapid save_definition calls for the same conversation_id could result in duplicate definitions or race conditions in chain_depth calculation. No integration tests cover concurrent webhook calls.
-- Files: `apps/backend/src/routes/webhook.ts` (line 71-257)
-- Impact: Edge case with concurrent visitors or rapid retries could cause data corruption.
-- Fix approach: Add an integration test: simulate two webhook calls arriving within 100ms, verify only one definition is created.
+**No test for voice chain consent-gate logic**
+- What's not tested: The `CONSENT_ACCEPTED` / `CONSENT_DECLINED` action handling in `useInstallationMachine.ts` (lines 123-143), and the `state.voiceCloneConsent` guard in `App.tsx` that gates audio submission.
+- Files: `apps/tablet/src/hooks/useInstallationMachine.test.ts`, `apps/tablet/src/App.tsx:255-258`
+- Risk: Consent bypass could result in GDPR violations (submitting audio when consent was declined).
+- Priority: High
 
-**No tests for RLS policy enforcement:**
-- Issue: The migrations define RLS policies, but there are no tests verifying they work as expected. If a policy is accidentally dropped during a future migration, it won't be caught.
-- Files: `supabase/migrations/004_rls.sql`
-- Impact: Silent security regression.
-- Fix approach: Add a test that attempts to insert/select/update as the anon user and verifies policies are enforced.
-
-**No tests for silent error paths in persist functions:**
-- Issue: The fire-and-forget functions in `apps/tablet/src/lib/persist.ts` catch all errors and log only. No tests verify that errors are logged, or what happens if Supabase is unavailable.
+**No test for `persistPrintJob`, `persistDefinition`, `persistTranscript`**
+- What's not tested: All fire-and-forget Supabase persistence functions.
 - Files: `apps/tablet/src/lib/persist.ts`
-- Impact: Silent data loss is undetected.
-- Fix approach: Mock Supabase to fail, call persist functions, verify they log errors without throwing.
+- Risk: Silent data loss bugs (e.g. wrong field mapping, session_id null when it shouldn't be) go undetected.
+- Priority: Medium
 
-**Face detection hook lacks error injection tests:**
-- Issue: Camera permission denied, model load failure, and MediaPipe CDN timeout are handled, but there are no tests simulating these failures.
-- Files: `apps/tablet/src/hooks/useFaceDetection.ts`
-- Impact: Edge cases may cause silent hangs (e.g., waiting forever for loadedmetadata if video fails).
-- Fix approach: Add tests that mock getUserMedia to throw, FaceDetector.createFromOptions to timeout, etc. Verify the hook surfaces errors and allows graceful fallback.
+**No tests for any backend routes**
+- What's not tested: `apps/backend/src/routes/config.ts`, `webhook.ts`, `voiceChain.ts`, `session.ts`.
+- Files: `apps/backend/src/routes/`
+- Risk: The `/webhook/definition` duplicate definition path and chain state logic are untested. Regressions would only be caught in production.
+- Priority: Medium
 
-**No end-to-end tests for the full conversation flow:**
-- Issue: Individual hooks and components are tested, but no E2E test covers: wake → welcome → text_display → conversation → definition received → printing → farewell → sleep.
-- Files: All screen components, state machine, ElevenLabs integration
-- Impact: A breaking change in screen routing or state transitions won't be caught until manually tested.
-- Fix approach: Add a Playwright E2E test that mocks ElevenLabs WebSocket and Supabase, then simulates a full conversation.
-
-## Deployment & Operational Risks
-
-**Backend depends on ElevenLabs API key at runtime:**
-- Issue: If the ElevenLabs API key (`ELEVENLABS_API_KEY` env var) is missing or revoked, voice chain processing fails silently. The backend logs errors but continues running, and visitors are offered voice chain mode with no way to participate.
-- Files: `apps/backend/src/services/voiceChain.ts` (line 17, 20)
-- Impact: Voice chain mode silently broken; visitors confused.
-- Fix approach: On startup, test the API key with a simple API call (e.g., GET /v1/user). If it fails, log an error and gracefully disable voice chain mode (return null from `/api/config`).
-
-**Coolify expects `pnpm-lock.yaml` to be committed:**
-- Issue: The deployment notes say lockfile must be committed. If a developer upgrades a dependency locally but forgets to run `pnpm install` and commit the lockfile, Coolify build will fail with `--frozen-lockfile` error.
-- Files: Monorepo root
-- Impact: Deployment blocked; unclear error message.
-- Fix approach: Add a pre-push hook that checks if any `package.json` changed but `pnpm-lock.yaml` wasn't. Fail with a message: "Run `pnpm install` and commit the lockfile."
-
-**Migrations are not auto-applied to production:**
-- Issue: The README notes that migrations must be applied manually or via the Supabase dashboard. If a developer creates a migration but forgets to apply it before deploying the backend, the code expects a table that doesn't exist and crashes.
-- Files: `supabase/migrations/`
-- Impact: Production outage; unclear error message.
-- Fix approach: Add a startup check to the backend: `SELECT * FROM information_schema.tables WHERE table_name='...'` for each critical table. If missing, log a critical error and refuse to start: "Please apply migrations."
+**No integration test for the program registry**
+- What's not tested: `getProgram()` fallback behavior when an unknown program ID is passed. Returning the wrong program silently would result in wrong prompt construction.
+- Files: `packages/shared/src/programs/index.ts`, `packages/shared/src/programs/index.test.ts`
+- Priority: Low
 
 ---
 

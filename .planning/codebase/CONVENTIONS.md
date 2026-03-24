@@ -5,224 +5,217 @@
 ## Naming Patterns
 
 **Files:**
-- Screen components: `{StateName}Screen.tsx` (e.g., `TextDisplayScreen.tsx`, `ConversationScreen.tsx`)
-- Custom hooks: `use{Name}.ts` (e.g., `useInstallationMachine.ts`, `useConversation.ts`, `useKaraokeReader.ts`)
-- Utilities: lowercase with hyphens (e.g., `buildWordTimestamps.ts`, `mock-audio.ts`)
-- Test files colocated with source: `{name}.test.ts` or `{name}.test.tsx` in same directory
+- React screen components: `PascalCase` with `Screen` suffix — `ConversationScreen.tsx`, `SleepScreen.tsx`
+- React hooks: `camelCase` with `use` prefix — `useInstallationMachine.ts`, `useConversation.ts`, `usePortraitCapture.ts`
+- Utility/lib files: `camelCase` — `persist.ts`, `systemPrompt.ts`, `fullscreen.ts`, `api.ts`
+- Test files: co-located, same name with `.test.ts` / `.test.tsx` suffix
+- Program files: `kebab-case` — `free-association.ts`, `voice-chain.ts`
 
 **Functions:**
-- camelCase for all functions and methods
-- Utility functions often prefixed with verb: `build*`, `make*`, `load*`, `fetch*`, `persist*`
-- Helper functions inside tests: `make{Type}()` for creating test fixtures (e.g., `makeDefinition()`, `makeTimestamps()`)
+- Hooks: `useXxx` — exported named functions
+- Programs: `xxxProgram` for the program object itself (e.g. `aphorismProgram`, `voiceChainProgram`)
+- Utility functions: `camelCase` — `buildSystemPrompt`, `loadConfig`, `renderAndPrint`, `buildTestPayload`
+- Async operations that return `void` and swallow errors: `persistXxx` — `persistDefinition`, `persistPrintJob`, `persistTranscript`
+- API layer: `fetchXxx` / `startXxx` / `submitXxx` pattern in `apps/tablet/src/lib/api.ts`
 
 **Variables:**
-- camelCase for all variables and properties
-- Constants in UPPER_SNAKE_CASE (e.g., `DEFAULT_MODE`, `DEFAULT_TERM`)
-- React state variables: descriptive names like `transcript`, `isSpeaking`, `status`, `activeWordIndex`
-- Booleans often prefixed with `is` or `has`: `isSpeaking`, `voiceCloneConsent`
+- `camelCase` throughout
+- State properties use `snake_case` only when mirroring Supabase column names exactly
 
-**Types:**
-- PascalCase for all types and interfaces
-- Suffixes for categorized types:
-  - `*Schema` for Zod schemas (e.g., `ModeSchema`, `SessionSchema`)
-  - `*Response` for API response types (e.g., `ConfigResponse`)
-  - `*Params` for function parameter interfaces (e.g., `UseConversationParams`)
-  - `*Return` for hook return types (e.g., `UseConversationReturn`)
-  - `*Action` for reducer action union types (e.g., `InstallationAction`)
-  - `*State` for reducer state types (e.g., `InstallationState`)
+**Types/Interfaces:**
+- Interfaces: `PascalCase` with descriptive noun — `InstallationState`, `BridgeConfig`, `UseConversationParams`
+- Zod schemas: `PascalCase` + `Schema` suffix — `ModeSchema`, `PrintPayloadSchema`, `SessionSchema`
+- Types inferred from Zod: `type Foo = z.infer<typeof FooSchema>` — always paired with their schema
+- Action union types: `PascalCase` — `InstallationAction`
+- Action type strings: `SCREAMING_SNAKE_CASE` — `'WAKE'`, `'TIMER_3S'`, `'DEFINITION_RECEIVED'`
+
+**Directories:**
+- Screen components: `components/screens/`
+- Hooks: `hooks/`
+- Library functions: `lib/`
+- API routes: `routes/`
+- Services: `services/`
+- Program modules: `programs/`
 
 ## Code Style
 
 **Formatting:**
-- Prettier handles all formatting (runs via `pnpm lint`)
-- No `.prettierrc` configured — uses Prettier defaults
-- No linting config file detected (ESLint not explicitly configured)
+- 2-space indentation (Biome config in `packages/karaoke-reader/biome.json`, inferred from code in other packages)
+- Line width: 100 characters (`packages/karaoke-reader/biome.json`)
+- Single quotes for strings
 
-**Comments:**
-- Use block comments (`/** ... */`) for JSDoc/TSDoc documentation
-- Describe intent and behavior, not obvious code
-- Place descriptive comments above implementations:
-  ```typescript
-  /**
-   * Build the system prompt for the ElevenLabs Conversational AI agent.
-   * The prompt is constructed dynamically based on the current mode...
-   */
-  export function buildSystemPrompt(...) { ... }
-  ```
-- Section dividers use lines of `=` or `-` to organize code blocks:
-  ```typescript
-  // ============================================================
-  // State
-  // ============================================================
-  ```
+**Linting:**
+- Biome used in `packages/karaoke-reader/` — recommended rules + import organization
+- No ESLint config found at root; TypeScript strict mode enforces most quality rules
+- One documented `eslint-disable` comment exists: `// eslint-disable-next-line @typescript-eslint/no-explicit-any` in `useConversation.test.ts` — only in test code
 
 **TypeScript:**
-- Strict mode enforced (`"strict": true` in `tsconfig.base.json`)
-- No `any` types allowed
-- Config settings:
-  - `noUncheckedIndexedAccess: true` — require type guards on object index access
-  - `noUnusedLocals: true` — error on unused variables
-  - `noUnusedParameters: true` — error on unused function parameters
-  - `declaration: true` — emit `.d.ts` files for packages
+- Strict mode everywhere — `tsconfig.base.json` sets `"strict": true`
+- `noUncheckedIndexedAccess: true` — array access returns `T | undefined`, requires explicit null checks
+- `noUnusedLocals: true`, `noUnusedParameters: true`
+- `no any` rule enforced — the one `any` in tests is explicitly suppressed
+- Target: ES2022, module: ESNext, moduleResolution: bundler
 
 ## Import Organization
 
-**Order:**
-1. External library imports (React, third-party packages)
-2. Type-only imports from external libraries
-3. Local absolute imports from `@meinungeheuer/shared` or named packages
-4. Local relative imports (hooks, components, utilities)
-5. Type-only imports from local modules
+**Order (Biome enforces in karaoke-reader; pattern followed everywhere):**
+1. Node built-ins (if applicable)
+2. External packages (`@elevenlabs/react`, `hono`, `zod`, `react`)
+3. Workspace packages (`@meinungeheuer/shared`, `karaoke-reader`)
+4. Local relative imports
 
-**Examples:**
+**Import style:**
+- Always use named imports, not default imports for internal code
+- Type-only imports use `import type { ... }` syntax — consistently used throughout
+- Packages exports use `.js` extension even for TypeScript source (ESM interop): `import { ... } from './aphorism.js'`
+- Workspace imports: `@meinungeheuer/shared` for types and constants; `karaoke-reader` for the reader package
+
+## Zod Validation Patterns
+
+**Schema definition (in `packages/shared/src/types.ts`):**
 ```typescript
-import { useCallback, useRef, useState } from 'react';
-import type { Status, DisconnectionDetails, Role as ElevenLabsRole } from '@elevenlabs/react';
-import { DEFAULT_MODE, DEFAULT_TERM, getProgram } from '@meinungeheuer/shared';
-import type { ConversationProgram, Definition } from '@meinungeheuer/shared';
-import { useInstallationMachine } from './hooks/useInstallationMachine';
-import { fetchConfig } from './lib/api';
-import type { ConfigResponse } from './lib/api';
+// 1. Define schema with z.object() / z.enum()
+export const ModeSchema = z.enum(['text_term', 'term_only', 'chain']);
+// 2. Infer type from schema — never write type manually
+export type Mode = z.infer<typeof ModeSchema>;
 ```
 
-**Path Aliases:**
-- Monorepo workspace imports use package names: `@meinungeheuer/shared`, `@meinungeheuer/tablet`, `karaoke-reader`
-- Relative imports used within same package
-- No path aliases configured in TypeScript — imports use full workspace paths
-
-**Barrel Files:**
-- Not extensively used in codebase
-- Prefer direct imports to specific modules
-
-## Zod Runtime Validation
-
-**Pattern:**
-- All external API boundaries use Zod schemas for runtime validation
-- Schemas live in `packages/shared/src/types.ts`
-- Schemas named with `Schema` suffix (e.g., `SessionSchema`, `DefinitionSchema`)
-- Types inferred from schemas: `type Mode = z.infer<typeof ModeSchema>`
-
-**Example:**
+**Insert shapes (omit server-generated fields):**
 ```typescript
-export const ModeSchema = z.enum(['text_term', 'term_only', 'chain']);
-export type Mode = z.infer<typeof ModeSchema>;
+export const InsertSessionSchema = SessionSchema.omit({ id: true, created_at: true });
+export type InsertSession = z.infer<typeof InsertSessionSchema>;
+```
 
-export const SessionSchema = z.object({
-  id: z.string().uuid(),
-  created_at: z.string().datetime({ offset: true }),
-  // ... other fields
-});
-export type Session = z.infer<typeof SessionSchema>;
+**At API boundaries — always use `safeParse` with explicit error return:**
+```typescript
+const parsed = SaveDefinitionWebhookSchema.safeParse(body);
+if (!parsed.success) {
+  return c.json({ error: 'Invalid request body', details: parsed.error.flatten() }, 400);
+}
+```
+
+**For response validation — use `schema.parse()` (throws on failure):**
+```typescript
+// In api.ts apiFetch helper
+return schema.parse(json);
+```
+
+**Zod `.default()` used sparingly for backward-compatible fields:**
+```typescript
+program: z.string().default('aphorism'),
 ```
 
 ## Error Handling
 
-**Strategy:** Never crash long-running services (backend, printer-bridge). Catch, log, continue.
-
-**Patterns:**
-- Async functions wrap try-catch at top level:
-  ```typescript
-  try {
-    const result = await someOperation();
-    // handle success
-  } catch (error) {
-    console.error('Operation failed:', error);
-    // continue or return default
-  }
-  ```
-
-- Silent failures documented: `persistDefinition()`, `persistTranscript()`, `persistPrintJob()` swallow errors silently and are followed by comments explaining behavior
-
-- RLS (Row Level Security) policy failures are silent in the browser — no visible error logs. Check Supabase schema directly if data doesn't appear
-
-- Network errors in components dispatch state machine actions for graceful fallback (e.g., `FACE_LOST` triggers reset)
-
-**No error types exported:**
-- Custom error classes not used
-- Rely on JavaScript Error type and `.instanceof Error` checks
-- Defensive type assertions in tests: `as any` when testing edge cases
-
-## Logging
-
-**Framework:** `console` only (no dedicated logging library)
-
-**Patterns:**
-- `console.log()` for general output and debug info
-- `console.warn()` for warnings or recoverable issues
-- `console.error()` for errors (but don't throw in services)
-- `console.error('message:', error)` standard format
-- Example: `console.error('Failed to persist definition:', err);`
-
-**When to Log:**
-- Network request failures (with retry hints)
-- State transitions for debugging (mainly in tests)
-- Configuration loading and validation
-- Service startup/shutdown (backend, printer-bridge)
-- External API failures (ElevenLabs, Supabase)
-
-## Reducer Pattern
-
-**Used in:** `useInstallationMachine.ts`
-
-**Patterns:**
-- State interface: `InstallationState` with all mutable fields
-- Action union type: discriminated union with `type` field
-- Reducer function: pure function `(state, action) => newState`
-- No mutations — always return new object with spread operator: `{ ...state, field: newValue }`
-- Guard clauses check current state before transitioning:
-  ```typescript
-  case 'TIMER_3S':
-    if (state.screen !== 'welcome') return state;  // no-op if invalid
-    // then proceed with transition
-  ```
-- Default: return state unchanged for invalid transitions
-
-## React Component Design
-
-**Functional components only** — no class components
-
-**Props interface pattern:**
+**Fire-and-forget pattern (all persistence functions):**
+All `persist*.ts` functions in `apps/tablet/src/lib/persist.ts` are `async`, return `Promise<void>`, wrap the entire body in `try/catch`, log with `console.warn`, and never rethrow. Comments label them explicitly as "Fire-and-forget."
 ```typescript
-interface TextDisplayScreenProps {
-  dispatch: React.Dispatch<InstallationAction>;
-  contextText: string | null;
-  language: 'de' | 'en';
-}
-
-export function TextDisplayScreen({ dispatch, contextText, language }: TextDisplayScreenProps) {
-  // ...
+export async function persistDefinition(...): Promise<void> {
+  try {
+    const { error } = await supabase.from('definitions').insert({...});
+    if (error) {
+      if (error.code === '23505') {
+        console.log('[Persist] Definition already exists');  // Duplicate is fine
+      } else {
+        console.warn('[Persist] Definition insert error:', error.message);
+      }
+    }
+  } catch (err) {
+    console.warn('[Persist] Definition error:', err);
+  }
 }
 ```
 
-**Hooks:**
-- Custom hooks return either simple values or objects with named properties
-- Hook parameter is usually a single options object:
-  ```typescript
-  interface UseConversationParams { ... }
-  export function useConversation(params: UseConversationParams): UseConversationReturn { ... }
-  ```
+**Backend webhook routes:** All routes check `safeParse` before business logic. DB errors return HTTP 500 with descriptive JSON. Non-fatal errors (print queue insert failure, chain advance failure) are logged and continue — the primary operation (definition saved) is preserved.
 
-**Component organization:**
-- Screen components: `apps/tablet/src/components/screens/{StateName}Screen.tsx`
-- Reusable components: `apps/tablet/src/components/`
-- Hooks: `apps/tablet/src/hooks/` or `packages/{pkg}/src/hooks/`
-- Utilities: `apps/{app}/src/lib/` or `packages/{pkg}/src/utils/`
+**Long-running services:** `catch, log, continue` — printer bridge index.ts and backend index.ts never crash on individual job failures.
+
+**Retry pattern (printer.ts):**
+```typescript
+for (let attempt = 1; attempt <= 2; attempt++) {
+  try {
+    // ... network call ...
+    return;
+  } catch (err) {
+    if (attempt === 1) {
+      console.warn(`[printer] First attempt failed, retrying…`);
+      continue;
+    }
+    throw err;  // Only re-throw on second failure
+  }
+}
+```
+
+**Fallback chains:** `renderAndPrint` tries cloud render API, falls back to legacy POS rendering on error — wrapped in `try/catch` with `console.warn`.
+
+**Error propagation in API layer:** `apiFetch` in `apps/tablet/src/lib/api.ts` throws `Error('API error ${status}: ...')`. Callers that are fire-and-forget wrap in their own `try/catch`.
+
+## Logging
+
+**Prefix pattern:** All log calls include a bracketed module prefix:
+- `[Persist]` — persist.ts functions
+- `[printer]` — printer.ts
+- `[portrait]` — portrait printing
+- `[MeinUngeheuer]` — useConversation.ts (ElevenLabs integration)
+- `[Machine]` — useInstallationMachine.ts
+- `[webhook/definition]` / `[webhook/conversation-data]` — backend route handlers
+- `[programs]` — program registry
+
+**Log levels:** `console.log` for success/info; `console.warn` for recoverable errors; `console.error` for serious failures.
+
+## ConversationProgram Interface Pattern
+
+Programs implement `ConversationProgram` from `packages/shared/src/programs/types.ts`. Each program is a `const` object literal, not a class:
+```typescript
+export const aphorismProgram: ConversationProgram = {
+  id: 'aphorism',
+  name: 'Aphorism',
+  description: '...',
+  stages: { textReading: true, termPrompt: false, portrait: true, printing: true },
+  printLayout: 'dictionary',
+  resultDisplay: 'aphorism',
+  sessionMode: 'text_term',
+  buildSystemPrompt(params: PromptParams): string { ... },
+  buildFirstMessage(params: PromptParams): string { ... },
+};
+```
+Programs are registered in `packages/shared/src/programs/index.ts` via a plain `Record<string, ConversationProgram>`. `getProgram()` falls back to `aphorismProgram` with a `console.warn` for unknown IDs — never throws.
+
+## React/Component Patterns
+
+**State machine:** Single `useReducer` reducer pattern. State transitions are pure functions guarded by current screen check (`if (state.screen !== 'conversation') return state`). Actions are discriminated unions with `SCREAMING_SNAKE_CASE` type strings. Located at `apps/tablet/src/hooks/useInstallationMachine.ts`.
+
+**Screen components:** Pure presentational components in `apps/tablet/src/components/screens/{StateName}Screen.tsx`. Receive typed props; never manage their own conversation state.
+
+**Inline CSS vs Tailwind:** Mixed pattern. Tailwind v4 utility classes (`className`) used for structural layout (`flex`, `flex-col`, `w-full`, `h-full`, `overflow-y-auto`, `items-center`). `style={{}}` inline objects used for dynamic values, typography (`fontFamily`, `fontSize`, `clamp()`), and fine-grained color control.
+
+**Tailwind v4 config:** CSS-first — no `tailwind.config.js`. Configuration is in `apps/tablet/src/index.css` via `@import "tailwindcss"` directive. Plugin registered in `vite.config.ts` as `tailwindcss()` (from `@tailwindcss/vite`). Do NOT use v3-style `module.exports = { content: [...] }` config.
+
+**Responsive sizing:** `clamp()` in inline styles for fluid typography and spacing (`clamp(1.5rem, 3vw, 2.5rem)`), not Tailwind responsive prefixes.
+
+**Ref pattern for stable callbacks:** Refs used to stabilize callback access inside ElevenLabs hooks without triggering re-initialization:
+```typescript
+const onDefinitionReceivedRef = useRef(onDefinitionReceived);
+onDefinitionReceivedRef.current = onDefinitionReceived;
+```
+
+## Comments
+
+**When to comment:**
+- File-level JSDoc for module purpose (printer.ts, config.ts, persist.ts)
+- Section dividers with `// ===...===` banners for major logical groups
+- Line comments for non-obvious behavior (`// Duplicate is fine — webhook may also insert`)
+- `@deprecated` JSDoc when function is being superseded (`systemPrompt.ts`)
+
+**What NOT to document:** Don't add comments explaining obvious TypeScript — the types are the docs.
 
 ## Module Design
 
-**Exports:**
-- Named exports preferred for functions and types
-- Default exports rare — used only for components in some cases
+**Exports:** Named exports only — no default exports anywhere.
 
-**Package structure:**
-- `packages/shared/src/types.ts` — all shared types and Zod schemas
-- `packages/shared/src/programs/` — conversation program definitions and builders
-- `packages/karaoke-reader/` — self-contained package for TTS with karaoke highlighting
-- Each app has own `src/` directory with no shared state
+**Barrel files:** `packages/shared/src/index.ts` and `packages/shared/src/programs/index.ts` are barrel re-exports. Individual modules import from the barrel via `@meinungeheuer/shared`.
 
-**Re-exports and Declarations:**
-- Test-only exports hidden in comments at bottom of test files
-- Helper functions for testing often defined inline in test files, not in separate fixtures
+**Function size:** Helper functions extracted when shared or complex (e.g. `addParagraphNumbers`, `buildModeBlock` in `aphorism.ts`). Main exported function stays readable without scrolling through internals.
 
 ---
 
