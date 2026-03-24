@@ -980,7 +980,7 @@ function buildSliceSection(body: HTMLElement): void {
 
     try {
       const fd = new FormData();
-      fd.append('image', uploadedFile);
+      fd.append('file', uploadedFile);
       fd.append('direction', direction);
       fd.append('count', String(sliceCount));
       fd.append('dot_size', String(dotSize));
@@ -1000,9 +1000,9 @@ function buildSliceSection(body: HTMLElement): void {
         return;
       }
 
-      const json = (await res.json()) as { slices: string[] };
-      previewUrls = (json.slices ?? []).map((b64: string) => {
-        const byteStr = atob(b64);
+      const json = (await res.json()) as { slices: Array<{ name: string; label: string; image_b64: string }> };
+      previewUrls = (json.slices ?? []).map((s) => {
+        const byteStr = atob(s.image_b64);
         const arr = new Uint8Array(byteStr.length);
         for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
         const blob = new Blob([arr], { type: 'image/png' });
