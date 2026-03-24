@@ -241,45 +241,126 @@ const WB_CSS = `
     font-family: system-ui, sans-serif;
     padding: 8px 0;
   }
-  .portrait-live-label {
-    font-size: 11px;
-    color: #777777;
-    font-family: system-ui, sans-serif;
-    margin-bottom: 6px;
-    margin-top: 14px;
-    letter-spacing: 0.04em;
-  }
-  .portrait-canvas-row {
+  /* ── Portrait Pipeline ────────────────────────────────── */
+  .portrait-editor-row {
     display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-bottom: 10px;
+    gap: 16px;
+    margin-bottom: 16px;
+    align-items: flex-start;
   }
-  .portrait-canvas-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  .portrait-source-wrap {
+    flex: 0 0 auto;
+    position: relative;
+    line-height: 0;
   }
-  .portrait-canvas-item canvas {
-    width: 150px;
-    height: auto;
+  .portrait-source-canvas {
+    display: block;
     border: 1px solid #333333;
     border-radius: 4px;
-    display: block;
+    background: #111111;
+    cursor: crosshair;
   }
-  .portrait-canvas-item .portrait-canvas-label {
+  .portrait-source-canvas.dragging {
+    cursor: grabbing;
+  }
+  .portrait-controls-col {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-y: auto;
+    max-height: 420px;
+  }
+  .portrait-crop-group {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  .portrait-crop-group:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+  .portrait-crop-group-title {
     font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #888888;
+    font-family: system-ui, sans-serif;
+    margin-bottom: 6px;
+  }
+  .portrait-pipeline-section {
+    margin-top: 16px;
+  }
+  .portrait-pipeline-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #777777;
+    font-family: system-ui, sans-serif;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #1a1a1a;
+    padding-bottom: 6px;
+  }
+  .portrait-gallery-row {
+    display: flex;
+    gap: 0;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .portrait-gallery-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    flex: 0 0 auto;
+  }
+  .portrait-gallery-arrow {
+    align-self: center;
+    color: #555555;
+    font-size: 14px;
+    padding: 0 6px;
+    line-height: 1;
+    margin-top: -20px;
+  }
+  .portrait-gallery-canvas {
+    display: block;
+    width: 130px;
+    height: auto;
+    border: 1px solid #333333;
+    border-radius: 3px;
+    background: #111111;
+  }
+  .portrait-gallery-canvas.original {
+    width: 100px;
+  }
+  .portrait-gallery-item-label {
+    font-size: 9px;
     color: #555555;
     font-family: system-ui, sans-serif;
     text-align: center;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.05em;
     text-transform: uppercase;
+    line-height: 1.3;
   }
   .portrait-no-face {
     font-size: 12px;
     color: #cc8800;
     font-family: system-ui, sans-serif;
     padding: 6px 0;
+  }
+  .portrait-dithered-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .portrait-dithered-grid img {
+    width: 130px;
+    height: auto;
+    border: 1px solid #333333;
+    border-radius: 3px;
   }
 `;
 
@@ -1135,10 +1216,10 @@ function buildSliceSection(body: HTMLElement): void {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Section 4: Portrait
+// Section 4: Portrait Pipeline
 // ═══════════════════════════════════════════════════════════════════════════
 
-// ── Portrait landmarks type ────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface PortraitLandmarks {
   forehead_top: [number, number];
@@ -1160,7 +1241,16 @@ interface PortraitPreviewResponse {
   errors: string[];
 }
 
-// ── Client-side crop computation (mirrors main.py logic) ───────────────────────
+// Editable landmark state (subset of PortraitLandmarks for dragging)
+interface EditableLandmarks {
+  forehead_top: [number, number];
+  chin: [number, number];
+  left_eye_center: [number, number];
+  right_eye_center: [number, number];
+  face_center_x: number;
+}
+
+// ── Client-side crop computation ───────────────────────────────────────────────
 
 interface CropBox {
   left: number;
@@ -1169,59 +1259,69 @@ interface CropBox {
   height: number;
 }
 
+// Crop params per zoom level
+interface Z0Params { padTop: number; padBottom: number; aspect: number; }
+interface Z1Params { padTop: number; padBottom: number; aspect: number; }
+interface Z2Params { eyePad: number; aspect: number; }
+interface Z3Params { stripWidth: number; stripOffsetX: number; }
+
 function computeZ0Crop(
   imgW: number, imgH: number,
-  lm: PortraitLandmarks,
-  padTop: number, padBottom: number, aspect: number,
+  lm: EditableLandmarks,
+  p: Z0Params,
 ): CropBox {
-  const eyeY = Math.round((lm.left_eye_center[1] + lm.right_eye_center[1]) / 2);
   const faceH = lm.chin[1] - lm.forehead_top[1];
   const cx = lm.face_center_x;
-  const top = Math.max(0, Math.round(eyeY - faceH * (1 + padTop)));
-  const bottom = Math.min(imgH, Math.round(lm.chin[1] + faceH * padBottom));
-  const cropH = bottom - top;
-  const cropW = Math.round(cropH * aspect);
-  const left = Math.max(0, Math.min(cx - Math.floor(cropW / 2), imgW - cropW));
+  const top = Math.max(0, Math.round(lm.forehead_top[1] - faceH * p.padTop));
+  const bottom = Math.min(imgH, Math.round(lm.chin[1] + faceH * p.padBottom));
+  const cropH = Math.max(1, bottom - top);
+  const cropW = Math.max(1, Math.round(cropH * p.aspect));
+  const left = Math.max(0, Math.min(Math.round(cx - cropW / 2), imgW - cropW));
   return { left, top, width: Math.min(cropW, imgW - left), height: cropH };
 }
 
 function computeZ1Crop(
   imgW: number, imgH: number,
-  lm: PortraitLandmarks,
-  padTop: number, padBottom: number,
+  lm: EditableLandmarks,
+  p: Z1Params,
 ): CropBox {
   const faceH = lm.chin[1] - lm.forehead_top[1];
   const cx = lm.face_center_x;
-  const top = Math.max(0, Math.round(lm.forehead_top[1] - faceH * padTop));
-  const bottom = Math.min(imgH, Math.round(lm.chin[1] + faceH * padBottom));
-  const cropH = bottom - top;
-  const cropW = cropH;
-  const left = Math.max(0, Math.min(cx - Math.floor(cropW / 2), imgW - cropW));
+  const top = Math.max(0, Math.round(lm.forehead_top[1] - faceH * p.padTop));
+  const bottom = Math.min(imgH, Math.round(lm.chin[1] + faceH * p.padBottom));
+  const cropH = Math.max(1, bottom - top);
+  const cropW = Math.max(1, Math.round(cropH * p.aspect));
+  const left = Math.max(0, Math.min(Math.round(cx - cropW / 2), imgW - cropW));
   return { left, top, width: Math.min(cropW, imgW - left), height: cropH };
 }
 
 function computeZ2Crop(
   imgW: number, imgH: number,
-  lm: PortraitLandmarks,
+  lm: EditableLandmarks,
+  p: Z2Params,
 ): CropBox {
-  const eyeY = Math.round((lm.left_eye_center[1] + lm.right_eye_center[1]) / 2);
-  const eyeSpread = Math.abs(lm.left_eye_outer[0] - lm.right_eye_outer[0]);
-  const pad = Math.round(eyeSpread * 0.5);
-  const top = Math.max(0, eyeY - pad);
-  const bottom = Math.min(imgH, eyeY + pad);
-  const left = Math.max(0, lm.right_eye_outer[0] - pad);
-  const right = Math.min(imgW, lm.left_eye_outer[0] + pad);
-  return { left, top, width: right - left, height: bottom - top };
+  const eyeY = (lm.left_eye_center[1] + lm.right_eye_center[1]) / 2;
+  const eyeSpread = Math.abs(lm.left_eye_center[0] - lm.right_eye_center[0]);
+  const basePad = Math.max(20, eyeSpread * 0.5);
+  const pad = Math.round(basePad * p.eyePad);
+  const cx = (lm.left_eye_center[0] + lm.right_eye_center[0]) / 2;
+  const halfH = pad;
+  const halfW = Math.round(halfH * p.aspect);
+  const top = Math.max(0, Math.round(eyeY - halfH));
+  const bottom = Math.min(imgH, Math.round(eyeY + halfH));
+  const left = Math.max(0, Math.min(Math.round(cx - halfW), imgW - halfW * 2));
+  const right = Math.min(imgW, left + halfW * 2);
+  return { left, top, width: Math.max(1, right - left), height: Math.max(1, bottom - top) };
 }
 
 function computeZ3Crop(
   imgW: number, imgH: number,
-  lm: PortraitLandmarks,
-  stripWidth: number,
+  lm: EditableLandmarks,
+  p: Z3Params,
 ): CropBox {
-  const cx = lm.face_center_x;
-  const sw = Math.round(imgW * stripWidth);
-  const left = Math.max(0, Math.min(cx - Math.floor(sw / 2), imgW - sw));
+  const cx = lm.face_center_x + p.stripOffsetX * imgW;
+  const sw = Math.max(1, Math.round(imgW * p.stripWidth));
+  const left = Math.max(0, Math.min(Math.round(cx - sw / 2), imgW - sw));
   return { left, top: 0, width: Math.min(sw, imgW - left), height: imgH };
 }
 
@@ -1236,230 +1336,470 @@ function computeFallbackCrops(imgW: number, imgH: number, stripWidth: number): C
   ];
 }
 
-function drawCropOnCanvas(
+// ── Source canvas: draw image + landmark overlay ───────────────────────────────
+
+const LANDMARK_RADIUS = 8;
+
+type LandmarkKey = 'forehead_top' | 'chin' | 'left_eye_center' | 'right_eye_center' | 'face_center_x';
+
+const LANDMARK_COLORS: Record<LandmarkKey, string> = {
+  forehead_top:     '#00ff00',
+  chin:             '#00ff00',
+  left_eye_center:  '#00aaff',
+  right_eye_center: '#00aaff',
+  face_center_x:    '#ff4444',
+};
+
+function drawSourceCanvas(
   canvas: HTMLCanvasElement,
   img: HTMLImageElement,
-  box: CropBox,
-  lm: PortraitLandmarks | null,
+  lm: EditableLandmarks,
   showOverlay: boolean,
+  displayW: number,
 ): void {
+  const scaleX = img.naturalWidth / displayW;
+  const displayH = Math.round(img.naturalHeight * displayW / img.naturalWidth);
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
+  ctx.drawImage(img, 0, 0);
 
-  // Clamp to avoid zero-size draws
-  const sw = Math.max(1, box.width);
-  const sh = Math.max(1, box.height);
+  if (!showOverlay) return;
 
-  // Set canvas native resolution to match source crop
-  canvas.width = sw;
-  canvas.height = sh;
+  const r = LANDMARK_RADIUS * scaleX;
 
-  ctx.drawImage(img, box.left, box.top, sw, sh, 0, 0, sw, sh);
+  // Dashed line: forehead → chin (vertical axis)
+  ctx.save();
+  ctx.setLineDash([6 * scaleX, 4 * scaleX]);
+  ctx.lineWidth = 1.5 * scaleX;
+  ctx.strokeStyle = 'rgba(0,255,0,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(lm.forehead_top[0], lm.forehead_top[1]);
+  ctx.lineTo(lm.chin[0], lm.chin[1]);
+  ctx.stroke();
 
-  if (showOverlay && lm) {
-    const ox = -box.left;
-    const oy = -box.top;
+  // Dashed line: eye to eye
+  ctx.strokeStyle = 'rgba(0,170,255,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(lm.left_eye_center[0], lm.left_eye_center[1]);
+  ctx.lineTo(lm.right_eye_center[0], lm.right_eye_center[1]);
+  ctx.stroke();
 
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
+  // Center vertical line (face_center_x)
+  ctx.strokeStyle = 'rgba(255,68,68,0.4)';
+  ctx.setLineDash([4 * scaleX, 4 * scaleX]);
+  ctx.beginPath();
+  ctx.moveTo(lm.face_center_x, 0);
+  ctx.lineTo(lm.face_center_x, img.naturalHeight);
+  ctx.stroke();
+  ctx.restore();
 
-    // Forehead line
-    const fhY = lm.forehead_top[1] + oy;
-    ctx.strokeStyle = 'rgba(0,255,0,0.6)';
-    ctx.beginPath(); ctx.moveTo(0, fhY); ctx.lineTo(sw, fhY); ctx.stroke();
-
-    // Chin line
-    const chY = lm.chin[1] + oy;
-    ctx.beginPath(); ctx.moveTo(0, chY); ctx.lineTo(sw, chY); ctx.stroke();
-
-    // Center line
-    ctx.strokeStyle = 'rgba(255,0,0,0.45)';
-    const cxL = lm.face_center_x + ox;
-    ctx.beginPath(); ctx.moveTo(cxL, 0); ctx.lineTo(cxL, sh); ctx.stroke();
-
-    // Eye dots
-    ctx.setLineDash([]);
-    ctx.fillStyle = 'rgba(0,200,255,0.8)';
-    for (const key of ['left_eye_center', 'right_eye_center'] as const) {
-      const [ex, ey] = lm[key];
-      ctx.beginPath(); ctx.arc(ex + ox, ey + oy, 3, 0, Math.PI * 2); ctx.fill();
-    }
+  // Landmark dots
+  const points: { key: LandmarkKey; x: number; y: number }[] = [
+    { key: 'forehead_top',     x: lm.forehead_top[0],     y: lm.forehead_top[1] },
+    { key: 'chin',             x: lm.chin[0],             y: lm.chin[1] },
+    { key: 'left_eye_center',  x: lm.left_eye_center[0],  y: lm.left_eye_center[1] },
+    { key: 'right_eye_center', x: lm.right_eye_center[0], y: lm.right_eye_center[1] },
+    { key: 'face_center_x',   x: lm.face_center_x,       y: img.naturalHeight / 2 },
+  ];
+  for (const pt of points) {
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = LANDMARK_COLORS[pt.key];
+    ctx.globalAlpha = 0.85;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1.5 * scaleX;
+    ctx.stroke();
   }
 }
 
+// ── Gallery crop canvas render ─────────────────────────────────────────────────
+
+function drawGalleryCrop(
+  canvas: HTMLCanvasElement,
+  img: HTMLImageElement,
+  box: CropBox,
+  displayW: number,
+): void {
+  const sw = Math.max(1, box.width);
+  const sh = Math.max(1, box.height);
+  canvas.width = sw;
+  canvas.height = sh;
+  const displayH = Math.round(displayW * sh / sw);
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.drawImage(img, box.left, box.top, sw, sh, 0, 0, sw, sh);
+}
+
+// ── buildPortraitSection ───────────────────────────────────────────────────────
+
 function buildPortraitSection(body: HTMLElement): void {
   const statusEl = makeStatusEl();
-  body.appendChild(statusEl);
 
+  // ── State ──────────────────────────────────────────────────────────────────
   let uploadedFile: File | null = null;
+  let sourceImage: HTMLImageElement | null = null;
+  let imgW = 0;
+  let imgH = 0;
+
+  // Editable landmarks (image pixel coords)
+  let lm: EditableLandmarks = {
+    forehead_top:     [0, 0],
+    chin:             [0, 0],
+    left_eye_center:  [0, 0],
+    right_eye_center: [0, 0],
+    face_center_x:    0,
+  };
+  let hasLandmarks = false;
+
+  // Crop params
+  let z0: Z0Params = { padTop: 0.10, padBottom: 0.10, aspect: 0.70 };
+  let z1: Z1Params = { padTop: 0.05, padBottom: 0.05, aspect: 1.00 };
+  let z2: Z2Params = { eyePad: 1.00, aspect: 2.00 };
+  let z3: Z3Params = { stripWidth: 0.25, stripOffsetX: 0.00 };
+
+  // Dither / display options
   let ditherMode = 'floyd';
   let blur = 10;
-  let z0PadTop = 0.1;
-  let z0PadBottom = 0.1;
-  let z0Aspect = 0.7;
-  let z1PadTop = 0.05;
-  let z1PadBottom = 0.05;
-  let z3StripWidth = 0.25;
   let showOverlay = true;
+  let showDithered = false;
 
-  // Stored after first API call
-  let storedLandmarks: PortraitLandmarks | null = null;
-  let storedImgW = 0;
-  let storedImgH = 0;
-  let sourceImage: HTMLImageElement | null = null;
+  // Dithered image blobs (from API), keyed by zoom index
+  const ditheredUrls: (string | null)[] = [null, null, null, null];
 
-  // Canvas elements (created once, reused)
-  const canvasRow = document.createElement('div');
-  canvasRow.className = 'portrait-canvas-row';
-  canvasRow.style.display = 'none';
+  // Source canvas display width (responsive)
+  const SOURCE_DISPLAY_W = 380;
+  const GALLERY_DISPLAY_W = 120;
 
-  const zoomLabels = ['zoom_0 — full', 'zoom_1 — face', 'zoom_2 — eyes', 'zoom_3 — strip'];
-  const canvases: HTMLCanvasElement[] = [];
-  for (const label of zoomLabels) {
-    const item = document.createElement('div');
-    item.className = 'portrait-canvas-item';
-    const cv = document.createElement('canvas');
-    canvases.push(cv);
-    item.appendChild(cv);
-    const lbl = document.createElement('div');
-    lbl.className = 'portrait-canvas-label';
-    lbl.textContent = label;
-    item.appendChild(lbl);
-    canvasRow.appendChild(item);
-  }
+  // ── DOM ────────────────────────────────────────────────────────────────────
 
+  // File chooser
+  body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => {
+    uploadedFile = f;
+    hasLandmarks = false;
+    sourceImage = null;
+    imgW = 0; imgH = 0;
+    ditheredUrls.fill(null);
+    showDithered = false;
+    ditheredToggle.checked = false;
+
+    noFaceEl.style.display = 'none';
+    editorRow.style.display = 'none';
+    pipelineSection.style.display = 'none';
+    ditheredGrid.innerHTML = '';
+    setStatus(statusEl, '', '#777777');
+
+    if (!f) return;
+    const url = URL.createObjectURL(f);
+    const img = new Image();
+    img.onload = () => {
+      sourceImage = img;
+      imgW = img.naturalWidth;
+      imgH = img.naturalHeight;
+      // Default landmarks: center of image
+      const cx = imgW / 2;
+      lm = {
+        forehead_top:     [cx, Math.round(imgH * 0.15)],
+        chin:             [cx, Math.round(imgH * 0.85)],
+        left_eye_center:  [Math.round(cx + imgW * 0.12), Math.round(imgH * 0.38)],
+        right_eye_center: [Math.round(cx - imgW * 0.12), Math.round(imgH * 0.38)],
+        face_center_x:    cx,
+      };
+      hasLandmarks = false;
+      editorRow.style.display = 'flex';
+      pipelineSection.style.display = '';
+      refreshAll();
+      setStatus(statusEl, 'Image loaded. Drag landmarks to adjust, or click "Detect" to auto-place.', '#777777');
+    };
+    img.src = url;
+  }));
+
+  // ── Editor row: source canvas + controls column ────────────────────────────
+  const editorRow = document.createElement('div');
+  editorRow.className = 'portrait-editor-row';
+  editorRow.style.display = 'none';
+
+  // Source canvas
+  const sourceWrap = document.createElement('div');
+  sourceWrap.className = 'portrait-source-wrap';
+  const sourceCanvas = document.createElement('canvas');
+  sourceCanvas.className = 'portrait-source-canvas';
+  sourceWrap.appendChild(sourceCanvas);
+  editorRow.appendChild(sourceWrap);
+
+  // Controls column
+  const controlsCol = document.createElement('div');
+  controlsCol.className = 'portrait-controls-col';
+
+  // Detect button
+  const detectBtn = makeButton('Detect Face (API)');
+  const detectBtnRow = document.createElement('div');
+  detectBtnRow.className = 'wb-btn-row';
+  detectBtnRow.style.marginBottom = '10px';
+  detectBtnRow.appendChild(detectBtn);
+  controlsCol.appendChild(detectBtnRow);
+
+  // Zoom 0
+  const g0 = makeCropGroup('Zoom 0 — Full Portrait');
+  const s0PadTop = makeInlineSlider('pad top', 0, 1, 0.01, z0.padTop, (v) => { z0 = { ...z0, padTop: v }; refreshAll(); });
+  const s0PadBot = makeInlineSlider('pad bottom', 0, 1, 0.01, z0.padBottom, (v) => { z0 = { ...z0, padBottom: v }; refreshAll(); });
+  const s0Aspect = makeInlineSlider('aspect', 0.4, 1.2, 0.01, z0.aspect, (v) => { z0 = { ...z0, aspect: v }; refreshAll(); });
+  g0.appendChild(s0PadTop); g0.appendChild(s0PadBot); g0.appendChild(s0Aspect);
+  controlsCol.appendChild(g0);
+
+  // Zoom 1
+  const g1 = makeCropGroup('Zoom 1 — Face Close-up');
+  const s1PadTop = makeInlineSlider('pad top', 0, 0.5, 0.01, z1.padTop, (v) => { z1 = { ...z1, padTop: v }; refreshAll(); });
+  const s1PadBot = makeInlineSlider('pad bottom', 0, 0.5, 0.01, z1.padBottom, (v) => { z1 = { ...z1, padBottom: v }; refreshAll(); });
+  const s1Aspect = makeInlineSlider('aspect', 0.5, 1.5, 0.01, z1.aspect, (v) => { z1 = { ...z1, aspect: v }; refreshAll(); });
+  g1.appendChild(s1PadTop); g1.appendChild(s1PadBot); g1.appendChild(s1Aspect);
+  controlsCol.appendChild(g1);
+
+  // Zoom 2
+  const g2 = makeCropGroup('Zoom 2 — Eyes');
+  const s2EyePad = makeInlineSlider('eye pad', 0.2, 3.0, 0.05, z2.eyePad, (v) => { z2 = { ...z2, eyePad: v }; refreshAll(); });
+  const s2Aspect = makeInlineSlider('aspect', 1.0, 4.0, 0.05, z2.aspect, (v) => { z2 = { ...z2, aspect: v }; refreshAll(); });
+  g2.appendChild(s2EyePad); g2.appendChild(s2Aspect);
+  controlsCol.appendChild(g2);
+
+  // Zoom 3
+  const g3 = makeCropGroup('Zoom 3 — Vertical Strip');
+  const s3Width  = makeInlineSlider('width', 0.05, 0.5, 0.01, z3.stripWidth,  (v) => { z3 = { ...z3, stripWidth: v };  refreshAll(); });
+  const s3Offset = makeInlineSlider('offset x', -0.5, 0.5, 0.01, z3.stripOffsetX, (v) => { z3 = { ...z3, stripOffsetX: v }; refreshAll(); });
+  g3.appendChild(s3Width); g3.appendChild(s3Offset);
+  controlsCol.appendChild(g3);
+
+  editorRow.appendChild(controlsCol);
+  body.appendChild(editorRow);
+
+  // No-face warning
   const noFaceEl = document.createElement('div');
   noFaceEl.className = 'portrait-no-face';
   noFaceEl.style.display = 'none';
-  noFaceEl.textContent = 'No face detected — showing ratio-based fallback crops.';
-
-  // Compare grid (dithered output from API)
-  const compareGrid = document.createElement('div');
-  compareGrid.className = 'compare-grid';
-  compareGrid.style.display = 'none';
-
-  // Dithered preview grid
-  const previewGrid = document.createElement('div');
-  previewGrid.className = 'wb-preview-grid';
-
-  function renderLiveCanvases(): void {
-    if (!sourceImage || storedImgW === 0) return;
-
-    let boxes: CropBox[];
-    if (storedLandmarks) {
-      boxes = [
-        computeZ0Crop(storedImgW, storedImgH, storedLandmarks, z0PadTop, z0PadBottom, z0Aspect),
-        computeZ1Crop(storedImgW, storedImgH, storedLandmarks, z1PadTop, z1PadBottom),
-        computeZ2Crop(storedImgW, storedImgH, storedLandmarks),
-        computeZ3Crop(storedImgW, storedImgH, storedLandmarks, z3StripWidth),
-      ];
-    } else {
-      boxes = computeFallbackCrops(storedImgW, storedImgH, z3StripWidth);
-    }
-
-    for (let i = 0; i < canvases.length; i++) {
-      drawCropOnCanvas(canvases[i]!, sourceImage, boxes[i]!, storedLandmarks, showOverlay);
-    }
-    canvasRow.style.display = 'flex';
-  }
-
-  function b64ToObjectUrl(b64: string): string {
-    const byteStr = atob(b64);
-    const arr = new Uint8Array(byteStr.length);
-    for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
-    const blob = new Blob([arr], { type: 'image/png' });
-    return URL.createObjectURL(blob);
-  }
-
-  body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => {
-    uploadedFile = f;
-    // Reset stored state when a new file is chosen
-    storedLandmarks = null;
-    storedImgW = 0;
-    storedImgH = 0;
-    sourceImage = null;
-    canvasRow.style.display = 'none';
-    noFaceEl.style.display = 'none';
-    previewGrid.innerHTML = '';
-    compareGrid.innerHTML = '';
-  }));
-
-  body.appendChild(createTextarea('Style transfer prompt (used by full pipeline, not preview)', '', 8, () => { /* stored in program config */ }));
-
-  body.appendChild(
-    createRadioGroup(
-      'Dither mode',
-      [
-        { value: 'floyd', label: 'floyd' },
-        { value: 'bayer', label: 'bayer' },
-        { value: 'halftone', label: 'halftone' },
-      ],
-      ditherMode,
-      (v) => { ditherMode = v; }
-    )
-  );
-  body.appendChild(createSlider('Blur', 0, 30, 1, blur, (v) => { blur = v; }));
-
-  body.appendChild(makeSubLabel('Zoom 0 Crop'));
-  body.appendChild(createSlider('Pad top', 0, 1, 0.01, z0PadTop, (v) => { z0PadTop = v; renderLiveCanvases(); }));
-  body.appendChild(createSlider('Pad bottom', 0, 1, 0.01, z0PadBottom, (v) => { z0PadBottom = v; renderLiveCanvases(); }));
-  body.appendChild(createSlider('Aspect', 0.4, 1.0, 0.01, z0Aspect, (v) => { z0Aspect = v; renderLiveCanvases(); }));
-
-  body.appendChild(makeSubLabel('Zoom 1 Crop'));
-  body.appendChild(createSlider('Pad top', 0, 0.5, 0.01, z1PadTop, (v) => { z1PadTop = v; renderLiveCanvases(); }));
-  body.appendChild(createSlider('Pad bottom', 0, 0.5, 0.01, z1PadBottom, (v) => { z1PadBottom = v; renderLiveCanvases(); }));
-
-  body.appendChild(makeSubLabel('Zoom 3 Crop'));
-  body.appendChild(createSlider('Strip width', 0.1, 0.5, 0.01, z3StripWidth, (v) => { z3StripWidth = v; renderLiveCanvases(); }));
-
-  body.appendChild(createToggle('Landmark overlay', showOverlay, (v) => { showOverlay = v; renderLiveCanvases(); }));
-
-  // Live canvas section
-  const liveLabel = document.createElement('div');
-  liveLabel.className = 'portrait-live-label';
-  liveLabel.textContent = 'Live crop preview (adjust sliders)';
-  body.appendChild(liveLabel);
-  body.appendChild(canvasRow);
+  noFaceEl.textContent = 'No face detected — default landmark placement. Drag to adjust.';
   body.appendChild(noFaceEl);
 
-  // Dithered preview section (from API)
+  // ── Pipeline gallery section ───────────────────────────────────────────────
+  const pipelineSection = document.createElement('div');
+  pipelineSection.className = 'portrait-pipeline-section';
+  pipelineSection.style.display = 'none';
+
+  const pipelineLabel = document.createElement('div');
+  pipelineLabel.className = 'portrait-pipeline-label';
+  pipelineLabel.textContent = 'Pipeline Gallery';
+  pipelineSection.appendChild(pipelineLabel);
+
+  const galleryRow = document.createElement('div');
+  galleryRow.className = 'portrait-gallery-row';
+
+  // Original canvas
+  const origItem = makeGalleryItem('Original');
+  const origCanvas = origItem.canvas;
+  origCanvas.classList.add('original');
+  galleryRow.appendChild(origItem.el);
+
+  // Zoom canvases
+  const zoomItems = [
+    makeGalleryItem('Full portrait\nzoom 0'),
+    makeGalleryItem('Face\nzoom 1'),
+    makeGalleryItem('Eyes\nzoom 2'),
+    makeGalleryItem('Strip\nzoom 3'),
+  ];
+  for (const item of zoomItems) {
+    const arrow = document.createElement('div');
+    arrow.className = 'portrait-gallery-arrow';
+    arrow.textContent = '→';
+    galleryRow.appendChild(arrow);
+    galleryRow.appendChild(item.el);
+  }
+
+  pipelineSection.appendChild(galleryRow);
+
+  // Toggle row
+  const toggleRow = document.createElement('div');
+  toggleRow.style.cssText = 'display:flex;gap:18px;align-items:center;margin-top:10px;flex-wrap:wrap;';
+
+  const ditheredToggleWrap = makeCheckboxToggle('Show dithered', false, (v) => {
+    showDithered = v;
+    refreshGallery();
+  });
+  const ditheredToggle = ditheredToggleWrap.querySelector('input') as HTMLInputElement;
+
+  const overlayToggleWrap = makeCheckboxToggle('Landmark overlay', true, (v) => {
+    showOverlay = v;
+    drawSourceCanvas(sourceCanvas, sourceImage!, lm, showOverlay, SOURCE_DISPLAY_W);
+  });
+
+  toggleRow.appendChild(ditheredToggleWrap);
+  toggleRow.appendChild(overlayToggleWrap);
+  pipelineSection.appendChild(toggleRow);
+
+  // Dither controls
+  const ditherControlRow = document.createElement('div');
+  ditherControlRow.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;';
+  const ditherLabel = document.createElement('span');
+  ditherLabel.textContent = 'Dither:';
+  ditherLabel.style.cssText = 'font-size:12px;color:#777777;font-family:system-ui,sans-serif;';
+  ditherControlRow.appendChild(ditherLabel);
+  for (const mode of ['floyd', 'bayer', 'halftone']) {
+    const lbl = document.createElement('label');
+    lbl.style.cssText = 'font-size:12px;color:#aaaaaa;font-family:system-ui,sans-serif;display:flex;gap:4px;align-items:center;cursor:pointer;';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'portrait-dither-mode';
+    radio.value = mode;
+    if (mode === ditherMode) radio.checked = true;
+    radio.addEventListener('change', () => { ditherMode = mode; });
+    lbl.appendChild(radio);
+    lbl.appendChild(document.createTextNode(mode));
+    ditherControlRow.appendChild(lbl);
+  }
+  const blurLbl = document.createElement('span');
+  blurLbl.textContent = 'Blur:';
+  blurLbl.style.cssText = 'font-size:12px;color:#777777;font-family:system-ui,sans-serif;margin-left:8px;';
+  ditherControlRow.appendChild(blurLbl);
+  const blurSlider = document.createElement('input');
+  blurSlider.type = 'range'; blurSlider.min = '0'; blurSlider.max = '30'; blurSlider.step = '1'; blurSlider.value = String(blur);
+  blurSlider.style.cssText = 'width:80px;accent-color:#ffffff;';
+  blurSlider.addEventListener('input', () => { blur = Number(blurSlider.value); });
+  ditherControlRow.appendChild(blurSlider);
+  pipelineSection.appendChild(ditherControlRow);
+
+  // Dithered results grid (from API)
+  const ditheredGrid = document.createElement('div');
+  ditheredGrid.className = 'portrait-dithered-grid';
+  pipelineSection.appendChild(ditheredGrid);
+
+  // Action buttons
   const btnRow = document.createElement('div');
   btnRow.className = 'wb-btn-row';
+  btnRow.style.marginTop = '12px';
 
-  const previewBtn = makeButton('Preview Crops (dithered)');
-  previewBtn.addEventListener('click', () => { void handlePreview(); });
+  const previewDitheredBtn = makeButton('Preview Dithered');
+  previewDitheredBtn.addEventListener('click', () => { void handlePreviewDithered(); });
 
   const printBtn = makeButton('Send to Printer', 'primary');
   printBtn.addEventListener('click', () => { void handlePrint(); });
 
-  btnRow.appendChild(previewBtn);
+  btnRow.appendChild(previewDitheredBtn);
   btnRow.appendChild(printBtn);
-  body.appendChild(btnRow);
-  body.appendChild(previewGrid);
-  body.appendChild(compareGrid);
-  body.appendChild(statusEl);
+  pipelineSection.appendChild(btnRow);
+  pipelineSection.appendChild(statusEl);
 
-  async function handlePreview(): Promise<void> {
+  body.appendChild(pipelineSection);
+
+  // ── Landmark drag state ────────────────────────────────────────────────────
+  let draggingKey: LandmarkKey | null = null;
+
+  sourceCanvas.addEventListener('mousedown', (e) => {
+    if (!sourceImage) return;
+    const rect = sourceCanvas.getBoundingClientRect();
+    const scaleX = imgW / rect.width;
+    const scaleY = imgH / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    const hitRadius = LANDMARK_RADIUS * 2 * scaleX;
+
+    // Check point landmarks
+    const candidates: { key: LandmarkKey; x: number; y: number }[] = [
+      { key: 'forehead_top',     x: lm.forehead_top[0],     y: lm.forehead_top[1] },
+      { key: 'chin',             x: lm.chin[0],             y: lm.chin[1] },
+      { key: 'left_eye_center',  x: lm.left_eye_center[0],  y: lm.left_eye_center[1] },
+      { key: 'right_eye_center', x: lm.right_eye_center[0], y: lm.right_eye_center[1] },
+      { key: 'face_center_x',   x: lm.face_center_x,       y: imgH / 2 },
+    ];
+    for (const c of candidates) {
+      if (Math.hypot(mx - c.x, my - c.y) < hitRadius) {
+        draggingKey = c.key;
+        sourceCanvas.classList.add('dragging');
+        e.preventDefault();
+        return;
+      }
+    }
+    // Click anywhere else: set face_center_x
+    draggingKey = 'face_center_x';
+    lm = { ...lm, face_center_x: mx };
+    sourceCanvas.classList.add('dragging');
+    scheduleRefresh();
+    e.preventDefault();
+  });
+
+  sourceCanvas.addEventListener('mousemove', (e) => {
+    if (!draggingKey || !sourceImage) return;
+    const rect = sourceCanvas.getBoundingClientRect();
+    const scaleX = imgW / rect.width;
+    const scaleY = imgH / rect.height;
+    const mx = Math.max(0, Math.min(imgW, (e.clientX - rect.left) * scaleX));
+    const my = Math.max(0, Math.min(imgH, (e.clientY - rect.top) * scaleY));
+
+    switch (draggingKey) {
+      case 'forehead_top':     lm = { ...lm, forehead_top:     [mx, my] }; break;
+      case 'chin':             lm = { ...lm, chin:             [mx, my] }; break;
+      case 'left_eye_center':  lm = { ...lm, left_eye_center:  [mx, my] }; break;
+      case 'right_eye_center': lm = { ...lm, right_eye_center: [mx, my] }; break;
+      case 'face_center_x':   lm = { ...lm, face_center_x: mx }; break;
+    }
+    scheduleRefresh();
+  });
+
+  const stopDrag = () => {
+    draggingKey = null;
+    sourceCanvas.classList.remove('dragging');
+  };
+  sourceCanvas.addEventListener('mouseup', stopDrag);
+  sourceCanvas.addEventListener('mouseleave', stopDrag);
+
+  // Cursor feedback on hover
+  sourceCanvas.addEventListener('mousemove', (e) => {
+    if (draggingKey) return;
+    if (!sourceImage) return;
+    const rect = sourceCanvas.getBoundingClientRect();
+    const scaleX = imgW / rect.width;
+    const scaleY = imgH / rect.height;
+    const mx = (e.clientX - rect.left) * scaleX;
+    const my = (e.clientY - rect.top) * scaleY;
+    const hitRadius = LANDMARK_RADIUS * 2 * scaleX;
+    const near = [
+      { x: lm.forehead_top[0], y: lm.forehead_top[1] },
+      { x: lm.chin[0], y: lm.chin[1] },
+      { x: lm.left_eye_center[0], y: lm.left_eye_center[1] },
+      { x: lm.right_eye_center[0], y: lm.right_eye_center[1] },
+      { x: lm.face_center_x, y: imgH / 2 },
+    ].some(pt => Math.hypot(mx - pt.x, my - pt.y) < hitRadius);
+    sourceCanvas.style.cursor = near ? 'grab' : 'crosshair';
+  });
+
+  // ── Detect face via API ────────────────────────────────────────────────────
+  detectBtn.addEventListener('click', () => { void handleDetect(); });
+
+  async function handleDetect(): Promise<void> {
     if (!uploadedFile) {
       setStatus(statusEl, 'Select a photo first.', '#cc4444');
       return;
     }
-    previewBtn.disabled = true;
-    setStatus(statusEl, 'Processing portrait...', '#777777');
+    detectBtn.disabled = true;
+    setStatus(statusEl, 'Detecting face...', '#777777');
 
     const creds = await fetchRenderCredentials();
-
     try {
       const fd = new FormData();
       fd.append('file', uploadedFile);
       fd.append('dither_mode', ditherMode);
       fd.append('blur_radius', String(blur));
-      fd.append('z0_pad_top', String(z0PadTop));
-      fd.append('z0_pad_bottom', String(z0PadBottom));
-      fd.append('z0_aspect', String(z0Aspect));
-      fd.append('z1_pad_top', String(z1PadTop));
-      fd.append('z1_pad_bottom', String(z1PadBottom));
-      fd.append('z3_strip_width', String(z3StripWidth));
+      fd.append('z0_pad_top', String(z0.padTop));
+      fd.append('z0_pad_bottom', String(z0.padBottom));
+      fd.append('z0_aspect', String(z0.aspect));
+      fd.append('z1_pad_top', String(z1.padTop));
+      fd.append('z1_pad_bottom', String(z1.padBottom));
+      fd.append('z3_strip_width', String(z3.stripWidth));
 
       const headers: Record<string, string> = {};
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
@@ -1471,61 +1811,104 @@ function buildPortraitSection(body: HTMLElement): void {
       });
 
       if (!res.ok) {
-        setStatus(statusEl, `Preview failed: HTTP ${res.status}`, '#cc4444');
-        previewBtn.disabled = false;
+        setStatus(statusEl, `Detection failed: HTTP ${res.status}`, '#cc4444');
+        detectBtn.disabled = false;
         return;
       }
 
       const json = (await res.json()) as PortraitPreviewResponse;
-      const crops = json.crops ?? [];
-
-      // Store landmarks + load source image for live canvas rendering
-      storedLandmarks = json.landmarks ?? null;
-      if (json.image_size) {
-        [storedImgW, storedImgH] = json.image_size;
-      }
-      noFaceEl.style.display = storedLandmarks ? 'none' : '';
-
-      // Load the original uploaded file into an HTMLImageElement for canvas use
-      const objectUrl = URL.createObjectURL(uploadedFile);
-      const img = new Image();
-      img.onload = () => {
-        sourceImage = img;
-        // image_size from server reflects the PIL image which may differ from browser decode;
-        // use the browser-decoded dimensions as the authoritative source
-        storedImgW = img.naturalWidth;
-        storedImgH = img.naturalHeight;
-        renderLiveCanvases();
-      };
-      img.src = objectUrl;
-
-      // Show dithered results in the preview grid
-      previewGrid.innerHTML = '';
-      compareGrid.innerHTML = '';
-      for (const b64 of crops) {
-        const url = b64ToObjectUrl(b64);
-        const imgEl = document.createElement('img');
-        imgEl.src = url;
-        imgEl.alt = 'crop';
-        previewGrid.appendChild(imgEl);
+      const apiLm = json.landmarks;
+      if (apiLm) {
+        lm = {
+          forehead_top:     apiLm.forehead_top,
+          chin:             apiLm.chin,
+          left_eye_center:  apiLm.left_eye_center,
+          right_eye_center: apiLm.right_eye_center,
+          face_center_x:    apiLm.face_center_x,
+        };
+        hasLandmarks = true;
+        noFaceEl.style.display = 'none';
+        setStatus(statusEl, 'Face detected. Drag landmarks to refine.', '#66aa66');
+      } else {
+        hasLandmarks = false;
+        noFaceEl.style.display = '';
+        setStatus(statusEl, 'No face detected — using default placement.', '#cc8800');
       }
 
-      setStatus(statusEl, `${crops.length} crops rendered.${storedLandmarks ? '' : ' (no face detected, fallback crops)'}`, '#66aa66');
+      refreshAll();
     } catch {
-      setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
+      setStatus(statusEl, 'Detection unavailable — renderer not reachable.', '#cc4444');
     }
 
-    previewBtn.disabled = false;
+    detectBtn.disabled = false;
   }
 
-  async function handlePrint(): Promise<void> {
-    // Collect images: prefer dithered API output if available, fall back to canvas snapshots
-    const apiCropImages = previewGrid.querySelectorAll('img');
-    const hasApiCrops = apiCropImages.length > 0;
-    const hasCanvasCrops = sourceImage !== null && canvasRow.style.display !== 'none';
+  // ── Preview dithered via API ───────────────────────────────────────────────
+  async function handlePreviewDithered(): Promise<void> {
+    if (!uploadedFile) {
+      setStatus(statusEl, 'Select a photo first.', '#cc4444');
+      return;
+    }
+    previewDitheredBtn.disabled = true;
+    setStatus(statusEl, 'Rendering dithered crops...', '#777777');
 
-    if (!hasApiCrops && !hasCanvasCrops) {
-      setStatus(statusEl, 'Preview crops first, then print.', '#cc4444');
+    const creds = await fetchRenderCredentials();
+    try {
+      const fd = new FormData();
+      fd.append('file', uploadedFile);
+      fd.append('dither_mode', ditherMode);
+      fd.append('blur_radius', String(blur));
+      fd.append('z0_pad_top', String(z0.padTop));
+      fd.append('z0_pad_bottom', String(z0.padBottom));
+      fd.append('z0_aspect', String(z0.aspect));
+      fd.append('z1_pad_top', String(z1.padTop));
+      fd.append('z1_pad_bottom', String(z1.padBottom));
+      fd.append('z3_strip_width', String(z3.stripWidth));
+
+      const headers: Record<string, string> = {};
+      if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
+
+      const res = await fetch(`${creds.rendererUrl}/render/portrait-preview`, {
+        method: 'POST',
+        headers,
+        body: fd,
+      });
+
+      if (!res.ok) {
+        setStatus(statusEl, `Render failed: HTTP ${res.status}`, '#cc4444');
+        previewDitheredBtn.disabled = false;
+        return;
+      }
+
+      const json = (await res.json()) as PortraitPreviewResponse;
+      ditheredGrid.innerHTML = '';
+      for (let i = 0; i < json.crops.length; i++) {
+        const url = b64ToObjectUrl(json.crops[i]!);
+        ditheredUrls[i] = url;
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = `zoom ${i} dithered`;
+        ditheredGrid.appendChild(img);
+      }
+
+      // Update gallery if showing dithered
+      if (showDithered) refreshGallery();
+      setStatus(statusEl, `${json.crops.length} dithered crops rendered.`, '#66aa66');
+    } catch {
+      setStatus(statusEl, 'Render unavailable — renderer not reachable.', '#cc4444');
+    }
+
+    previewDitheredBtn.disabled = false;
+  }
+
+  // ── Print ──────────────────────────────────────────────────────────────────
+  async function handlePrint(): Promise<void> {
+    const ditheredImages = ditheredGrid.querySelectorAll('img');
+    const hasDithered = ditheredImages.length > 0;
+    const hasSource = sourceImage !== null;
+
+    if (!hasDithered && !hasSource) {
+      setStatus(statusEl, 'Load an image first.', '#cc4444');
       return;
     }
 
@@ -1535,12 +1918,32 @@ function buildPortraitSection(body: HTMLElement): void {
     try {
       const imageUrlEntries: { name: string; url: string }[] = [];
 
-      if (hasApiCrops) {
-        // Use dithered API output
-        for (let i = 0; i < apiCropImages.length; i++) {
-          const imgEl = apiCropImages[i] as HTMLImageElement;
+      if (hasDithered) {
+        for (let i = 0; i < ditheredImages.length; i++) {
+          const imgEl = ditheredImages[i] as HTMLImageElement;
           const imgRes = await fetch(imgEl.src);
           const blob = await imgRes.blob();
+          const fileName = `workbench/portrait-${Date.now()}-zoom${i}.png`;
+          const { error: upErr } = await supabase.storage
+            .from('prints')
+            .upload(fileName, blob, { contentType: 'image/png' });
+          if (upErr) {
+            setStatus(statusEl, `Upload failed for crop ${i}: ` + upErr.message, '#cc4444');
+            printBtn.disabled = false;
+            return;
+          }
+          const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
+          imageUrlEntries.push({ name: `zoom_${i}`, url: urlData.publicUrl });
+        }
+      } else {
+        // Fallback: upload canvas snapshots
+        const boxes = computeAllCropBoxes();
+        for (let i = 0; i < boxes.length; i++) {
+          const tmpCanvas = document.createElement('canvas');
+          drawGalleryCrop(tmpCanvas, sourceImage!, boxes[i]!, 200);
+          const blob = await new Promise<Blob>((resolve, reject) => {
+            tmpCanvas.toBlob((b) => b ? resolve(b) : reject(new Error('canvas toBlob failed')));
+          });
           const fileName = `workbench/portrait-${Date.now()}-zoom${i}.png`;
           const { error: upErr } = await supabase.storage
             .from('prints')
@@ -1576,6 +1979,169 @@ function buildPortraitSection(body: HTMLElement): void {
 
     printBtn.disabled = false;
   }
+
+  // ── Refresh logic (RAF-throttled during drag) ──────────────────────────────
+  let rafPending = false;
+
+  function scheduleRefresh(): void {
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(() => {
+      rafPending = false;
+      refreshAll();
+    });
+  }
+
+  function computeAllCropBoxes(): CropBox[] {
+    if (!sourceImage) return [];
+    if (!hasLandmarks && lm.forehead_top[0] === 0 && lm.chin[0] === 0) {
+      return computeFallbackCrops(imgW, imgH, z3.stripWidth);
+    }
+    return [
+      computeZ0Crop(imgW, imgH, lm, z0),
+      computeZ1Crop(imgW, imgH, lm, z1),
+      computeZ2Crop(imgW, imgH, lm, z2),
+      computeZ3Crop(imgW, imgH, lm, z3),
+    ];
+  }
+
+  function refreshAll(): void {
+    if (!sourceImage) return;
+    drawSourceCanvas(sourceCanvas, sourceImage, lm, showOverlay, SOURCE_DISPLAY_W);
+    refreshGallery();
+  }
+
+  function refreshGallery(): void {
+    if (!sourceImage) return;
+
+    // Original thumbnail
+    drawGalleryCrop(origCanvas, sourceImage, { left: 0, top: 0, width: imgW, height: imgH }, 100);
+
+    const boxes = computeAllCropBoxes();
+    for (let i = 0; i < zoomItems.length; i++) {
+      const item = zoomItems[i]!;
+      if (showDithered && ditheredUrls[i]) {
+        // Show dithered image in an <img> overlay instead of the canvas
+        showDitheredInItem(item, ditheredUrls[i]!);
+      } else {
+        hideDitheredInItem(item);
+        if (boxes[i]) {
+          drawGalleryCrop(item.canvas, sourceImage, boxes[i]!, GALLERY_DISPLAY_W);
+        }
+      }
+    }
+  }
+
+  // ── Helper: show/hide dithered image overlay on a gallery item ─────────────
+  function showDitheredInItem(item: GalleryItem, url: string): void {
+    let overlay = item.el.querySelector('.portrait-dithered-overlay') as HTMLImageElement | null;
+    if (!overlay) {
+      overlay = document.createElement('img');
+      overlay.className = 'portrait-dithered-overlay';
+      overlay.style.cssText = 'display:block;width:' + GALLERY_DISPLAY_W + 'px;height:auto;border:1px solid #333;border-radius:3px;';
+      item.canvas.style.display = 'none';
+      item.el.insertBefore(overlay, item.canvas);
+    }
+    overlay.src = url;
+    overlay.style.display = 'block';
+    item.canvas.style.display = 'none';
+  }
+
+  function hideDitheredInItem(item: GalleryItem): void {
+    const overlay = item.el.querySelector('.portrait-dithered-overlay') as HTMLImageElement | null;
+    if (overlay) overlay.style.display = 'none';
+    item.canvas.style.display = 'block';
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function b64ToObjectUrl(b64: string): string {
+    const byteStr = atob(b64);
+    const arr = new Uint8Array(byteStr.length);
+    for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i)!;
+    const blob = new Blob([arr], { type: 'image/png' });
+    return URL.createObjectURL(blob);
+  }
+}
+
+// ── Gallery item factory ───────────────────────────────────────────────────────
+
+interface GalleryItem { el: HTMLElement; canvas: HTMLCanvasElement; }
+
+function makeGalleryItem(labelText: string): GalleryItem {
+  const el = document.createElement('div');
+  el.className = 'portrait-gallery-item';
+  const canvas = document.createElement('canvas');
+  canvas.className = 'portrait-gallery-canvas';
+  el.appendChild(canvas);
+  const lbl = document.createElement('div');
+  lbl.className = 'portrait-gallery-item-label';
+  lbl.style.whiteSpace = 'pre-line';
+  lbl.textContent = labelText;
+  el.appendChild(lbl);
+  return { el, canvas };
+}
+
+// ── Crop group factory ─────────────────────────────────────────────────────────
+
+function makeCropGroup(title: string): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'portrait-crop-group';
+  const t = document.createElement('div');
+  t.className = 'portrait-crop-group-title';
+  t.textContent = title;
+  el.appendChild(t);
+  return el;
+}
+
+// ── Inline compact slider ──────────────────────────────────────────────────────
+
+function makeInlineSlider(
+  label: string, min: number, max: number, step: number,
+  initial: number, onChange: (v: number) => void,
+): HTMLElement {
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:5px;';
+
+  const lbl = document.createElement('span');
+  lbl.textContent = label;
+  lbl.style.cssText = 'font-size:11px;color:#888888;font-family:system-ui,sans-serif;width:68px;flex-shrink:0;';
+  row.appendChild(lbl);
+
+  const inp = document.createElement('input');
+  inp.type = 'range';
+  inp.min = String(min);
+  inp.max = String(max);
+  inp.step = String(step);
+  inp.value = String(initial);
+  inp.style.cssText = 'flex:1;accent-color:#ffffff;min-width:0;';
+  row.appendChild(inp);
+
+  const val = document.createElement('span');
+  val.textContent = initial.toFixed(2);
+  val.style.cssText = 'font-size:11px;color:#cccccc;font-family:system-ui,sans-serif;width:36px;text-align:right;flex-shrink:0;';
+  row.appendChild(val);
+
+  inp.addEventListener('input', () => {
+    const v = Number(inp.value);
+    val.textContent = v.toFixed(2);
+    onChange(v);
+  });
+
+  return row;
+}
+
+// ── Checkbox toggle ────────────────────────────────────────────────────────────
+
+function makeCheckboxToggle(label: string, initial: boolean, onChange: (v: boolean) => void): HTMLElement {
+  const lbl = document.createElement('label');
+  lbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;color:#aaaaaa;font-family:system-ui,sans-serif;cursor:pointer;';
+  const inp = document.createElement('input');
+  inp.type = 'checkbox';
+  inp.checked = initial;
+  inp.addEventListener('change', () => { onChange(inp.checked); });
+  lbl.appendChild(inp);
+  lbl.appendChild(document.createTextNode(label));
+  return lbl;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
