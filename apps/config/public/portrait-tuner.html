@@ -182,6 +182,14 @@ input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; borde
       </div>
 
       <div class="ctrl-section">
+        <h2>Actions</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button id="btn-download-all" style="background:#1a1a1a;color:#0f0;border:1px solid #333;padding:4px 12px;font:11px monospace;cursor:pointer;">Download All PNGs</button>
+          <button id="btn-download-annotated" style="background:#1a1a1a;color:#aaa;border:1px solid #333;padding:4px 12px;font:11px monospace;cursor:pointer;">Download Annotated</button>
+        </div>
+      </div>
+
+      <div class="ctrl-section">
         <h2>YAML output</h2>
         <div id="config-output"></div>
       </div>
@@ -647,6 +655,36 @@ function syncPadSliders() {
   // is mainly for repositioning the reference face, not for changing the pad fractions.
   // (This is the expected UX: drag to reposition face detection reference, not to change padding.)
 }
+
+// ── Download ───────────────────────────────────────────────────────────────
+
+function downloadCanvas(canvas, filename) {
+  const a = document.createElement('a');
+  a.href = canvas.toDataURL('image/png');
+  a.download = filename;
+  a.click();
+}
+
+function downloadCropFullRes(crop, filename) {
+  if (!sourceImage || !crop || crop.width <= 0 || crop.height <= 0) return;
+  const c = document.createElement('canvas');
+  c.width = crop.width;
+  c.height = crop.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(sourceImage, crop.left, crop.top, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  downloadCanvas(c, filename);
+}
+
+document.getElementById('btn-download-all').addEventListener('click', () => {
+  if (!sourceImage || lastCrops.length === 0) return;
+  lastCrops.forEach((crop, i) => {
+    setTimeout(() => downloadCropFullRes(crop, `zoom_${i}.png`), i * 200);
+  });
+});
+
+document.getElementById('btn-download-annotated').addEventListener('click', () => {
+  downloadCanvas(MAIN_CANVAS, 'img_lines.png');
+});
 
 // ── Init ───────────────────────────────────────────────────────────────────
 updateYaml();
