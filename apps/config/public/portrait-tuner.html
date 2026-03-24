@@ -72,8 +72,18 @@ input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; borde
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   flex: 0 0 auto; margin-right: 16px;
 }
-.crop-item canvas { display: block; background: #111; border: 1px solid #222; }
+.crop-item canvas { display: block; background: #111; border: 1px solid #222; cursor: pointer; }
+.crop-item canvas:hover { border-color: #555; }
 .crop-item .crop-lbl { font-size: 9px; color: #444; text-align: center; text-transform: uppercase; letter-spacing: 0.07em; }
+
+#lightbox {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.92); z-index: 100;
+  align-items: center; justify-content: center; cursor: pointer;
+}
+#lightbox.open { display: flex; }
+#lightbox canvas { max-width: 90vw; max-height: 90vh; object-fit: contain; border: 1px solid #333; }
+#lightbox .lbl { position: absolute; bottom: 20px; color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
 </style>
 </head>
 <body>
@@ -124,30 +134,50 @@ input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; borde
       </div>
 
       <div class="ctrl-section">
-        <h2>Per-zoom width (fraction of crop height)</h2>
+        <h2>Per-zoom width + center offset</h2>
 
         <div class="param-row">
-          <div class="param-label zoom-color-0">zoom 0 width</div>
+          <div class="param-label zoom-color-0">z0 width</div>
           <input type="range" class="param-slider" id="sl-w0" min="1" max="1000" value="670" step="1">
           <input type="number" class="param-number" id="num-w0" value="0.670" step="0.001" min="0.001">
         </div>
+        <div class="param-row">
+          <div class="param-label zoom-color-0">z0 offset</div>
+          <input type="range" class="param-slider" id="sl-o0" min="-500" max="500" value="0" step="1">
+          <input type="number" class="param-number" id="num-o0" value="0.000" step="0.001">
+        </div>
 
         <div class="param-row">
-          <div class="param-label zoom-color-1">zoom 1 width</div>
+          <div class="param-label zoom-color-1">z1 width</div>
           <input type="range" class="param-slider" id="sl-w1" min="1" max="1000" value="500" step="1">
           <input type="number" class="param-number" id="num-w1" value="0.500" step="0.001" min="0.001">
         </div>
-
         <div class="param-row">
-          <div class="param-label zoom-color-2">zoom 2 width</div>
-          <input type="range" class="param-slider" id="sl-w2" min="1" max="1000" value="300" step="1">
-          <input type="number" class="param-number" id="num-w2" value="0.300" step="0.001" min="0.001">
+          <div class="param-label zoom-color-1">z1 offset</div>
+          <input type="range" class="param-slider" id="sl-o1" min="-500" max="500" value="0" step="1">
+          <input type="number" class="param-number" id="num-o1" value="0.000" step="0.001">
         </div>
 
         <div class="param-row">
-          <div class="param-label zoom-color-3">zoom 3 width</div>
+          <div class="param-label zoom-color-2">z2 width</div>
+          <input type="range" class="param-slider" id="sl-w2" min="1" max="1000" value="300" step="1">
+          <input type="number" class="param-number" id="num-w2" value="0.300" step="0.001" min="0.001">
+        </div>
+        <div class="param-row">
+          <div class="param-label zoom-color-2">z2 offset</div>
+          <input type="range" class="param-slider" id="sl-o2" min="-500" max="500" value="0" step="1">
+          <input type="number" class="param-number" id="num-o2" value="0.000" step="0.001">
+        </div>
+
+        <div class="param-row">
+          <div class="param-label zoom-color-3">z3 width</div>
           <input type="range" class="param-slider" id="sl-w3" min="1" max="1000" value="150" step="1">
           <input type="number" class="param-number" id="num-w3" value="0.150" step="0.001" min="0.001">
+        </div>
+        <div class="param-row">
+          <div class="param-label zoom-color-3">z3 offset</div>
+          <input type="range" class="param-slider" id="sl-o3" min="-500" max="500" value="0" step="1">
+          <input type="number" class="param-number" id="num-o3" value="0.000" step="0.001">
         </div>
       </div>
 
@@ -177,6 +207,11 @@ input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; borde
     <canvas id="prev-3" width="80" height="120"></canvas>
     <div class="crop-lbl zoom-color-3">Zoom 3</div>
   </div>
+</div>
+
+<div id="lightbox" onclick="this.classList.remove('open')">
+  <canvas id="lightbox-canvas"></canvas>
+  <div class="lbl" id="lightbox-lbl"></div>
 </div>
 
 <script type="module">
@@ -210,10 +245,15 @@ let padTop    = 0.30;
 let padBottom = 0.80;
 let centerX   = 0.50;
 const widths  = [0.67, 0.50, 0.30, 0.15];
+const offsets = [0, 0, 0, 0]; // per-zoom center offset (fraction of image width)
 
 // ── DOM refs ───────────────────────────────────────────────────────────────
-const SL  = { padTop: document.getElementById('sl-pad-top'),   padBottom: document.getElementById('sl-pad-bottom'),   centerX: document.getElementById('sl-center-x'),   w: [0,1,2,3].map(i => document.getElementById(`sl-w${i}`)) };
-const NUM = { padTop: document.getElementById('num-pad-top'),  padBottom: document.getElementById('num-pad-bottom'),  centerX: document.getElementById('num-center-x'),  w: [0,1,2,3].map(i => document.getElementById(`num-w${i}`)) };
+const SL  = { padTop: document.getElementById('sl-pad-top'),   padBottom: document.getElementById('sl-pad-bottom'),   centerX: document.getElementById('sl-center-x'),   w: [0,1,2,3].map(i => document.getElementById(`sl-w${i}`)),  o: [0,1,2,3].map(i => document.getElementById(`sl-o${i}`)) };
+const NUM = { padTop: document.getElementById('num-pad-top'),  padBottom: document.getElementById('num-pad-bottom'),  centerX: document.getElementById('num-center-x'),  w: [0,1,2,3].map(i => document.getElementById(`num-w${i}`)),  o: [0,1,2,3].map(i => document.getElementById(`num-o${i}`)) };
+
+const LIGHTBOX = document.getElementById('lightbox');
+const LIGHTBOX_CANVAS = document.getElementById('lightbox-canvas');
+const LIGHTBOX_LBL = document.getElementById('lightbox-lbl');
 
 // ── Param binding helpers ──────────────────────────────────────────────────
 // scale: slider integer → float   (sliderVal / scale = float)
@@ -242,6 +282,7 @@ bindParam(SL.padBottom, NUM.padBottom, 1000, v => { padBottom = v; render(); });
 bindParam(SL.centerX, NUM.centerX, 1000, v => { centerX = v; render(); });
 [0,1,2,3].forEach(i => {
   bindParam(SL.w[i], NUM.w[i], 1000, v => { widths[i] = v; render(); });
+  bindParam(SL.o[i], NUM.o[i], 1000, v => { offsets[i] = v; render(); });
 });
 
 // ── File input ─────────────────────────────────────────────────────────────
@@ -260,7 +301,7 @@ document.getElementById('file-input').addEventListener('change', e => {
 });
 
 // ── Crop computation ───────────────────────────────────────────────────────
-function computeCrop(imgW, imgH, padTop, padBottom, centerX, widthRatio) {
+function computeCrop(imgW, imgH, padTop, padBottom, centerX, widthRatio, offsetX) {
   const fhY = lm.forehead.y;
   const chY = lm.chin.y;
   const faceH = chY - fhY;
@@ -270,7 +311,7 @@ function computeCrop(imgW, imgH, padTop, padBottom, centerX, widthRatio) {
   const cropH  = bottom - top;
 
   const cropW = Math.round(cropH * widthRatio);
-  const cx    = Math.round(centerX * imgW);
+  const cx    = Math.round((centerX + offsetX) * imgW);
   const left  = Math.max(0, Math.min(cx - Math.floor(cropW / 2), imgW - cropW));
 
   return { left, top, width: Math.min(cropW, imgW), height: cropH };
@@ -304,7 +345,7 @@ function render() {
   CTX.drawImage(sourceImage, 0, 0, displayW, displayH);
 
   // Compute crops (in image coords)
-  const crops = widths.map(w => computeCrop(iW, iH, padTop, padBottom, centerX, w));
+  const crops = widths.map((w, i) => computeCrop(iW, iH, padTop, padBottom, centerX, w, offsets[i]));
 
   // Shared top/bottom lines (in display coords)
   const topY    = Math.round(crops[0].top    * scale);
@@ -375,7 +416,10 @@ function render() {
   updateYaml();
 }
 
+let lastCrops = [];
+
 function updatePreviews(crops, iW, iH) {
+  lastCrops = crops;
   const PREV_H = 140;
   crops.forEach((c, i) => {
     const canvas = PREVIEW_CANVASES[i];
@@ -389,8 +433,34 @@ function updatePreviews(crops, iW, iH) {
   });
 }
 
+// Click thumbnail to enlarge
+PREVIEW_CANVASES.forEach((canvas, i) => {
+  canvas.addEventListener('click', () => {
+    if (!sourceImage || !lastCrops[i]) return;
+    const c = lastCrops[i];
+    if (c.height <= 0 || c.width <= 0) return;
+    const maxH = Math.min(window.innerHeight * 0.85, c.height);
+    const scale = maxH / c.height;
+    const pw = Math.round(c.width * scale);
+    LIGHTBOX_CANVAS.width = pw;
+    LIGHTBOX_CANVAS.height = Math.round(maxH);
+    const ctx = LIGHTBOX_CANVAS.getContext('2d');
+    ctx.drawImage(sourceImage, c.left, c.top, c.width, c.height, 0, 0, pw, Math.round(maxH));
+    LIGHTBOX_LBL.textContent = `Zoom ${i} — ${c.width}×${c.height}px — click to close`;
+    LIGHTBOX.classList.add('open');
+  });
+});
+
 function updateYaml() {
-  CONFIG_OUT.textContent = `portrait_crops:\n  pad_top: ${padTop.toFixed(2)}\n  pad_bottom: ${padBottom.toFixed(2)}\n  center_x: ${centerX.toFixed(3)}\n  zoom_0_width: ${widths[0].toFixed(2)}\n  zoom_1_width: ${widths[1].toFixed(2)}\n  zoom_2_width: ${widths[2].toFixed(2)}\n  zoom_3_width: ${widths[3].toFixed(2)}`;
+  const lines = ['portrait_crops:',
+    `  pad_top: ${padTop.toFixed(3)}`,
+    `  pad_bottom: ${padBottom.toFixed(3)}`,
+    `  center_x: ${centerX.toFixed(3)}`];
+  [0,1,2,3].forEach(i => {
+    lines.push(`  zoom_${i}_width: ${widths[i].toFixed(3)}`);
+    if (offsets[i] !== 0) lines.push(`  zoom_${i}_offset: ${offsets[i].toFixed(3)}`);
+  });
+  CONFIG_OUT.textContent = lines.join('\n');
 }
 
 // ── MediaPipe face detection ───────────────────────────────────────────────
