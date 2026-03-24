@@ -239,7 +239,7 @@ def render_md(req: MarkdownRequest):
 # ── Portrait processing ──────────────────────────────────
 
 @app.post("/process/portrait", dependencies=[Depends(verify_api_key)])
-async def process_portrait_endpoint(
+def process_portrait_endpoint(
     file: UploadFile = File(...),
     session_id: str | None = None,
     skip_transform: bool = False,
@@ -247,74 +247,83 @@ async def process_portrait_endpoint(
     """
     Full portrait pipeline: style transfer -> face detection -> crop -> dither.
     Uploads print-ready images to Supabase Storage, inserts into print_queue.
+    Uses sync def so FastAPI runs it in a threadpool (MediaPipe/PIL block).
     """
-    from pipeline import transform_to_statue_bytes, process_portrait
+    import traceback
+    try:
+        from pipeline import transform_to_statue_bytes, process_portrait
 
-    # Lazy-init Supabase (only needed for portraits)
-    supabase_client = _get_supabase()
-    if not supabase_client:
-        raise HTTPException(500, "Supabase not configured")
+        # Lazy-init Supabase (only needed for portraits)
+        supabase_client = _get_supabase()
+        if not supabase_client:
+            raise HTTPException(500, "Supabase not configured")
 
-    image_bytes = await file.read()
+        image_bytes = file.file.read()
 
-    _render_cfg = get_render_config(_CONFIG_PATH)
-    portrait_cfg = _render_cfg.get("portrait", {})
-    config = {
-        "n8n_webhook_url": os.environ.get("N8N_WEBHOOK_URL") or portrait_cfg.get("n8n_webhook_url"),
-        "openrouter_api_key_env": portrait_cfg.get("openrouter_api_key_env", "OPENROUTER_API_KEY"),
-        "style_prompt": portrait_cfg.get("style_prompt", "Transform this portrait into a monochrome sculpture."),
-        "paper_px": _render_cfg.get("halftone", {}).get("paper_px", 576),
-        "contrast": _render_cfg.get("halftone", {}).get("contrast", 1.3),
-        "brightness": _render_cfg.get("halftone", {}).get("brightness", 1.0),
-        "sharpness": _render_cfg.get("halftone", {}).get("sharpness", 1.2),
-        "blur": portrait_cfg.get("blur", 10),
-        "dither_mode": portrait_cfg.get("dither_mode", "bayer"),
-    }
+        _render_cfg = get_render_config(_CONFIG_PATH)
+        portrait_cfg = _render_cfg.get("portrait", {})
+        config = {
+            "n8n_webhook_url": os.environ.get("N8N_WEBHOOK_URL") or portrait_cfg.get("n8n_webhook_url"),
+            "openrouter_api_key_env": portrait_cfg.get("openrouter_api_key_env", "OPENROUTER_API_KEY"),
+            "style_prompt": portrait_cfg.get("style_prompt", "Transform this portrait into a monochrome sculpture."),
+            "paper_px": _render_cfg.get("halftone", {}).get("paper_px", 576),
+            "contrast": _render_cfg.get("halftone", {}).get("contrast", 1.3),
+            "brightness": _render_cfg.get("halftone", {}).get("brightness", 1.0),
+            "sharpness": _render_cfg.get("halftone", {}).get("sharpness", 1.2),
+            "blur": portrait_cfg.get("blur", 10),
+            "dither_mode": portrait_cfg.get("dither_mode", "bayer"),
+        }
 
-    # Stage B: Style transfer (optional)
-    if not skip_transform and config.get("n8n_webhook_url"):
-        image_bytes = transform_to_statue_bytes(image_bytes, config)
+        # Stage B: Style transfer (optional)
+        if not skip_transform and config.get("n8n_webhook_url"):
+            image_bytes = transform_to_statue_bytes(image_bytes, config)
 
-    # Stage C: Face detection + crops + dithering
-    results = process_portrait(image_bytes, config)
+        # Stage C: Face detection + crops + dithering
+        results = process_portrait(image_bytes, config)
 
-    # Upload to Supabase Storage
-    job_id = str(uuid.uuid4())
-    image_urls = []
+        # Upload to Supabase Storage
+        job_id = str(uuid.uuid4())
+        image_urls = []
 
-    for name, img in results:
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
+        for name, img in results:
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
 
-        path = f"portraits/{job_id}/{name}.png"
-        supabase_client.storage.from_("prints").upload(
-            path, buf.getvalue(),
-            file_options={"content-type": "image/png"}
-        )
+            path = f"portraits/{job_id}/{name}.png"
+            supabase_client.storage.from_("prints").upload(
+                path, buf.getvalue(),
+                file_options={"content-type": "image/png"}
+            )
 
-        url = supabase_client.storage.from_("prints").get_public_url(path)
-        image_urls.append({"name": name, "url": url})
+            url = supabase_client.storage.from_("prints").get_public_url(path)
+            image_urls.append({"name": name, "url": url})
 
-    # Insert print job
-    payload = {
-        "type": "portrait",
-        "image_urls": image_urls,
-        "job_id": job_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    }
+        # Insert print job
+        payload = {
+            "type": "portrait",
+            "image_urls": image_urls,
+            "job_id": job_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
-    supabase_client.table("print_queue").insert({
-        "session_id": session_id,
-        "payload": payload,
-        "status": "pending",
-    }).execute()
+        supabase_client.table("print_queue").insert({
+            "session_id": session_id,
+            "payload": payload,
+            "status": "pending",
+        }).execute()
 
-    return {
-        "status": "ok",
-        "job_id": job_id,
-        "zoom_levels": len(results),
-        "image_urls": image_urls,
-    }
+        return {
+            "status": "ok",
+            "job_id": job_id,
+            "zoom_levels": len(results),
+            "image_urls": image_urls,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(f"[PORTRAIT ERROR] {tb}")
+        raise HTTPException(500, detail=f"{type(e).__name__}: {e}")
 
 
 # ── Supabase client (lazy init) ──────────────────────────
