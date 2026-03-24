@@ -1,222 +1,229 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-24
 
 ## Naming Patterns
 
 **Files:**
-- Source files: `camelCase.ts` / `camelCase.tsx` (e.g., `useConversation.ts`, `buildWordTimestamps.ts`)
-- Screen components: `PascalCase.tsx` in `components/screens/` directory, named `{StateName}Screen.tsx` (e.g., `ConversationScreen.tsx`, `SleepScreen.tsx`)
-- Top-level components: `PascalCase.tsx` (e.g., `KaraokeReader.tsx`, `CameraDetector.tsx`, `ScreenTransition.tsx`)
-- Test files: co-located, same name with `.test.ts` / `.test.tsx` suffix (e.g., `cache.ts` -> `cache.test.ts`)
-- Index/barrel files: `index.ts` for re-exports
+- Screen components: `{StateName}Screen.tsx` (e.g., `TextDisplayScreen.tsx`, `ConversationScreen.tsx`)
+- Custom hooks: `use{Name}.ts` (e.g., `useInstallationMachine.ts`, `useConversation.ts`, `useKaraokeReader.ts`)
+- Utilities: lowercase with hyphens (e.g., `buildWordTimestamps.ts`, `mock-audio.ts`)
+- Test files colocated with source: `{name}.test.ts` or `{name}.test.tsx` in same directory
 
 **Functions:**
-- React components: `PascalCase` named exports (e.g., `export function ConversationScreen()`)
-- Hooks: `camelCase` prefixed with `use` (e.g., `useInstallationMachine`, `useAudioSync`, `useFaceDetection`)
-- Utility functions: `camelCase` (e.g., `buildWordTimestamps`, `computeCacheKey`, `splitTextIntoChunks`)
-- Service functions: `camelCase` (e.g., `advanceChain`, `generateEmbedding`, `getActiveChainContext`)
-- Factory/builder functions: `build` or `create` prefix (e.g., `buildSystemPrompt`, `createSupabaseClient`, `createMemoryCache`)
+- camelCase for all functions and methods
+- Utility functions often prefixed with verb: `build*`, `make*`, `load*`, `fetch*`, `persist*`
+- Helper functions inside tests: `make{Type}()` for creating test fixtures (e.g., `makeDefinition()`, `makeTimestamps()`)
 
 **Variables:**
-- Local variables: `camelCase`
-- Constants: `UPPER_SNAKE_CASE` for config objects and standalone values (e.g., `FACE_DETECTION`, `TIMERS`, `DEFAULT_TERM`)
-- Environment variables accessed via bracket notation: `process.env['VARIABLE_NAME']` (NOT `process.env.VARIABLE_NAME`)
-- Vite env vars: `import.meta.env['VITE_VARIABLE_NAME']`
+- camelCase for all variables and properties
+- Constants in UPPER_SNAKE_CASE (e.g., `DEFAULT_MODE`, `DEFAULT_TERM`)
+- React state variables: descriptive names like `transcript`, `isSpeaking`, `status`, `activeWordIndex`
+- Booleans often prefixed with `is` or `has`: `isSpeaking`, `voiceCloneConsent`
 
 **Types:**
-- Interfaces and type aliases: `PascalCase` (e.g., `InstallationState`, `TranscriptEntry`, `WordTimestamp`)
-- Zod schemas: `PascalCase` suffixed with `Schema` (e.g., `SessionSchema`, `ModeSchema`, `PrintPayloadSchema`)
-- Inferred types from Zod: same name without `Schema` suffix (e.g., `type Session = z.infer<typeof SessionSchema>`)
-- Insert types: prefixed with `Insert` (e.g., `InsertSession`, `InsertDefinition`)
-- Props interfaces: `{ComponentName}Props` (e.g., `ConversationScreenProps`, `KaraokeReaderProps`)
-- Hook params/returns: `Use{Name}Params` / `Use{Name}Return` (e.g., `UseConversationParams`, `UseKaraokeReaderReturn`)
+- PascalCase for all types and interfaces
+- Suffixes for categorized types:
+  - `*Schema` for Zod schemas (e.g., `ModeSchema`, `SessionSchema`)
+  - `*Response` for API response types (e.g., `ConfigResponse`)
+  - `*Params` for function parameter interfaces (e.g., `UseConversationParams`)
+  - `*Return` for hook return types (e.g., `UseConversationReturn`)
+  - `*Action` for reducer action union types (e.g., `InstallationAction`)
+  - `*State` for reducer state types (e.g., `InstallationState`)
 
 ## Code Style
 
 **Formatting:**
-- Biome v2 in `packages/karaoke-reader/` (`packages/karaoke-reader/biome.json`)
-  - Indent: 2 spaces
-  - Line width: 100
-  - Import organization enabled
-- No global Prettier or ESLint config at root
-- Other packages rely on TypeScript strict mode and editor defaults
-- Use 2-space indentation consistently across all files
-- Single quotes for strings
+- Prettier handles all formatting (runs via `pnpm lint`)
+- No `.prettierrc` configured — uses Prettier defaults
+- No linting config file detected (ESLint not explicitly configured)
 
-**Linting:**
-- TypeScript strict mode in all packages via `tsconfig.base.json`:
-  - `strict: true`
-  - `noUncheckedIndexedAccess: true`
-  - `noUnusedLocals: true`
-  - `noUnusedParameters: true`
-- Tablet app relaxes unused checks: `noUnusedLocals: false`, `noUnusedParameters: false` in `apps/tablet/tsconfig.json`
-- No `any` type allowed (enforced by strict mode)
-- Use optional chaining (`?.`) consistently for nullable access
+**Comments:**
+- Use block comments (`/** ... */`) for JSDoc/TSDoc documentation
+- Describe intent and behavior, not obvious code
+- Place descriptive comments above implementations:
+  ```typescript
+  /**
+   * Build the system prompt for the ElevenLabs Conversational AI agent.
+   * The prompt is constructed dynamically based on the current mode...
+   */
+  export function buildSystemPrompt(...) { ... }
+  ```
+- Section dividers use lines of `=` or `-` to organize code blocks:
+  ```typescript
+  // ============================================================
+  // State
+  // ============================================================
+  ```
+
+**TypeScript:**
+- Strict mode enforced (`"strict": true` in `tsconfig.base.json`)
+- No `any` types allowed
+- Config settings:
+  - `noUncheckedIndexedAccess: true` — require type guards on object index access
+  - `noUnusedLocals: true` — error on unused variables
+  - `noUnusedParameters: true` — error on unused function parameters
+  - `declaration: true` — emit `.d.ts` files for packages
 
 ## Import Organization
 
 **Order:**
-1. External packages (React, Hono, Zod, Supabase, etc.)
-2. Workspace packages (`@meinungeheuer/shared`, `karaoke-reader`)
-3. Relative imports (local modules)
+1. External library imports (React, third-party packages)
+2. Type-only imports from external libraries
+3. Local absolute imports from `@meinungeheuer/shared` or named packages
+4. Local relative imports (hooks, components, utilities)
+5. Type-only imports from local modules
+
+**Examples:**
+```typescript
+import { useCallback, useRef, useState } from 'react';
+import type { Status, DisconnectionDetails, Role as ElevenLabsRole } from '@elevenlabs/react';
+import { DEFAULT_MODE, DEFAULT_TERM, getProgram } from '@meinungeheuer/shared';
+import type { ConversationProgram, Definition } from '@meinungeheuer/shared';
+import { useInstallationMachine } from './hooks/useInstallationMachine';
+import { fetchConfig } from './lib/api';
+import type { ConfigResponse } from './lib/api';
+```
 
 **Path Aliases:**
-- Workspace packages: `@meinungeheuer/shared`, `@meinungeheuer/tablet`, `@meinungeheuer/backend`, `@meinungeheuer/printer-bridge`
-- Karaoke reader sub-exports: `karaoke-reader/utils`, `karaoke-reader/hooks`, `karaoke-reader/elevenlabs`
-- No path aliases within individual apps (use relative imports)
+- Monorepo workspace imports use package names: `@meinungeheuer/shared`, `@meinungeheuer/tablet`, `karaoke-reader`
+- Relative imports used within same package
+- No path aliases configured in TypeScript — imports use full workspace paths
 
-**Module extensions:**
-- Always include `.js` extension in relative imports for ESM compatibility (e.g., `import { supabase } from '../services/supabase.js'`)
-- Exception: tablet app (Vite bundler resolves without extensions)
+**Barrel Files:**
+- Not extensively used in codebase
+- Prefer direct imports to specific modules
 
-**Type-only imports:**
-- Use `import type` for type-only imports (e.g., `import type { Mode, Definition } from '@meinungeheuer/shared'`)
-- Use `type` keyword inline in mixed imports (e.g., `import { z, type ZodType } from 'zod'` is NOT used -- separate them)
+## Zod Runtime Validation
+
+**Pattern:**
+- All external API boundaries use Zod schemas for runtime validation
+- Schemas live in `packages/shared/src/types.ts`
+- Schemas named with `Schema` suffix (e.g., `SessionSchema`, `DefinitionSchema`)
+- Types inferred from schemas: `type Mode = z.infer<typeof ModeSchema>`
+
+**Example:**
+```typescript
+export const ModeSchema = z.enum(['text_term', 'term_only', 'chain']);
+export type Mode = z.infer<typeof ModeSchema>;
+
+export const SessionSchema = z.object({
+  id: z.string().uuid(),
+  created_at: z.string().datetime({ offset: true }),
+  // ... other fields
+});
+export type Session = z.infer<typeof SessionSchema>;
+```
 
 ## Error Handling
 
+**Strategy:** Never crash long-running services (backend, printer-bridge). Catch, log, continue.
+
 **Patterns:**
-- **Never crash long-running services.** Backend and printer-bridge catch all errors, log, and continue. See `apps/backend/src/app.ts` global error handler and `apps/printer-bridge/src/index.ts` processJob.
-- **Zod safeParse at API boundaries.** All incoming request bodies are validated with `schema.safeParse(body)`. On failure, return `{ error, details: parsed.error.flatten() }` with 400 status. See `apps/backend/src/routes/webhook.ts`.
-- **Fire-and-forget with void.** Non-critical async operations (embeddings, persist, cache writes) use `void functionCall()` to suppress unhandled-promise warnings without blocking. See `apps/backend/src/routes/webhook.ts` line 253: `void generateEmbedding(definitionId)`.
-- **Try-catch at function boundaries.** Service functions wrap entire body in try-catch, log errors with context objects, and return gracefully:
+- Async functions wrap try-catch at top level:
   ```typescript
-  // Pattern from apps/backend/src/services/embeddings.ts
   try {
-    // ... operation
-  } catch (err) {
-    console.error('[embeddings] Unexpected error:', { definitionId, error: err });
+    const result = await someOperation();
+    // handle success
+  } catch (error) {
+    console.error('Operation failed:', error);
+    // continue or return default
   }
   ```
-- **Non-fatal errors: log and continue.** When a secondary operation fails (e.g., print queue insert after definition save), log the error but still return success for the primary operation.
-- **Client-side error swallowing.** Tablet persist functions (`apps/tablet/src/lib/persist.ts`) never throw -- they catch, `console.warn`, and return. UI must never block on persistence.
-- **Retry pattern.** Used in printer bridge (`apps/printer-bridge/src/printer.ts`): retry once on network error, then throw.
 
-**Request body parsing pattern (Hono routes):**
-```typescript
-let body: unknown;
-try {
-  body = await c.req.json();
-} catch {
-  return c.json({ error: 'Invalid JSON body' }, 400);
-}
+- Silent failures documented: `persistDefinition()`, `persistTranscript()`, `persistPrintJob()` swallow errors silently and are followed by comments explaining behavior
 
-const parsed = SomeSchema.safeParse(body);
-if (!parsed.success) {
-  return c.json({ error: 'Invalid request body', details: parsed.error.flatten() }, 400);
-}
-```
+- RLS (Row Level Security) policy failures are silent in the browser — no visible error logs. Check Supabase schema directly if data doesn't appear
+
+- Network errors in components dispatch state machine actions for graceful fallback (e.g., `FACE_LOST` triggers reset)
+
+**No error types exported:**
+- Custom error classes not used
+- Rely on JavaScript Error type and `.instanceof Error` checks
+- Defensive type assertions in tests: `as any` when testing edge cases
 
 ## Logging
 
-**Framework:** `console` (console.log, console.error, console.warn)
+**Framework:** `console` only (no dedicated logging library)
 
 **Patterns:**
-- Use bracketed prefixes for log context: `[component/action]` format
-  - Backend routes: `[webhook/definition]`, `[session/start]`, `[config/GET]`
-  - Services: `[chain]`, `[embeddings]`
-  - Printer bridge: `[bridge]`
-  - Tablet: `[App]`, `[MeinUngeheuer]`, `[Persist]`
-- Log structured context objects for errors:
+- `console.log()` for general output and debug info
+- `console.warn()` for warnings or recoverable issues
+- `console.error()` for errors (but don't throw in services)
+- `console.error('message:', error)` standard format
+- Example: `console.error('Failed to persist definition:', err);`
+
+**When to Log:**
+- Network request failures (with retry hints)
+- State transitions for debugging (mainly in tests)
+- Configuration loading and validation
+- Service startup/shutdown (backend, printer-bridge)
+- External API failures (ElevenLabs, Supabase)
+
+## Reducer Pattern
+
+**Used in:** `useInstallationMachine.ts`
+
+**Patterns:**
+- State interface: `InstallationState` with all mutable fields
+- Action union type: discriminated union with `type` field
+- Reducer function: pure function `(state, action) => newState`
+- No mutations — always return new object with spread operator: `{ ...state, field: newValue }`
+- Guard clauses check current state before transitioning:
   ```typescript
-  console.error('[webhook/definition] Session fetch error:', {
-    conversation_id,
-    error: sessionFetchError,
-  });
+  case 'TIMER_3S':
+    if (state.screen !== 'welcome') return state;  // no-op if invalid
+    // then proceed with transition
   ```
-- Use `console.warn` for non-critical issues (duplicate inserts, fallback behavior)
-- Use `console.log` for lifecycle events (startup, connection, job completion)
+- Default: return state unchanged for invalid transitions
 
-## Comments
+## React Component Design
 
-**When to Comment:**
-- Section headers use `// ============================================================` separator bars with centered titles
-- Subsection headers use `// ---------------------------------------------------------------------------` with left-aligned titles
-- Printer bridge uses `// ---` with Unicode box-drawing chars for section dividers
-- JSDoc blocks on exported functions that need context (especially "fire-and-forget" and "never throws" contracts)
-- Inline comments for non-obvious type assertions or workarounds
+**Functional components only** — no class components
 
-**JSDoc/TSDoc:**
-- Used on exported service functions and hook factories
-- Focus on behavioral contracts: "Never throws; all errors are logged", "Fire-and-forget", "Returns null if..."
-- Not used on React components (props interfaces are self-documenting)
-- Not used on simple utility functions where the name is descriptive enough
+**Props interface pattern:**
+```typescript
+interface TextDisplayScreenProps {
+  dispatch: React.Dispatch<InstallationAction>;
+  contextText: string | null;
+  language: 'de' | 'en';
+}
 
-## Function Design
+export function TextDisplayScreen({ dispatch, contextText, language }: TextDisplayScreenProps) {
+  // ...
+}
+```
 
-**Size:** Functions are kept focused. Route handlers are long (50-100 lines) but linear -- numbered step comments break them into sections. Utility functions are short (10-30 lines).
+**Hooks:**
+- Custom hooks return either simple values or objects with named properties
+- Hook parameter is usually a single options object:
+  ```typescript
+  interface UseConversationParams { ... }
+  export function useConversation(params: UseConversationParams): UseConversationReturn { ... }
+  ```
 
-**Parameters:**
-- Hooks accept a single params object: `function useConversation(params: UseConversationParams)`
-- Simple functions use positional params: `function buildWordTimestamps(text: string, alignment: AlignmentData, timeOffset?: number)`
-- Config/options objects for anything with 3+ optional parameters
-
-**Return Values:**
-- Hooks return named objects: `{ state, dispatch, wake, reset }`
-- Service functions return `Promise<void>` for side effects, `Promise<T | null>` for queries
-- Supabase queries use destructured `{ data, error }` pattern consistently
+**Component organization:**
+- Screen components: `apps/tablet/src/components/screens/{StateName}Screen.tsx`
+- Reusable components: `apps/tablet/src/components/`
+- Hooks: `apps/tablet/src/hooks/` or `packages/{pkg}/src/hooks/`
+- Utilities: `apps/{app}/src/lib/` or `packages/{pkg}/src/utils/`
 
 ## Module Design
 
 **Exports:**
-- Named exports exclusively. No default exports anywhere in the codebase.
-- Components: `export function ComponentName()`
-- Hooks: `export function useHookName()`
-- Types: `export interface` / `export type`
+- Named exports preferred for functions and types
+- Default exports rare — used only for components in some cases
 
-**Barrel Files:**
-- `packages/shared/src/index.ts`: re-exports all from `types.js`, `supabase.js`, `constants.js`
-- `packages/karaoke-reader/src/index.ts`: explicit named re-exports of all public API
-- `packages/karaoke-reader/src/hooks/index.ts`: barrel for hooks sub-package
-- `packages/karaoke-reader/src/utils/index.ts`: barrel for utils sub-package
-- Apps do NOT use barrel files -- direct imports to specific modules
+**Package structure:**
+- `packages/shared/src/types.ts` — all shared types and Zod schemas
+- `packages/shared/src/programs/` — conversation program definitions and builders
+- `packages/karaoke-reader/` — self-contained package for TTS with karaoke highlighting
+- Each app has own `src/` directory with no shared state
 
-**Singleton Pattern:**
-- Supabase client: lazy singleton in tablet (`apps/tablet/src/lib/supabase.ts`) and module-level in backend (`apps/backend/src/services/supabase.ts`)
-- OpenRouter client: lazy singleton with null check (`apps/backend/src/services/embeddings.ts`)
-
-## React Patterns
-
-**State Machine:**
-- Central `useReducer` pattern for app state in `apps/tablet/src/hooks/useInstallationMachine.ts`
-- Discriminated union actions: `type InstallationAction = { type: 'WAKE' } | { type: 'TIMER_3S' } | ...`
-- State guards prevent invalid transitions (each case checks `state.screen` before transitioning)
-- Exhaustiveness guard in switch: `const _: never = screen; void _;`
-
-**Callback Refs:**
-- Use `useRef` to hold callback references that change frequently, avoiding re-initialization of external SDKs:
-  ```typescript
-  const onDefinitionReceivedRef = useRef(onDefinitionReceived);
-  onDefinitionReceivedRef.current = onDefinitionReceived;
-  ```
-
-**Component Props:**
-- Screen components receive `dispatch` as a prop for state machine actions
-- Props interfaces defined above the component in the same file
-- Use `React.Dispatch<InstallationAction>` type for dispatch props
-
-**CSS / Styling:**
-- Tailwind v4 in tablet app via `@tailwindcss/vite` plugin. CSS-first config (NOT `tailwind.config.js`).
-- Import: `@import "tailwindcss"` in `apps/tablet/src/index.css`
-- Mix of Tailwind utility classes and inline `style` objects in components
-- Inline styles used for dynamic values and complex responsive sizing (`clamp()`)
-- Inline `<style>` tags for CSS keyframe animations
-- Karaoke-reader uses BEM-like CSS class naming: `.kr-root`, `.kr-scroll-container`, `.kr-controls`, `.kr-loading-indicator`
-- Data attributes for state: `data-kr-index`, `data-kr-state`, `data-kr-status`
-
-## Shared Type Pattern
-
-**Zod-first type definitions** in `packages/shared/src/types.ts`:
-1. Define Zod schema: `export const SessionSchema = z.object({...})`
-2. Infer TypeScript type: `export type Session = z.infer<typeof SessionSchema>`
-3. Derive insert types: `export const InsertSessionSchema = SessionSchema.omit({ id: true, created_at: true })`
-
-**Database type interface** in `packages/shared/src/supabase.ts`:
-- Manual `Database` interface mirroring SQL schema with `Row`, `Insert`, `Update` shapes
-- Used to produce typed Supabase client: `SupabaseClient<Database>`
-- Each table includes `Relationships: []`
+**Re-exports and Declarations:**
+- Test-only exports hidden in comments at bottom of test files
+- Helper functions for testing often defined inline in test files, not in separate fixtures
 
 ---
 
-*Convention analysis: 2026-03-08*
+*Convention analysis: 2026-03-24*
