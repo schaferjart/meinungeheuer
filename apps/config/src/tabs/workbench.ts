@@ -917,6 +917,11 @@ function buildSliceSection(body: HTMLElement): void {
   let direction = 'vertical';
   let sliceCount = 10;
   let dotSize = 2;
+  let ditherMode = 'floyd';
+  let contrast = 1.3;
+  let brightness = 1.0;
+  let sharpness = 1.2;
+  let blur = 0;
   let previewUrls: string[] = [];
 
   body.appendChild(makeFileField('Image', 'image/*', (f) => { uploadedFile = f; }));
@@ -936,8 +941,18 @@ function buildSliceSection(body: HTMLElement): void {
     createSlider('Slice count', 1, 20, 1, sliceCount, (v) => { sliceCount = v; })
   );
   body.appendChild(
-    createNumberInput('Dot size (px)', dotSize, 1, 20, 1, (v) => { dotSize = v; })
+    createRadioGroup(
+      'Dither mode',
+      [{ value: 'floyd', label: 'floyd' }, { value: 'bayer', label: 'bayer' }, { value: 'halftone', label: 'halftone' }],
+      ditherMode,
+      (v) => { ditherMode = v; }
+    )
   );
+  body.appendChild(createNumberInput('Dot size (px)', dotSize, 1, 20, 1, (v) => { dotSize = v; }));
+  body.appendChild(createSlider('Contrast', 0.5, 2.0, 0.05, contrast, (v) => { contrast = v; }));
+  body.appendChild(createSlider('Brightness', 0.5, 2.0, 0.05, brightness, (v) => { brightness = v; }));
+  body.appendChild(createSlider('Sharpness', 0.5, 2.0, 0.05, sharpness, (v) => { sharpness = v; }));
+  body.appendChild(createSlider('Blur', 0, 30, 1, blur, (v) => { blur = v; }));
 
   const previewGrid = document.createElement('div');
   previewGrid.className = 'wb-preview-grid';
@@ -984,6 +999,8 @@ function buildSliceSection(body: HTMLElement): void {
       fd.append('direction', direction);
       fd.append('count', String(sliceCount));
       fd.append('dot_size', String(dotSize));
+      fd.append('dither_mode', ditherMode);
+      fd.append('paper_px', '576');
 
       const headers: Record<string, string> = {};
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
@@ -1045,21 +1062,25 @@ function buildSliceSection(body: HTMLElement): void {
         imageUrlEntries.push({ name: `slice_${i}`, url: urlData.publicUrl });
       }
 
-      // Insert as portrait-type job (bridge downloads images and sends to POS)
-      const { error } = await supabase.from('print_queue').insert({
-        payload: {
-          type: 'portrait',
-          image_urls: imageUrlEntries,
-          job_id: `workbench-slice-${Date.now()}`,
-          timestamp: new Date().toISOString(),
-        },
-        status: 'pending',
-      });
+      // Insert each slice as a separate portrait job (one cut per slice)
+      let insertErrors = 0;
+      for (const entry of imageUrlEntries) {
+        const { error } = await supabase.from('print_queue').insert({
+          payload: {
+            type: 'portrait',
+            image_urls: [entry],
+            job_id: `workbench-slice-${Date.now()}-${entry.name}`,
+            timestamp: new Date().toISOString(),
+          },
+          status: 'pending',
+        });
+        if (error) insertErrors++;
+      }
 
-      if (error) {
-        setStatus(statusEl, 'Error: ' + error.message, '#cc4444');
+      if (insertErrors > 0) {
+        setStatus(statusEl, `${insertErrors} slice(s) failed to queue.`, '#cc4444');
       } else {
-        setStatus(statusEl, `${imageUrlEntries.length} slices queued for printing.`, '#66aa66');
+        setStatus(statusEl, `${imageUrlEntries.length} slices queued (separate cuts).`, '#66aa66');
       }
     } catch {
       setStatus(statusEl, 'Failed to queue print job.', '#cc4444');
@@ -1078,7 +1099,6 @@ function buildPortraitSection(body: HTMLElement): void {
   body.appendChild(statusEl);
 
   let uploadedFile: File | null = null;
-  let stylePrompt = '';
   let ditherMode = 'floyd';
   let blur = 10;
   let z0PadTop = 0.1;
@@ -1101,7 +1121,7 @@ function buildPortraitSection(body: HTMLElement): void {
 
   body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => { uploadedFile = f; }));
 
-  body.appendChild(createTextarea('Style transfer prompt', '', 8, (v) => { stylePrompt = v; }));
+  body.appendChild(createTextarea('Style transfer prompt (used by full pipeline, not preview)', '', 8, () => { /* stored in program config */ }));
 
   body.appendChild(
     createRadioGroup(
@@ -1160,21 +1180,15 @@ function buildPortraitSection(body: HTMLElement): void {
     if (!uploadedFile) return null;
     try {
       const fd = new FormData();
-      fd.append('image', uploadedFile);
-      fd.append('style_prompt', stylePrompt);
+      fd.append('file', uploadedFile);
       fd.append('dither_mode', ditherMode);
       fd.append('blur', String(blur));
-      fd.append('z0_pad_top', String(z0PadTop));
-      fd.append('z0_pad_bottom', String(z0PadBottom));
-      fd.append('z0_aspect', String(z0Aspect));
-      fd.append('z1_pad_top', String(z1PadTop));
-      fd.append('z1_pad_bottom', String(z1PadBottom));
-      fd.append('z3_strip_width', String(z3StripWidth));
+      fd.append('skip_transform', 'true');
 
       const headers: Record<string, string> = {};
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
 
-      const res = await fetch(`${creds.rendererUrl}/render/portrait`, {
+      const res = await fetch(`${creds.rendererUrl}/render/portrait-preview`, {
         method: 'POST',
         headers,
         body: fd,
@@ -1243,21 +1257,15 @@ function buildPortraitSection(body: HTMLElement): void {
 
       try {
         const fd = new FormData();
-        fd.append('image', uploadedFile);
-        fd.append('style_prompt', stylePrompt);
+        fd.append('file', uploadedFile);
         fd.append('dither_mode', ditherMode);
         fd.append('blur', String(blur));
-        fd.append('z0_pad_top', String(z0PadTop));
-        fd.append('z0_pad_bottom', String(z0PadBottom));
-        fd.append('z0_aspect', String(z0Aspect));
-        fd.append('z1_pad_top', String(z1PadTop));
-        fd.append('z1_pad_bottom', String(z1PadBottom));
-        fd.append('z3_strip_width', String(z3StripWidth));
+        fd.append('skip_transform', 'true');
 
         const headers: Record<string, string> = {};
         if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
 
-        const res = await fetch(`${creds.rendererUrl}/render/portrait`, {
+        const res = await fetch(`${creds.rendererUrl}/render/portrait-preview`, {
           method: 'POST',
           headers,
           body: fd,

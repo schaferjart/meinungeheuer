@@ -107,6 +107,50 @@ def render_dither(
     return _image_response(dithered)
 
 
+# ── Portrait preview ──────────────────────────────────────
+
+
+@app.post("/render/portrait-preview", dependencies=[Depends(verify_api_key)])
+def render_portrait_preview(
+    file: UploadFile = File(...),
+    dither_mode: str = Form("bayer"),
+    blur: float = Form(10),
+    contrast: float = Form(1.3),
+    brightness: float = Form(1.0),
+    sharpness: float = Form(1.2),
+    skip_transform: bool = Form(True),
+):
+    """Face detection + zoom crops + dither. Returns base64 PNGs for each crop.
+    No style transfer, no Storage upload, no print_queue insert.
+    """
+    from pipeline import detect_face_landmarks, compute_zoom_crops, process_portrait
+
+    image_bytes = file.file.read()
+    config = get_render_config(_CONFIG_PATH)
+    portrait_cfg = config.get("portrait", {})
+
+    # Override with request params
+    local_cfg = {
+        "paper_px": config.get("_meta", {}).get("paper_px", 576),
+        "contrast": contrast,
+        "brightness": brightness,
+        "sharpness": sharpness,
+        "blur": blur,
+        "dither_mode": dither_mode,
+    }
+
+    results = process_portrait(image_bytes, local_cfg)
+
+    import base64 as b64mod
+    crops = []
+    for name, img in results:
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        crops.append(b64mod.b64encode(buf.getvalue()).decode())
+
+    return {"crops": crops, "count": len(crops)}
+
+
 # ── Markdown rendering ────────────────────────────────────
 
 class MarkdownRequest(BaseModel):
