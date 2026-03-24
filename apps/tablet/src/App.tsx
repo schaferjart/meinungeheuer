@@ -87,7 +87,7 @@ function InstallationApp() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   // Portrait capture hook — reads frames from the shared video element
-  const printRendererUrl = import.meta.env['VITE_PRINT_RENDERER_URL'] ?? '';
+  const printRendererUrl = import.meta.env['VITE_PRINT_RENDERER'] ?? import.meta.env['VITE_PRINT_RENDERER_URL'] ?? '';
   const { captureFrame, uploadPortrait } = usePortraitCapture({
     videoRef,
     printRendererUrl,
