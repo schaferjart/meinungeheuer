@@ -103,7 +103,7 @@ export const ConfigResponseSchema = z.object({
 export type ConfigResponse = z.infer<typeof ConfigResponseSchema>;
 
 export const SessionStartResponseSchema = z.object({
-  sessionId: z.string().uuid(),
+  session_id: z.string().uuid(),
 });
 export type SessionStartResponse = z.infer<typeof SessionStartResponseSchema>;
 
@@ -145,9 +145,9 @@ export async function fetchConfig(backendUrl: string): Promise<ConfigResponse> {
 export interface StartSessionParams {
   mode: Mode;
   term: string;
-  contextText: string | null;
-  parentSessionId: string | null;
-  language: string;
+  context_text: string | null;
+  parent_session_id: string | null;
+  elevenlabs_conversation_id: string;
 }
 
 export async function startSession(
