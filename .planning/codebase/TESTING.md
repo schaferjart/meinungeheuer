@@ -5,174 +5,298 @@
 ## Test Framework
 
 **Runner:**
-- Vitest 3.0.5
-- Config: Per-package or workspace-level via Vitest config files
-- Environment: `happy-dom` (lightweight DOM implementation for faster tests)
+- Vitest (all workspaces)
+- Versions: `^3.0.5` in tablet, printer-bridge, backend; separate config per workspace package
 
 **Assertion Library:**
-- Vitest built-in assertions (compatible with Jest API)
-- Methods: `expect().toBe()`, `expect().toEqual()`, `expect().toHaveBeenCalled()`, etc.
-
-**Test Utilities:**
-- React Testing Library 16.3.2 — `renderHook()` for hook testing
-- `@testing-library/dom` — DOM utilities
-- Vitest spies and mocks: `vi.fn()`, `vi.spyOn()`, `vi.stubGlobal()`, `vi.useFakeTimers()`
+- Vitest built-in `expect` (Chai-based)
+- `@testing-library/jest-dom/vitest` — DOM matchers in `packages/karaoke-reader`
 
 **Run Commands:**
 ```bash
-pnpm test                             # Run all tests
+pnpm test                          # Run all tests across all workspaces (pnpm -r test)
 pnpm --filter @meinungeheuer/tablet exec vitest run src/hooks/useInstallationMachine.test.ts  # Single file
-pnpm --filter @meinungeheuer/tablet exec vitest src/hooks/useInstallationMachine.test.ts      # Watch mode
+pnpm --filter @meinungeheuer/tablet exec vitest src/hooks/useInstallationMachine.test.ts     # Watch mode
+pnpm --filter @meinungeheuer/printer-bridge test   # Printer bridge tests only
+pnpm --filter karaoke-reader test                   # Karaoke reader tests only
+pnpm --filter @meinungeheuer/shared test            # Shared programs tests only
+```
+
+## Vitest Configuration Per Workspace
+
+**`apps/tablet`** — No vitest.config.ts; runs with Vitest defaults. Uses `jsdom` only where specified with in-file directive `// @vitest-environment jsdom`. Default environment is Node.
+
+**`apps/printer-bridge`** — No vitest.config.ts; runs with Vitest defaults (Node environment). `"test": "vitest run --passWithNoTests"` — allows running with zero tests found.
+
+**`apps/backend`** — No vitest.config.ts; `"test": "vitest run --passWithNoTests"`. No test files exist currently.
+
+**`packages/shared`** — `packages/shared/vitest.config.ts`:
+```typescript
+export default defineConfig({
+  test: {
+    include: ['src/**/*.test.ts'],  // Explicit include to exclude dist/
+  },
+});
+```
+
+**`packages/karaoke-reader`** — `packages/karaoke-reader/vitest.config.ts`:
+```typescript
+export default defineConfig({
+  test: {
+    globals: true,
+    environment: 'happy-dom',
+    setupFiles: ['./src/test-utils/setup.ts'],  // Imports @testing-library/jest-dom/vitest
+  },
+});
 ```
 
 ## Test File Organization
 
-**Location:**
-- Co-located with source: `src/hooks/useInstallationMachine.ts` → `src/hooks/useInstallationMachine.test.ts`
-- Same directory as implementation
-- Not in separate `__tests__` directory
+**Location:** Co-located with source — `foo.ts` → `foo.test.ts`, `foo.tsx` → `foo.test.tsx`
 
-**Naming:**
-- Test files: `{name}.test.ts` or `{name}.test.tsx`
-- Glob pattern: `**/*.test.ts` or `**/*.test.tsx`
+**Naming:** `{module}.test.ts` / `{module}.test.tsx`
 
 **Structure:**
 ```
-apps/tablet/src/hooks/
-├── useInstallationMachine.ts
-├── useInstallationMachine.test.ts
-├── useConversation.ts
-└── useConversation.test.ts
+apps/tablet/src/
+  hooks/
+    useInstallationMachine.ts
+    useInstallationMachine.test.ts   # Reducer logic
+    useConversation.ts
+    useConversation.test.ts          # mapRole() only
+    usePortraitCapture.ts
+    usePortraitCapture.test.ts
+  lib/
+    systemPrompt.ts
+    systemPrompt.test.ts
+    fullscreen.ts
+    fullscreen.test.ts
+
+apps/printer-bridge/src/
+  config.ts
+  config.test.ts
+  printer.ts
+  printer.test.ts
+
+packages/shared/src/programs/
+  aphorism.ts
+  free-association.ts
+  free-association.test.ts
+  index.ts
+  index.test.ts                      # Registry + schema validation
 
 packages/karaoke-reader/src/
-├── hooks/
-│   ├── useKaraokeReader.ts
-│   └── useKaraokeReader.test.ts
-├── utils/
-│   ├── buildWordTimestamps.ts
-│   └── buildWordTimestamps.test.ts
-├── test-utils/
-│   ├── mock-audio.ts
-│   └── setup.ts
-└── cache.test.ts
+  adapters/elevenlabs/
+    index.ts
+    index.test.ts                    # fetchElevenLabsTTS + useElevenLabsTTS
+  cache.ts
+  cache.test.ts
+  hooks/
+    useAudioSync.ts
+    useAudioSync.test.ts
+    useAutoScroll.ts
+    useAutoScroll.test.ts
+    useKaraokeReader.ts
+    useKaraokeReader.test.ts
+  components/
+    KaraokeReader.tsx
+    KaraokeReader.test.tsx
+  utils/
+    buildWordTimestamps.ts
+    buildWordTimestamps.test.ts
+    computeCacheKey.ts
+    computeCacheKey.test.ts
+    markdown.ts
+    markdown.test.ts
+    splitTextIntoChunks.ts
+    splitTextIntoChunks.test.ts
 ```
+
+## Test Count by Package
+
+| Package | Test Files | Approx Tests |
+|---------|-----------|-------------|
+| `apps/tablet` | 5 | ~40 |
+| `apps/printer-bridge` | 2 | ~10 |
+| `apps/backend` | 0 | 0 |
+| `packages/shared` | 2 | ~20 |
+| `packages/karaoke-reader` | 9 | ~80 |
+| **Total** | **18** | **~150** |
 
 ## Test Structure
 
 **Suite Organization:**
-
-Using Vitest's `describe()` and `it()`:
-
 ```typescript
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-describe('useInstallationMachine reducer', () => {
-  describe('SLEEP state', () => {
-    it('starts in sleep state', () => {
-      expect(initialState.screen).toBe('sleep');
-    });
-
-    it('WAKE transitions sleep → welcome', () => {
-      const next = reducer(initialState, { type: 'WAKE' });
+describe('ModuleName', () => {
+  describe('specific feature/method', () => {
+    it('does X when Y', () => {
+      // arrange
+      const state = { screen: 'sleep', ... };
+      // act
+      const next = reducer(state, { type: 'WAKE' });
+      // assert
       expect(next.screen).toBe('welcome');
-    });
-  });
-
-  describe('Configuration actions', () => {
-    it('SET_CONFIG updates mode, term, contextText', () => {
-      // ...
     });
   });
 });
 ```
 
-**Patterns:**
-
-**Setup/Teardown:**
+**Reducer testing pattern (useInstallationMachine.test.ts):**
+The reducer is inlined into the test file — the source module does not export the reducer function. Tests duplicate the reducer logic to test it in isolation without React hooks:
 ```typescript
-beforeEach(() => {
-  vi.useFakeTimers();
-  // or other setup
+// Reducer is re-implemented inline — never calls renderHook
+function reducer(state: InstallationState, action: InstallationAction): InstallationState { ... }
+
+// Sequence helper
+function advance(state: InstallationState, ...actions: InstallationAction[]): InstallationState {
+  return actions.reduce((s, a) => reducer(s, a), state);
+}
+```
+
+**Full flow tests:**
+```typescript
+it('traverses states (text_term skips term_prompt)', () => {
+  const final = advance(
+    { ...initialState, mode: 'text_term', ... },
+    { type: 'WAKE' },
+    { type: 'TIMER_3S' },
+    { type: 'READY' },
+    { type: 'DEFINITION_RECEIVED', definition: def },
+    { type: 'DEFINITION_READY' },
+    { type: 'TIMER_10S' },
+    { type: 'TIMER_15S' },
+  );
+  expect(final.screen).toBe('sleep');
 });
+```
+
+**Per-screen guard tests:**
+```typescript
+it('DEFINITION_RECEIVED is ignored outside conversation', () => {
+  const inSleep = reducer(initialState, { type: 'DEFINITION_RECEIVED', definition: def });
+  expect(inSleep.screen).toBe('sleep');
+});
+```
+
+## Mocking Patterns
+
+**Global fetch mock (printer.test.ts, elevenlabs adapter test):**
+```typescript
+// vi.stubGlobal — preferred for Node tests without jsdom
+const mockFetch = vi.fn()
+  .mockResolvedValueOnce({ ok: true, blob: () => Promise.resolve(pngBlob) })
+  .mockResolvedValueOnce({ ok: true, text: () => Promise.resolve('') });
+vi.stubGlobal('fetch', mockFetch);
 
 afterEach(() => {
-  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 ```
 
-**Describe blocks organize by:**
-- State machine states (e.g., `describe('SLEEP state')`)
-- Feature areas (e.g., `describe('Configuration actions')`)
-- Component or function (e.g., `describe('buildWordTimestamps')`)
-
-**Test names are descriptive:**
-- Describe what is being tested and the expected outcome
-- Format: "does X when given Y" or "transitions from X to Y"
-- Examples:
-  - `'starts in sleep state'`
-  - `'WAKE transitions sleep → welcome'`
-  - `'TIMER_3S with term_only stages → term_prompt'`
-
-## Mocking
-
-**Framework:** Vitest `vi` module
-
-**Mock Types:**
-
-**Function Mocks:**
+**Browser global mock (ElevenLabs adapter test — happy-dom):**
 ```typescript
-const onComplete = vi.fn();
+beforeEach(() => {
+  mockFetch = vi.fn();
+  globalThis.fetch = mockFetch;
+  globalThis.URL.createObjectURL = vi.fn().mockReturnValue('blob:test-url');
+  globalThis.URL.revokeObjectURL = vi.fn();
+});
+```
+
+**console.warn spy (to assert warnings are logged):**
+```typescript
+vi.spyOn(console, 'warn').mockImplementation(() => {});
+// ... test ...
+// or assert it was called:
+expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('nonexistent'));
+warnSpy.mockRestore();
+```
+
+**DOM environment directive (fullscreen.test.ts):**
+```typescript
+// @vitest-environment jsdom
+```
+Used at file top when a test needs browser globals but the package default is Node.
+
+**Module re-import pattern (fullscreen.test.ts):**
+For modules with side-effectful module-level code, `vi.resetModules()` + dynamic `import()` ensures each test gets a fresh module:
+```typescript
+afterEach(() => {
+  vi.resetModules();
+});
+it('returns true when navigator.standalone is true', async () => {
+  Object.defineProperty(navigator, 'standalone', { value: true, ... });
+  const { isStandaloneMode } = await import('./fullscreen');
+  expect(isStandaloneMode()).toBe(true);
+});
+```
+
+**DOM API mock (usePortraitCapture.test.ts):**
+```typescript
+vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+  if (tag === 'canvas') return mockCanvas as unknown as HTMLCanvasElement;
+  return originalCreateElement(tag);
+});
+```
+
+**Storage mock (cache.test.ts):**
+```typescript
+const spy = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+  throw new DOMException('SecurityError');
+});
+```
+
+**MockAudio utility (karaoke-reader):**
+The `packages/karaoke-reader/src/test-utils/mock-audio.ts` provides a `MockAudio` class that simulates `HTMLAudioElement` events (`canplaythrough`, `timeupdate`, etc.) with imperative trigger methods:
+```typescript
 const mockAudio = new MockAudio() as unknown as HTMLAudioElement;
-
-// Track calls
-expect(onComplete).toHaveBeenCalledTimes(1);
-expect(onComplete).toHaveBeenCalledWith(expect.any(Error));
+act(() => {
+  (mockAudio as unknown as MockAudio).simulateCanPlayThrough(5); // sets duration
+});
 ```
 
-**Spy Mocks:**
+**Custom CacheAdapter mock (elevenlabs adapter test):**
 ```typescript
-const pauseSpy = vi.spyOn(mockAudio, 'pause');
-// ... trigger pause
-expect(pauseSpy).toHaveBeenCalled();
-pauseSpy.mockRestore();
+function makeMockCache(stored?: TTSCacheValue | null) {
+  const getCalls: string[] = [];
+  const setCalls: Array<{ key: string; value: TTSCacheValue }> = [];
+  return {
+    getCalls,
+    setCalls,
+    async get(key: string) { getCalls.push(key); return stored ?? null; },
+    async set(key: string, value: TTSCacheValue) { setCalls.push({ key, value }); },
+  };
+}
 ```
 
-**Global Stubs:**
+## Hook Testing
+
+`@testing-library/react`'s `renderHook` + `waitFor` + `act` used for all hook tests:
+
 ```typescript
-const pngBlob = new Blob([...], { type: 'image/png' });
-const mockFetch = vi.fn()
-  .mockResolvedValueOnce({ ok: true, blob: () => Promise.resolve(pngBlob) })
-  .mockRejectedValueOnce(new Error('ECONNREFUSED'));
-vi.stubGlobal('fetch', mockFetch);
+import { renderHook, act, waitFor } from '@testing-library/react';
+
+it('status transitions: idle -> loading -> ready', async () => {
+  const { result } = renderHook(() => useElevenLabsTTS(options));
+  expect(['idle', 'loading']).toContain(result.current.status);
+
+  await waitFor(() => {
+    expect(result.current.status).toBe('ready');
+  });
+});
 ```
 
-**Patterns:**
-- Mocks track function calls and return values
-- `.mockResolvedValueOnce()` for sequential async returns
-- `.mockRejectedValueOnce()` for error simulation
-- `.mockImplementation()` for custom behavior
-- Call `vi.restoreAllMocks()` in `afterEach()` to clean up
+**Fake timers for rAF-dependent hooks:**
+```typescript
+beforeEach(() => { vi.useFakeTimers(); });
+afterEach(() => { vi.useRealTimers(); });
+```
 
-**What to Mock:**
-- External APIs (fetch, ElevenLabs SDK)
-- Audio events and methods (play, pause, currentTime)
-- Timers (vi.useFakeTimers() for testing delays)
-- HTMLMediaElement and browser APIs not fully implemented in happy-dom
+## Factory Helpers
 
-**What NOT to Mock:**
-- Pure utility functions (test with real data)
-- React hooks that are the subject of the test
-- Zod validation (use real schemas)
-- State machine reducer logic (test pure function directly)
-- Test helper functions (e.g., `makeDefinition()`, `mockAlignment()`)
-
-## Fixtures and Factories
-
-**Test Data:**
-
-Fixtures created as functions within test files:
-
+Tests use `makeXxx()` factory functions for test data, not shared fixtures files:
 ```typescript
 function makeDefinition(overrides: Partial<Definition> = {}): Definition {
   return {
@@ -180,201 +304,57 @@ function makeDefinition(overrides: Partial<Definition> = {}): Definition {
     session_id: '00000000-0000-0000-0000-000000000002',
     term: 'BIRD',
     definition_text: 'A bird is a happy accident.',
-    citations: ['everything that flies is basically refusing to stay'],
-    language: 'en',
-    chain_depth: 0,
-    created_at: '2026-02-24T14:00:00+00:00',
-    embedding: null,
     ...overrides,
   };
 }
-
-function makeTimestamps(): WordTimestamp[] {
-  return [
-    { word: 'Hello', startTime: 0.0, endTime: 0.5, index: 0 },
-    { word: 'world', startTime: 0.6, endTime: 1.0, index: 1 },
-  ];
-}
-
-function mockAlignment(text: string, intervalSeconds: number = 0.05) {
-  // Returns { characters, character_start_times_seconds, character_end_times_seconds }
-}
 ```
 
-**Location:**
-- Inline in test file above test suite (`describe()` block)
-- Not in separate fixture files
-- Use `makeX()` naming for factories
+**Null UUID convention:** Test IDs use `00000000-0000-0000-0000-000000000001` through `...099` pattern for readability.
 
-**Usage:**
-- Overrides allow customization: `makeDefinition({ term: 'SPRECHEN' })`
-- Spread default values: `{ ...defaultState, screen: 'conversation' }`
+## What IS Tested
 
-## Custom Test Utilities
+- State machine reducer transitions (all screens, all stage-config combinations, guard conditions)
+- ElevenLabs role mapping (`mapRole`)
+- System prompt content assertions (guardrails, mode blocks, paragraph numbering)
+- Program registry (`getProgram` fallback, `listPrograms`, stage configs)
+- Individual program instances (id, stages, prompt content, first message language selection)
+- Shared Zod schemas (optional fields, defaults, variant shapes)
+- Printer console-mode vs HTTP-mode behavior
+- Printer retry logic (2-attempt loop, render API fallback)
+- Printer API key header injection
+- Config `loadConfig` env var reading + defaults
+- Portrait capture hook (`captureFrame`, canvas interaction, blob size thresholds)
+- Fullscreen API (standalone mode detection, webkit fallback, manifest.json assertions)
+- ElevenLabs TTS adapter (fetch calls, multi-chunk time offsets, cache hit/miss, error handling, abort)
+- Cache implementations (memory, localStorage, error resilience, prefix isolation)
+- Word timestamp building from character alignment data
+- Karaoke audio sync (`findActiveWordIndex` pure function, hook state transitions)
+- KaraokeReader component (word span rendering, data attributes)
+- All cache error cases are explicitly tested (read throws, write throws, corrupted JSON)
 
-**MockAudio** (`packages/karaoke-reader/src/test-utils/mock-audio.ts`):
+## What is NOT Tested
 
-Extends `EventTarget` to provide controllable audio simulation for tests:
-
-```typescript
-export class MockAudio extends EventTarget {
-  currentTime = 0;
-  duration = NaN;
-  volume = 1;
-  paused = true;
-  readyState = 0;
-  src = '';
-
-  play(): Promise<void> { ... }
-  pause(): void { ... }
-  simulateCanPlayThrough(duration?: number): void { ... }
-  simulateEnded(): void { ... }
-  simulateError(): void { ... }
-  simulateTimeUpdate(time: number): void { ... }
-}
-```
-
-**Usage in Tests:**
-```typescript
-const audio = new MockAudio() as unknown as HTMLAudioElement;
-const mockAudio = audio as unknown as MockAudio;
-
-const { result } = renderHook(() =>
-  useKaraokeReader({ timestamps: makeTimestamps(), audioSrc: audio })
-);
-
-act(() => {
-  mockAudio.simulateCanPlayThrough(5);
-});
-
-expect(result.current.status).toBe('ready');
-```
-
-**Setup File** (`packages/karaoke-reader/src/test-utils/setup.ts`):
-
-Vitest runs setup file before tests:
-
-```typescript
-// In vitest.config.ts
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'happy-dom',
-    setupFiles: ['./src/test-utils/setup.ts'],
-  },
-});
-```
-
-## Test Types
-
-**Unit Tests:**
-- Scope: Single function or pure reducer
-- Approach: Test with multiple input variations
-- Example: `apps/tablet/src/hooks/useInstallationMachine.test.ts` — tests pure reducer function directly
-- Example: `packages/karaoke-reader/src/utils/buildWordTimestamps.test.ts` — tests utility function with text alignment data
-
-**Hook Tests:**
-- Scope: React custom hooks in isolation
-- Approach: Use `renderHook()` from @testing-library/react, wrap state changes in `act()`
-- Example: `apps/tablet/src/hooks/useConversation.test.ts` — tests role mapping function
-- Example: `packages/karaoke-reader/src/hooks/useKaraokeReader.test.ts` — tests audio state machine hook
-
-**Integration Tests:**
-- Scope: Multiple components or layers working together
-- Used for: API contracts, printer bridge with render API + POS server, state flow sequences
-- Example: `apps/printer-bridge/src/printer.test.ts` — tests `renderAndPrint()` calling both render-api and POS server in sequence
-
-**E2E Tests:**
-- Not used in codebase
-- Manual testing via kiosk mode or admin dashboard
-
-## Common Patterns
-
-**Async Testing:**
-
-Use `act()` wrapper for state updates and `async/await` for Promises:
-
-```typescript
-await act(async () => {
-  result.current.play();
-});
-
-expect(result.current.status).toBe('playing');
-```
-
-**Error Testing:**
-
-Test error handling with thrown errors or rejected promises:
-
-```typescript
-it('transitions to error on audio error event', () => {
-  const audio = new MockAudio() as unknown as HTMLAudioElement;
-  const mockAudio = audio as unknown as MockAudio;
-
-  const { result } = renderHook(() =>
-    useKaraokeReader({ timestamps: makeTimestamps(), audioSrc: audio }),
-  );
-
-  act(() => {
-    mockAudio.simulateError();
-  });
-
-  expect(result.current.status).toBe('error');
-  expect(result.current.error).toBeInstanceOf(Error);
-});
-```
-
-**State Machine Transitions:**
-
-Test reducer with sequence of actions using helper function:
-
-```typescript
-function advance(state: InstallationState, ...actions: InstallationAction[]): InstallationState {
-  return actions.reduce((s, a) => reducer(s, a), state);
-}
-
-it('traverses states (text_term skips term_prompt)', () => {
-  const def = makeDefinition();
-  const final = advance(
-    { ...initialState, mode: 'text_term', contextText: 'Some text' },
-    { type: 'WAKE' },                                          // → welcome
-    { type: 'TIMER_3S' },                                      // → text_display
-    { type: 'READY' },                                         // → conversation
-    { type: 'DEFINITION_RECEIVED', definition: def },         // → synthesizing
-    { type: 'DEFINITION_READY' },                              // → definition
-    { type: 'TIMER_10S' },                                     // → farewell
-    { type: 'TIMER_15S' },                                     // → sleep
-  );
-  expect(final.screen).toBe('sleep');
-});
-```
-
-**Testing Zod Validation:**
-
-```typescript
-import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@meinungeheuer/shared';
-
-it('returns a valid PrintPayload', () => {
-  const payload = buildTestPayload();
-  const result = PrintPayloadSchema.safeParse(payload);
-  expect(result.success).toBe(true);
-});
-```
+- `apps/backend` — zero test files. The entire Hono API surface (routes, webhook handlers, services) is untested. This is the highest-risk gap.
+- `apps/tablet/src/lib/persist.ts` — no tests for Supabase persistence functions
+- `apps/tablet/src/lib/api.ts` — no tests for `fetchConfig`, `startSession`, `submitVoiceChainData`
+- `apps/tablet/src/lib/supabase.ts` — Supabase client initialization
+- `apps/tablet/src/hooks/useFaceDetection.ts` — MediaPipe integration untested
+- `apps/tablet/src/hooks/useAudioCapture.ts` — audio recording untested
+- `apps/tablet/src/components/screens/*` — UI components have no rendering tests (except `KaraokeReader`)
+- `apps/printer-bridge/src/index.ts` — Supabase Realtime subscription logic untested
+- `packages/shared/src/programs/voice-chain.ts` — no test file for the voice chain program
+- Supabase integration — no database integration tests anywhere
+- ElevenLabs webhook signature verification — no tests for auth middleware in `apps/backend/src/routes/webhook.ts`
 
 ## Coverage
 
-**Requirements:** No enforcement detected (no coverage thresholds configured)
+**Requirements:** None enforced — no coverage thresholds configured.
 
 **View Coverage:**
 ```bash
-pnpm test -- --coverage  # (if configured)
+pnpm --filter karaoke-reader exec vitest run --coverage
+pnpm --filter @meinungeheuer/tablet exec vitest run --coverage
 ```
-
-**Current Coverage:**
-- Core logic heavily tested: state machine, utility functions, hooks
-- Mock implementations allow testing without real ElevenLabs/Supabase
-- Integration tests validate API contracts
-- No coverage minimum enforced
 
 ---
 

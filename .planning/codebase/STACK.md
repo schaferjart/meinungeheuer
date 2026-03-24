@@ -5,131 +5,139 @@
 ## Languages
 
 **Primary:**
-- TypeScript 5.7.3 - All Node.js and browser-based code (strict mode, ES2022 target)
+- TypeScript 5.7–5.8 — all Node.js apps (`apps/backend`, `apps/printer-bridge`, `apps/archive`, `apps/config`) and React app (`apps/tablet`) and both packages (`packages/shared`, `packages/karaoke-reader`)
+- Python 3.x — `apps/pos-server` (Flask) and `apps/print-renderer` (FastAPI)
 
 **Secondary:**
-- Python 3.x - POS (thermal printer) server (`apps/pos-server/`) using Flask
-- JavaScript (JSX/TSX) - React components in tablet app
+- SQL — Supabase migrations in `supabase/migrations/`
+- CSS (Tailwind v4) — `apps/tablet` only
 
 ## Runtime
 
 **Environment:**
-- Node.js 20+ - Required for all JavaScript apps (tablet, backend, printer-bridge, shared)
-- Python 3.x - POS server runtime
+- Node.js >=20.0.0 (enforced via `engines` in root `package.json`)
+- Python (no pinned version; venv used in `apps/pos-server/venv` and `apps/print-renderer/venv`)
 
 **Package Manager:**
-- pnpm (workspaces) - Monorepo management with hoisted dependencies
-- Lockfile: `pnpm-lock.yaml` (present)
+- pnpm (workspaces)
+- Lockfile: `pnpm-lock.yaml` present and required (`--frozen-lockfile` on Coolify)
 
 ## Frameworks
 
 **Core:**
-- React 18.3.1 - UI framework for tablet app (`apps/tablet/`)
-- Hono 4.7.2 - Lightweight HTTP API server for backend (`apps/backend/`)
-
-**Streaming & Voice:**
-- @elevenlabs/react 0.14.1 - ElevenLabs Conversational AI SDK (WebSocket-based voice pipeline)
-- @elevenlabs/client 0.15.0 - ElevenLabs REST client (voice cloning, agent config)
+- React 18.3.1 — `apps/tablet` (kiosk UI), `packages/karaoke-reader` (component library, React optional peer dep)
+- Hono 4.7.2 + `@hono/node-server` 1.14.0 — `apps/backend` HTTP API server
+- Flask 3.1.3 + flask-cors 5.0.1 — `apps/pos-server` print HTTP server
+- FastAPI + uvicorn — `apps/print-renderer` rendering API
 
 **Build/Dev:**
-- Vite 6.x - Build tool for React apps (dev server on port 3000, dev:tablet command)
-- @tailwindcss/vite 4.0.7 - Tailwind CSS v4 plugin for Vite (CSS-first configuration)
-- @vitejs/plugin-react 4.3.4 - React fast refresh for Vite
-- TypeScript Compiler (tsc) - Standalone compilation for backend/printer-bridge/shared
-- tsx 4.19.3 - TypeScript execution runner with watch mode
+- Vite 6.1–6.3 — `apps/tablet`, `apps/archive`, `apps/config` (SPA bundler + dev server)
+- `@vitejs/plugin-react` 4.3.4 — JSX transform for tablet
+- `@tailwindcss/vite` 4.0.7 — Tailwind v4 CSS-first integration (not a PostCSS plugin)
+- tsup 8.5.0 — `packages/karaoke-reader` library bundler (ESM + CJS dual output)
+- tsx 4.19.3 — `apps/backend` and `apps/printer-bridge` dev runner + watch mode
 
 **Testing:**
-- Vitest 3.0.5 - Test runner (all workspaces, `pnpm test` runs parallel)
-- @testing-library/react 16.3.2 - React component testing utilities
-- jsdom 28.1.0 - DOM environment for browser tests
-- chai (via Vitest) - Assertion library
+- Vitest 3.0.5 — all TypeScript packages and apps
+- `@testing-library/react` 16.3.2 — `apps/tablet` and `packages/karaoke-reader`
+- `@testing-library/dom` 10.4.1 — `apps/tablet`
+- `@testing-library/jest-dom` 6.9.1 — `packages/karaoke-reader`
+- `@testing-library/user-event` 14.6.1 — `packages/karaoke-reader`
+- jsdom 28.1.0 — `apps/tablet` test environment
+- happy-dom 20.8.3 — `packages/karaoke-reader` test environment
+- pytest — `apps/pos-server` (in requirements.txt)
+
+**Linting/Formatting:**
+- Biome 2.0.0 — `packages/karaoke-reader` only (`biome check src/`)
+- No ESLint or Prettier detected in the main apps (Biome used for karaoke-reader)
 
 ## Key Dependencies
 
 **Critical:**
-- @supabase/supabase-js 2.49.1 - PostgreSQL + Realtime client for tablet, backend, printer-bridge, shared
-- zod 3.24.2-3.25.76 - Runtime schema validation (API boundaries, config loading)
-- @mediapipe/tasks-vision 0.10.18 - Face detection in-browser (2 fps debounced detection)
+- `@elevenlabs/react` 0.14.1 — Conversational AI SDK for `apps/tablet`; handles WebSocket STT+LLM+TTS pipeline. Pinned to exact version (not a range).
+- `@elevenlabs/client` ^0.15.0 — Underlying ElevenLabs client used by `@elevenlabs/react`
+- `@supabase/supabase-js` ^2.49.1 — Database + Realtime + Storage client. Used in all apps that interact with the database.
+- `zod` ^3.24–3.25 — Runtime schema validation at all API/data boundaries; used in `packages/shared`, `apps/backend`, `apps/tablet`, `apps/printer-bridge`
+- `openai` ^4.82.0 — `apps/backend` only; used with OpenRouter base URL for embeddings generation (NOT the default OpenAI API)
+- `@mediapipe/tasks-vision` ^0.10.18 — In-browser face detection in `apps/tablet`; loads WASM + model from CDN at runtime
 
-**Infrastructure & APIs:**
-- openai 4.82.0 - OpenRouter client for embeddings (text-embedding-3-small via OpenRouter proxy)
-- @hono/node-server 1.14.0 - Node.js HTTP adapter for Hono
-- qrcode 1.5.0 - QR code generation (tablet feature)
-- karaoke-reader (workspace) - Custom library for word-level TTS timestamp sync
+**Infrastructure:**
+- `@meinungeheuer/shared` (workspace) — shared Zod schemas, Supabase client factory, types, constants, voice chain config, program definitions
+- `karaoke-reader` (workspace) — TTS-with-timestamps karaoke component and ElevenLabs adapter; consumed by `apps/tablet`
+- `qrcode` ^1.5.0 — QR code generation in `apps/tablet` (for print cards linking to archive)
+- `hono/cors` + `hono/logger` — Hono built-in middleware in `apps/backend`
 
-**Python (POS Server):**
-- Flask 3.1.3 - HTTP server for thermal printer commands
-- python-escpos 3.1 - ESC/POS printer protocol implementation
-- python-barcode 0.16.1 - Barcode generation
-- qrcode 8.2 - QR code generation (Python)
-- Pillow 12.1.1 - Image processing
-- PyYAML 6.0.3 - Config file parsing
-- requests 2.31+ - HTTP client
-- pytest 7.0+ - Test framework
+**Python (pos-server):**
+- `python-escpos` 3.1 — ESC/POS printer communication
+- `Pillow` 12.1.1 — image processing for print output
+- `Flask` 3.1.3 — HTTP server
+- `pyusb` 1.3.1 — USB printer connectivity
+- `zeroconf` 0.146.0 — network printer discovery
+- `qrcode` 8.2 — QR generation for print cards
+
+**Python (print-renderer):**
+- `FastAPI` + `uvicorn` — rendering API server
+- `Pillow` — image processing (dithering, cropping, resizing)
+- `mediapipe` — face landmark detection for portrait crops
+- `numpy` — image array operations
+- `supabase` Python client — uploads to Supabase Storage, inserts `print_queue`
+- `python-dotenv` — loads `.env` at startup
 
 ## Configuration
 
-**Environment:**
-- Tablet: `apps/tablet/.env.example`
-  - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` - Browser-safe Supabase access
-  - `VITE_ELEVENLABS_API_KEY`, `VITE_ELEVENLABS_AGENT_ID`, `VITE_ELEVENLABS_VOICE_ID` - Voice config
-  - `VITE_BACKEND_URL` - Backend API endpoint (default: `http://localhost:3001`)
-  - `VITE_PRINT_RENDERER_URL` - Print rendering service endpoint
+**Environment — Tablet (`apps/tablet/.env`):**
+- `VITE_SUPABASE_URL` — Supabase project URL
+- `VITE_SUPABASE_ANON_KEY` — Supabase anon key
+- `VITE_ELEVENLABS_API_KEY` — ElevenLabs API key (for TTS-with-timestamps in karaoke)
+- `VITE_ELEVENLABS_AGENT_ID` — ElevenLabs Conversational AI agent ID
+- `VITE_ELEVENLABS_VOICE_ID` — ElevenLabs voice ID for karaoke TTS
+- `VITE_BACKEND_URL` — Backend API URL (default `http://localhost:3001`)
+- `VITE_PRINT_RENDERER_URL` — Print renderer URL for config workbench
 
-- Backend: `apps/backend/.env.example`
-  - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` - Full DB access (server-side only)
-  - `OPENROUTER_API_KEY` - Embeddings via OpenRouter (proxy to OpenAI)
-  - `WEBHOOK_SECRET` - Shared secret for ElevenLabs webhook verification
-  - `ELEVENLABS_API_KEY` - Server-side ElevenLabs API key (voice cloning)
+**Environment — Backend (`apps/backend/.env`):**
+- `PORT` — HTTP port (default 3001)
+- `SUPABASE_URL` — Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY` — Full DB access (never expose to browser)
+- `OPENROUTER_API_KEY` — For embeddings (`openai/text-embedding-3-small`) and LLM calls via OpenRouter
+- `WEBHOOK_SECRET` — Shared secret verified on all `/webhook/*` and admin endpoints
+- `ELEVENLABS_API_KEY` — Server-side ElevenLabs key for voice cloning
 
-- Printer Bridge: `apps/printer-bridge/.env.example`
-  - `SUPABASE_URL`, `SUPABASE_ANON_KEY` - Realtime subscription to `print_queue`
-  - `POS_SERVER_URL` - Thermal printer HTTP endpoint (default: `http://localhost:9100`)
-  - `PRINT_RENDERER_URL` - Cloud render service
-  - `RENDER_API_KEY` - API key for render service
+**Environment — Printer Bridge (`apps/printer-bridge/.env`):**
+- `SUPABASE_URL` — Supabase project URL
+- `SUPABASE_ANON_KEY` — or `SUPABASE_SERVICE_ROLE_KEY`
+- `POS_SERVER_URL` — POS server address (default `http://localhost:9100`)
+- `PRINT_RENDERER_URL` — Cloud render API URL (default `http://localhost:8000`)
+- `RENDER_API_KEY` — API key for authenticating to print-renderer
 
-- POS Server: `apps/pos-server/config.yaml`
-  - Printer model, port, font paths, barcode config
-
-**TypeScript:**
-- `tsconfig.base.json` - Root config (strict mode, ES2022, bundler resolution)
-  - Each app extends base: `tsconfig.json`
-  - noUncheckedIndexAccess enabled (strict indexing)
-  - sourceMap and declarationMap enabled
-- Shared package builds to `packages/shared/dist/`
-- All apps: `noEmit: true` for `typecheck` task (tsc only)
+**Environment — Print Renderer (`apps/print-renderer/.env`):**
+- `OPENROUTER_API_KEY` — For style transfer LLM calls
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` — Storage uploads + print_queue inserts
+- `N8N_WEBHOOK_URL` — n8n workflow endpoint for portrait-to-statue style transfer
+- `RENDER_API_KEY` — Secret for authenticating incoming requests
 
 **Build:**
-- Vite config: `apps/tablet/vite.config.ts` (React plugin + Tailwind CSS plugin)
-- Root `pnpm-lock.yaml` - Frozen lockfile for Coolify deployments
+- `tsconfig.base.json` — root TypeScript config; strict mode, ES2022 target, `noUncheckedIndexedAccess`, `noUnusedLocals`, `noUnusedParameters`
+- Per-app `tsconfig.json` extends base config
+- `karaoke-reader` uses tsup for dual ESM+CJS output; four entry points
+- Tablet, archive, config use Vite builds with `tsc --noEmit` typecheck step
+- Supabase migrations in `supabase/migrations/` — NOT auto-applied; manual via MCP or dashboard
 
 ## Platform Requirements
 
 **Development:**
-- Node.js 20+ (enforced in root `package.json`)
-- pnpm for workspace management
-- Python 3.x for POS server (optional unless testing printer)
+- Node.js 20+, pnpm
+- Python 3 + venv for `pos-server` and `print-renderer`
+- ElevenLabs API key, OpenRouter API key, Supabase project (free tier supported)
 
 **Production:**
-- **Tablet:** Docker (2-stage: Node build → nginx SPA)
-  - Runs on Coolify, consumes `VITE_*` build args
-  - Port 3000 (dev), served via nginx reverse proxy
-
-- **Backend:** Node.js container on Coolify
-  - Port 3001 (Hono server)
-  - Requires `SUPABASE_*`, `OPENROUTER_API_KEY`, `WEBHOOK_SECRET`
-
-- **Printer Bridge:** Local service (not containerized), runs on Pi or laptop
-  - Manual start: `pnpm dev:printer`
-  - Requires `SUPABASE_*`, `POS_SERVER_URL`, `PRINT_RENDERER_URL`
-
-- **POS Server:** Python Flask on local network
-  - Port 9100 (ESC/POS printer endpoint)
-  - Requires USB printer or dummy mode
-
-- **Supabase:** Managed cloud (PostgreSQL + pgvector extension)
-  - Migrations in `supabase/migrations/`
-  - Realtime subscriptions enabled on `print_queue` table
+- **Tablet**: Docker (nginx SPA), deployed via Coolify from `main` branch, `VITE_*` as build args
+- **Backend**: Docker or Node.js process, deployed via Coolify
+- **Printer bridge**: Node.js process on Pi/laptop; local to printer, NOT cloud-deployed
+- **POS server**: Python Flask on Pi, port 9100 (`192.168.1.65:9100` in production)
+- **Print renderer**: Docker (FastAPI), deployed via Coolify; Base Directory `/` (depends on shared)
+- **Config app**: Vite SPA, self-contained
+- **Archive app**: Vite SPA, self-contained
+- **Supabase**: Managed cloud (PostgreSQL + pgvector + Realtime + Storage)
 
 ---
 

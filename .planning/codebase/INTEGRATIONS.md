@@ -4,202 +4,232 @@
 
 ## APIs & External Services
 
-**ElevenLabs Conversational AI:**
-- Service: WebSocket-based voice conversation (speech-to-text, LLM routing, text-to-speech)
-- What it's used for: Real-time visitor dialogue with configurable agent system prompts
-- SDK/Client: `@elevenlabs/react` (0.14.1) in `apps/tablet/`
-- SDK/Client: `@elevenlabs/client` (0.15.0) in `apps/backend/`
-- Auth: `VITE_ELEVENLABS_API_KEY` (tablet, browser-safe) and `ELEVENLABS_API_KEY` (backend, server-side)
-- Agent ID: `agent_7201kjt1wgyqfjp8zkr68r3ngas6` (stored in `VITE_ELEVENLABS_AGENT_ID`)
-- Config: System prompt overridden at session start from `packages/shared/src/programs/` via `useConversation.ts`
-- Voice override: Custom voice clones via voice chain (ID in `VITE_ELEVENLABS_VOICE_ID`)
-- Webhook: ElevenLabs can POST `save_definition` tool calls to backend `/webhook/save-definition` (optional; client-side tool handling in `useConversation.ts`)
+### ElevenLabs — Conversational AI + TTS + Voice Cloning
 
-**OpenRouter (LLM Proxy):**
-- Service: OpenAI-compatible API for embeddings (proxies to OpenAI backend)
-- What it's used for: Semantic embeddings of definitions for similarity search / archive
-- Client: `openai` npm package (4.82.0) with custom baseURL in `apps/backend/src/services/embeddings.ts`
-- Auth: `OPENROUTER_API_KEY` (backend only, server-side)
-- Model: `openai/text-embedding-3-small`
-- Dimensions: 1536-dimensional vectors
-- Trigger: Fire-and-forget from `/webhook/save-definition` route
+**Conversational AI WebSocket:**
+- Used in `apps/tablet` via `@elevenlabs/react` SDK (`useConversation` hook in `apps/tablet/src/hooks/useConversation.ts`)
+- Agent ID: `agent_7201kjt1wgyqfjp8zkr68r3ngas6` (hardcoded default, overridable via `VITE_ELEVENLABS_AGENT_ID`)
+- Connection: `useConversation.startSession({ agentId, connectionType: 'websocket', overrides })`
+- Session overrides inject `agent.prompt.prompt` (system prompt), `agent.firstMessage`, and `agent.language` at session start — no need to redeploy agent
+- Auth: `VITE_ELEVENLABS_API_KEY` env var (browser-side)
 
-**Thermal Printer (Local Network):**
-- Service: ESC/POS protocol via HTTP (custom POS server in `apps/pos-server/`)
-- What it's used for: Printing personalized glossary definitions on thermal paper cards
-- URL: `POS_SERVER_URL` env var (default: `http://localhost:9100`)
-- Implementation: Printer bridge subscribes to Supabase `print_queue` table (Realtime), POSTs job payloads to `/print` and `/portrait` endpoints
-- Health check: `curl http://192.168.1.65:9100/health`
-- Render dependency: Print jobs first POST to `PRINT_RENDERER_URL` (Python Flask render service) to get ESC/POS bytes
+**Agent PATCH API (voice chain):**
+- Used by `apps/backend` in `apps/backend/src/routes/voiceChain.ts`
+- Endpoint: `PATCH https://api.elevenlabs.io/v1/convai/agents/{agent_id}`
+- Payload: `{ conversation_config: { tts: { voice_id } } }`
+- Auth header: `xi-api-key: ELEVENLABS_API_KEY`
+- Called before each voice-chain conversation to apply the previous visitor's cloned voice
+- After conversation ends, voice is restored to default (`DLsHlh26Ugcm6ELvS0qi`)
+
+**Instant Voice Cloning:**
+- Used by `apps/backend` in `apps/backend/src/services/voiceChain.ts` (`cloneVoice()`)
+- Endpoint: `POST https://api.elevenlabs.io/v1/voices/add`
+- Payload: multipart/form-data — `name`, `remove_background_noise`, `files` (webm audio blob)
+- Auth header: `xi-api-key: ELEVENLABS_API_KEY`
+- Input: visitor audio recording (webm/opus), max 10MB. Files above 10MB are trimmed.
+- Returns `{ voice_id }` on success
+- Clones are deleted after `VOICE_CLONE.retentionWindow` (default 10) chain positions via `DELETE https://api.elevenlabs.io/v1/voices/{voice_id}`
+
+**TTS with Timestamps:**
+- Used by `packages/karaoke-reader` in `packages/karaoke-reader/src/adapters/elevenlabs/index.ts`
+- Endpoint: `POST https://api.elevenlabs.io/v1/text-to-speech/{voiceId}/with-timestamps`
+- Payload: `{ text, model_id, output_format, voice_settings }`
+- Auth header: `xi-api-key: apiKey` (tablet's `VITE_ELEVENLABS_API_KEY`)
+- Default model: `eleven_multilingual_v2`, default format: `mp3_44100_128`
+- Returns `{ audio_base64, alignment, normalized_alignment }` — character-level timing converted to word timestamps
+- Long text is split into chunks (default 200 words) and stitched together with time offsets
+- Results cached in-memory by SHA-256 of `text + voiceId`
+
+**Webhooks (incoming to backend):**
+- `POST /webhook/definition` — called by ElevenLabs when agent invokes the `save_definition` tool (`apps/backend/src/routes/webhook.ts`)
+  - Body: `{ tool_call_id, tool_name, parameters: { term, definition_text, citations, language }, conversation_id }`
+  - Also handled client-side as a `clientTools` callback in `useConversation.ts` for immediate UI update
+- `POST /webhook/conversation-data` — called by ElevenLabs post-conversation with full transcript
+  - Body: `{ conversation_id, transcript: [{ role, message }], metadata: { duration_seconds } }`
+  - All webhook endpoints verify `WEBHOOK_SECRET` via Bearer token or query param `?secret=`
+
+---
+
+### OpenRouter — LLM and Embeddings Proxy
+
+**Embeddings:**
+- Used by `apps/backend` in `apps/backend/src/services/embeddings.ts`
+- Client: `openai` npm package with `baseURL: 'https://openrouter.ai/api/v1'`
+- Model: `openai/text-embedding-3-small`, 1536 dimensions
+- Auth: `OPENROUTER_API_KEY` env var
+- Called fire-and-forget after each definition is saved; result stored in `definitions.embedding` (pgvector column)
+
+**Chat Completions (voice chain LLM tasks):**
+- Used by `apps/backend` in `apps/backend/src/services/voiceChain.ts`
+- Endpoint: `POST https://openrouter.ai/api/v1/chat/completions` (raw fetch, not OpenAI SDK)
+- Auth header: `Authorization: Bearer OPENROUTER_API_KEY`
+- Two tasks:
+  1. Speech profile extraction: model `google/gemini-2.0-flash-001`, temperature 0.3, returns structured JSON
+  2. Icebreaker generation: model `google/gemini-2.0-flash-001`, temperature 0.9, returns plain text
+- Both prompts defined in `packages/shared/src/voiceChainConfig.ts`
+
+**Style transfer (print-renderer, optional):**
+- Used by `apps/print-renderer` in `apps/print-renderer/pipeline.py`
+- Via n8n webhook (see n8n section below), not direct OpenRouter API call
+
+---
+
+### Supabase — Database, Realtime, Storage, Auth
+
+**Database (PostgreSQL + pgvector):**
+- Tables: `sessions`, `turns`, `definitions` (with `embedding VECTOR(1536)`), `print_queue`, `chain_state`, `installation_config`, `texts`, `voice_chain_state`, `render_config`, `prompts`
+- Migrations: `supabase/migrations/` (13 files; applied manually via MCP or dashboard — NOT auto-applied)
+- pgvector extension enabled via `001_extensions.sql`
+
+**Client usage:**
+- Tablet (`apps/tablet/src/lib/supabase.ts`): uses anon key via `createSupabaseClient` from shared
+- Backend (`apps/backend/src/services/supabase.ts`): uses service role key
+- Printer bridge (`apps/printer-bridge/src/index.ts`): uses service role key (or anon key fallback)
+- Print renderer (`apps/print-renderer/supabase_config.py`): Python `supabase` client, service role key
+- Config app (`apps/config/src/lib/supabase.ts`): anon key + Supabase Auth (email+password sign-in)
+- Archive app (`apps/archive/src/supabase.ts`): anon key
+
+**Tablet direct writes (fire-and-forget):**
+- `definitions.insert` — in `apps/tablet/src/lib/persist.ts` (`persistDefinition()`)
+- `print_queue.insert` — in `apps/tablet/src/lib/persist.ts` (`persistPrintJob()`)
+- `turns.insert` — in `apps/tablet/src/lib/persist.ts` (`persistTranscript()`)
+- Storage upload to `portraits-blurred` bucket (`uploadBlurredPortrait()`)
+
+**Realtime:**
+- Printer bridge subscribes to `INSERT` on `print_queue` where `status=eq.pending` via `supabase.channel('print_queue_inserts').on('postgres_changes', ...)` in `apps/printer-bridge/src/index.ts`
+- Fallback: polling every 5 seconds when Realtime is unavailable
+- `turns` table requires a public SELECT policy for the archive to read conversations (noted in CLAUDE.md)
+
+**Storage:**
+- Bucket `portraits-blurred`: tablet uploads blurred JPEG portraits (public read)
+- Bucket `prints`: print-renderer uploads dithered portrait PNGs for printing
+
+**Auth:**
+- Used only in `apps/config` (admin app) via `supabase.auth.signInWithPassword()` and `supabase.auth.signOut()`
+
+**Render config:**
+- `render_config` table stores JSONB per-template config with 5s TTL cache in `apps/print-renderer/supabase_config.py`
+- Falls back to `apps/print-renderer/config.yaml` when Supabase is unreachable
+
+---
+
+### MediaPipe — In-Browser Face Detection
+
+- Used in `apps/tablet/src/hooks/useFaceDetection.ts`
+- Package: `@mediapipe/tasks-vision` ^0.10.18
+- WASM runtime loaded from CDN: `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.32/wasm`
+- Model loaded from CDN: `https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite`
+- Also used in `apps/print-renderer/pipeline.py` for face landmark detection (portrait crops); optional with ratio-based fallback
+- Detection runs at 2fps (500ms interval), CPU delegate
+
+---
+
+### n8n — Portrait Style Transfer Webhook (optional)
+
+- Used in `apps/print-renderer/main.py` (`process_portrait` endpoint)
+- Config: `N8N_WEBHOOK_URL` env var (default: `https://n8n.baufer.beauty/webhook/portrait-statue`)
+- Sends portrait JPEG to n8n for style-transfer-to-statue transformation
+- Stage skipped if `N8N_WEBHOOK_URL` is not set or `skip_transform=true` is passed
+- No SDK; raw HTTP POST via `requests` library
+
+---
 
 ## Data Storage
 
 **Databases:**
-
-- **Supabase (PostgreSQL)**
-  - Connection: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (tablet), `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (backend/bridge)
-  - Client: `@supabase/supabase-js` (2.49.1) across all Node apps
-  - Tables:
-    - `sessions` - One row per visitor interaction (mode, term, context_text, parent_session_id for chain)
-    - `turns` - Conversation transcript (role: visitor/agent, content, turn_number)
-    - `definitions` - Generated output (term, definition_text, citations[], language, **embedding: VECTOR(1536)**)
-    - `print_queue` - Print jobs (payload: JSONB, status: pending/printing/done/error)
-    - `chain_state` - Active chain tracking for Mode C
-    - `installation_config` - Operator settings (mode, active_term, active_text_id)
-    - `texts` - Curated source texts for Mode A (content_de, content_en, terms[])
-    - `render_config` - Print template configuration (JSONB columns per template)
-    - `voice_chain_profiles` - Visitor speech profiles for voice chain
-  - Extensions: pgvector (for semantic search)
-  - RLS: Public read on most tables, INSERT/UPDATE restricted to authenticated or service role
-  - Realtime: Enabled on `print_queue` (printer bridge subscribes to INSERT events)
-  - Migrations: `supabase/migrations/001-013_*.sql` (incremental schema)
+- Supabase managed PostgreSQL
+  - Connection: `SUPABASE_URL` + `SUPABASE_ANON_KEY` or `SUPABASE_SERVICE_ROLE_KEY`
+  - Client: `@supabase/supabase-js` ^2.49.x (TypeScript apps), `supabase` Python package (print-renderer)
+  - pgvector extension for `definitions.embedding` (1536 dimensions)
 
 **File Storage:**
-- Supabase Storage bucket: `portraits-blurred`
-  - Stores JPEG portraits (blurred via MediaPipe) as `/portraits-blurred/{uuid}.jpg`
-  - Public read access (returns signed URLs or public URLs)
-  - Uploaded from tablet via `uploadBlurredPortrait()` in `apps/tablet/src/lib/persist.ts`
+- Supabase Storage
+  - `portraits-blurred` bucket: blurred visitor portrait JPEGs (public read, tablet writes)
+  - `prints` bucket: dithered print-ready portrait PNGs (print-renderer writes, printer bridge reads)
 
 **Caching:**
-- TTS timestamp cache in Supabase `tts_cache` table
-  - Key: hash of text + voice config
-  - Value: character-level timestamps from ElevenLabs TTS with-timestamps API
-  - Hydrated in `useTextToSpeechWithTimestamps.ts`
+- `packages/karaoke-reader`: in-memory LRU-style cache for TTS audio (`computeCacheKey` uses `crypto.subtle.digest` SHA-256)
+- `apps/print-renderer`: 5-second in-memory TTL cache for `render_config` Supabase fetch
 
 ## Authentication & Identity
 
-**Auth Provider:**
-- Custom (RLS + WEBHOOK_SECRET)
-  - Tablet uses Supabase anon key (browser-safe, restricted by RLS policies)
-  - Backend uses service role key (full DB access)
-  - Webhook calls verified via `WEBHOOK_SECRET` (query param or Authorization header)
-  - No user login/signup — visitor interactions are anonymous sessions
+**ElevenLabs API:**
+- Browser-side: `VITE_ELEVENLABS_API_KEY` (public, anon key scoped to TTS + Conversational AI)
+- Server-side: `ELEVENLABS_API_KEY` (used in backend for voice cloning + agent PATCH)
 
-**Session Tracking:**
-- ElevenLabs conversation ID stored in `sessions.elevenlabs_conversation_id`
-- Session UUID generated per interaction (stored in `sessions.id`)
-- Chain mode: `sessions.parent_session_id` links to previous visitor's session
+**Supabase:**
+- Browser (tablet, archive): anon key — limited by RLS policies
+- Server (backend, printer bridge, print-renderer): service role key — bypasses RLS
+- Config app: anon key + Supabase email/password Auth
+
+**Backend webhook protection:**
+- `WEBHOOK_SECRET` verified on all `/webhook/*` routes and `POST /api/config/update`
+- Accepts via `Authorization: Bearer <secret>` header OR `?secret=<secret>` query param
+- If `WEBHOOK_SECRET` is unset, all requests are allowed (dev mode)
+
+**Print renderer:**
+- `RENDER_API_KEY` verified via `X-Api-Key` header (constant-time `hmac.compare_digest`)
+- If `RENDER_API_KEY` is unset, all requests are allowed
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- Not detected (no Sentry, Rollbar, or equivalent)
+- Not detected — no Sentry, Datadog, or similar
 
 **Logs:**
-- Console.log/console.error across all apps
-- Backend logs to stdout (via `tsx watch`)
-- Printer bridge logs to stdout
-- POS server logs to stdout (Flask)
-- No centralized log aggregation
-
-**Debugging Patterns:**
-- Supabase admin dashboard for data inspection
-- `mcp__supabase__execute_sql` for direct schema/data queries (documented in CLAUDE.md)
+- `apps/backend`: Hono's built-in `logger()` middleware (request/response logging) + `console.error/warn`
+- All apps: `console.log/warn/error` with `[service/function]` prefix pattern
+- Python apps: Python standard `logging` module
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- **Tablet**: Coolify (Docker, 2-stage build)
-  - Repository: GitHub `main` branch
-  - Build args: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_ELEVENLABS_*`, `VITE_BACKEND_URL`, `VITE_PRINT_RENDERER_URL`
-  - Output: Nginx SPA server
-
-- **Backend**: Coolify (Docker, Node.js)
-  - Repository: GitHub `main` branch
-  - Port: 3001
-  - Env vars: `SUPABASE_*`, `OPENROUTER_API_KEY`, `WEBHOOK_SECRET`, `ELEVENLABS_API_KEY`
-
-- **Printer Bridge**: Local service (Pi/laptop), manual start
-  - No CI/CD deployment
-  - Git pull + `sudo systemctl restart printer-bridge` (systemd service)
-
-- **POS Server**: Local service (Pi/laptop), manual start
-  - Python Flask + systemd service (`pos-server.service`)
-  - Git pull + `sudo systemctl restart pos-server`
+- Tablet: Coolify, Docker (2-stage: node build → nginx SPA), from GitHub `main` branch
+- Backend: Coolify, Docker
+- Print renderer: Coolify, Docker (`apps/print-renderer/Dockerfile`)
+- Printer bridge: local Pi/laptop, manual `pnpm dev:printer`
+- POS server: local Pi, manual `python print_server.py`
 
 **CI Pipeline:**
-- Not detected (no GitHub Actions, GitLab CI, or equivalent)
-- Manual build/test via `pnpm` commands
+- Not detected — no GitHub Actions, CircleCI, or similar
 
-**Lockfile Strategy:**
-- `pnpm-lock.yaml` must be committed after any dependency change
-- Coolify uses `--frozen-lockfile` and will fail if lockfile is stale
-
-## Environment Configuration
-
-**Required env vars (Tablet):**
-```
-VITE_SUPABASE_URL=https://...supabase.co
-VITE_SUPABASE_ANON_KEY=eyJ...
-VITE_ELEVENLABS_API_KEY=sk_...
-VITE_ELEVENLABS_AGENT_ID=agent_7201...
-VITE_ELEVENLABS_VOICE_ID=xyz... (optional, for voice chain)
-VITE_BACKEND_URL=http://localhost:3001 (or https://... in prod)
-VITE_PRINT_RENDERER_URL=http://... (cloud render service)
-```
-
-**Required env vars (Backend):**
-```
-PORT=3001
-SUPABASE_URL=https://...supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbG... (service role, NOT anon key)
-OPENROUTER_API_KEY=sk-or-... (for embeddings)
-WEBHOOK_SECRET=your-shared-secret (verified on webhook calls)
-ELEVENLABS_API_KEY=... (for voice cloning / agent config)
-```
-
-**Required env vars (Printer Bridge):**
-```
-SUPABASE_URL=https://...supabase.co
-SUPABASE_ANON_KEY=eyJ... (or SERVICE_ROLE_KEY)
-POS_SERVER_URL=http://localhost:9100 (or IP of Pi)
-PRINT_RENDERER_URL=http://localhost:8000
-RENDER_API_KEY=... (API key for render service)
-```
-
-**Secrets location:**
-- Local dev: `.env` files per app (gitignored)
-- Coolify: Environment variable secrets configured in UI
-- Pi: Systemd service files with env vars (not committed to git)
+**Deployment notes:**
+- Coolify requires Base Directory `/` for apps with workspace dependencies (`apps/tablet`, `apps/backend`, `apps/print-renderer`)
+- `VITE_*` build args injected only for Vite apps; disabled for runtime-only services
+- `pnpm-lock.yaml` must be committed after any dependency change (Coolify uses `--frozen-lockfile`)
+- `packages/shared/dist/` must be committed to git for Pi deployment (Pi cannot run `tsc` due to RAM limits)
 
 ## Webhooks & Callbacks
 
-**Incoming:**
-- `/webhook/save-definition` (POST) — ElevenLabs agent calls `save_definition` tool
-  - Optional: Can be webhook (POST from ElevenLabs) or client-side tool (SDK handles in-browser)
-  - Payload schema: `SaveDefinitionWebhookSchema` (Zod)
-  - Verification: `WEBHOOK_SECRET` (query param or Authorization header)
-  - Response: Triggers embedding generation (fire-and-forget)
+**Incoming (from ElevenLabs → backend):**
+- `POST /webhook/definition` — agent `save_definition` tool call; saves definition + enqueues print job
+- `POST /webhook/conversation-data` — post-conversation transcript + metadata
 
-- `/webhook/voice-chain` (POST) — Advance voice chain state
-  - Payload: `voiceChainPayloadSchema` (definitions, speech profiles, icebreakers)
+**Outgoing (backend → ElevenLabs):**
+- `PATCH https://api.elevenlabs.io/v1/convai/agents/{id}` — apply voice clone before each voice-chain conversation
+- `POST https://api.elevenlabs.io/v1/voices/add` — create instant voice clone
+- `DELETE https://api.elevenlabs.io/v1/voices/{id}` — delete stale clones
 
-- `/api/config` (GET) — Tablet fetches mode/text/program on startup
-  - No auth (public read)
-  - Falls back to defaults if offline
+**Outgoing (tablet → backend):**
+- `GET /api/config` — on startup, fetches mode/term/program/voice-chain state
+- `POST /api/session/start` — after ElevenLabs session connects
+- `POST /api/voice-chain/process` — multipart/form-data with audio + transcript + portrait URL
+- `POST /api/voice-chain/apply-voice` — before starting voice-chain conversation (triggers agent PATCH)
 
-**Outgoing:**
-- Tablet → `/webhook/*` (POST via `fetch()`) — Define client-side tools (e.g., `save_definition`)
-- Printer bridge → `POS_SERVER_URL/print` (POST) — Send ESC/POS bytes
-- Printer bridge → `PRINT_RENDERER_URL/render` (POST) — Render definition to ESC/POS
+**Outgoing (tablet → Supabase directly):**
+- INSERT to `definitions`, `print_queue`, `turns` tables (fire-and-forget)
+- PUT to `portraits-blurred` storage bucket
 
-## Third-Party SDKs & Libraries
+**Outgoing (printer bridge → print renderer):**
+- `POST {PRINT_RENDERER_URL}/render/dictionary` — render text card as PNG
+- Falls back to legacy `POST {POS_SERVER_URL}/print/dictionary` if renderer unavailable
 
-**Voice Pipeline:**
-- ElevenLabs Conversational AI: WebSocket transport, automatic STT/LLM/TTS orchestration
-- No custom speech recognition or TTS — fully delegated to ElevenLabs
+**Outgoing (printer bridge → POS server):**
+- `POST {POS_SERVER_URL}/print/image` — send pre-rendered PNG for printing
+- `POST {POS_SERVER_URL}/print/batch` — send multiple portrait PNGs for printing
 
-**Computer Vision:**
-- MediaPipe Face Detection: In-browser, 2 fps (3s wake delay, 30s sleep debounce)
-- No cloud vision API (entirely local)
-
-**QR Codes:**
-- `qrcode` (npm) on tablet
-- `qrcode` (Python) on POS server
-
-**Data Validation:**
-- Zod: Runtime schema validation at all API boundaries
-- No GraphQL
+**Outgoing (print-renderer → n8n):**
+- `POST {N8N_WEBHOOK_URL}` — portrait-to-statue style transfer (optional)
 
 ---
 
