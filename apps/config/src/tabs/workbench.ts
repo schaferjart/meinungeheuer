@@ -1172,6 +1172,15 @@ function buildPortraitSection(body: HTMLElement): void {
   body.appendChild(compareGrid);
   body.appendChild(statusEl);
 
+  // Auto-preview on slider change (debounced 500ms)
+  let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleAutoPreview(): void {
+    if (!uploadedFile) return;
+    if (autoPreviewTimer) clearTimeout(autoPreviewTimer);
+    autoPreviewTimer = setTimeout(() => { void handlePreview(); }, 500);
+  }
+  body.addEventListener('input', scheduleAutoPreview);
+
   function b64ToObjectUrl(b64: string): string {
     const byteStr = atob(b64);
     const arr = new Uint8Array(byteStr.length);
