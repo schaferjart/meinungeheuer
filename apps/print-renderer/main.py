@@ -118,37 +118,77 @@ def render_portrait_preview(
     contrast: float = Form(1.3),
     brightness: float = Form(1.0),
     sharpness: float = Form(1.2),
+    z0_pad_top: float = Form(0.3),
+    z0_pad_bottom: float = Form(0.8),
+    z0_aspect: float = Form(0.67),
+    z1_pad_top: float = Form(0.15),
+    z1_pad_bottom: float = Form(0.15),
+    z3_strip_width: float = Form(0.25),
 ):
     """Dither a portrait image and return base64 PNG crops.
-    Uses face detection if mediapipe is available, falls back to simple crops.
+    Uses face detection if mediapipe is available, falls back to ratio-based crops.
     No style transfer, no Storage upload, no print_queue insert.
     """
+    import traceback as tb
+
     image_bytes = file.file.read()
     img = open_image(image_bytes)
+    w, h = img.size
     paper_px = get_paper_px(get_render_config(_CONFIG_PATH))
 
-    # Try face detection for smart crops, fall back to simple divisions
+    # Build crops based on the pad/aspect params (works without mediapipe)
     crops_to_render = []
+    errors = []
+
     try:
-        from pipeline import detect_face_landmarks, compute_zoom_crops
+        from pipeline import detect_face_landmarks
         landmarks = detect_face_landmarks(img)
-        if landmarks:
-            zooms = compute_zoom_crops(img, landmarks)
-        else:
-            # No face found — simple quadrant crops
-            w, h = img.size
-            zooms = [
-                {"name": "full", "box": (0, 0, w, h)},
-                {"name": "top", "box": (0, 0, w, h // 2)},
-                {"name": "center", "box": (w // 4, h // 4, 3 * w // 4, 3 * h // 4)},
-                {"name": "bottom", "box": (0, h // 2, w, h)},
-            ]
-        for z in zooms:
-            cropped = img.crop(z["box"])
-            crops_to_render.append(cropped)
-    except Exception:
-        # Mediapipe not available — just use the full image
-        crops_to_render.append(img)
+    except Exception as e:
+        landmarks = None
+        errors.append(f"mediapipe: {e}")
+
+    if landmarks:
+        # Smart crops based on face landmarks
+        cx = landmarks["face_center_x"]
+        eye_y = (landmarks["left_eye_center"][1] + landmarks["right_eye_center"][1]) // 2
+        face_h = landmarks["chin"][1] - landmarks["forehead_top"][1]
+
+        # Zoom 0: full portrait
+        z0_top = max(0, int(eye_y - face_h * (1 + z0_pad_top)))
+        z0_bot = min(h, int(landmarks["chin"][1] + face_h * z0_pad_bottom))
+        z0_w = int((z0_bot - z0_top) * z0_aspect)
+        z0_left = max(0, cx - z0_w // 2)
+        z0_right = min(w, z0_left + z0_w)
+        crops_to_render.append(img.crop((z0_left, z0_top, z0_right, z0_bot)))
+
+        # Zoom 1: face close-up
+        z1_top = max(0, int(landmarks["forehead_top"][1] - face_h * z1_pad_top))
+        z1_bot = min(h, int(landmarks["chin"][1] + face_h * z1_pad_bottom))
+        z1_left = max(0, cx - (z1_bot - z1_top) // 2)
+        z1_right = min(w, z1_left + (z1_bot - z1_top))
+        crops_to_render.append(img.crop((z1_left, z1_top, z1_right, z1_bot)))
+
+        # Zoom 2: eyes region (auto)
+        eye_spread = abs(landmarks["left_eye_outer"][0] - landmarks["right_eye_outer"][0])
+        z2_pad = int(eye_spread * 0.5)
+        z2_top = max(0, eye_y - z2_pad)
+        z2_bot = min(h, eye_y + z2_pad)
+        z2_left = max(0, landmarks["right_eye_outer"][0] - z2_pad)
+        z2_right = min(w, landmarks["left_eye_outer"][0] + z2_pad)
+        crops_to_render.append(img.crop((z2_left, z2_top, z2_right, z2_bot)))
+
+        # Zoom 3: narrow strip
+        strip_w = int(w * z3_strip_width)
+        z3_left = max(0, cx - strip_w // 2)
+        z3_right = min(w, z3_left + strip_w)
+        crops_to_render.append(img.crop((z3_left, 0, z3_right, h)))
+    else:
+        # Fallback: ratio-based crops (no face detection)
+        crops_to_render.append(img)  # full
+        crops_to_render.append(img.crop((w // 4, h // 4, 3 * w // 4, 3 * h // 4)))  # center
+        crops_to_render.append(img.crop((w // 4, h // 6, 3 * w // 4, h // 2)))  # upper center
+        strip_w = int(w * z3_strip_width)
+        crops_to_render.append(img.crop((w // 2 - strip_w // 2, 0, w // 2 + strip_w // 2, h)))  # strip
 
     # Dither each crop
     results = []
@@ -161,7 +201,7 @@ def render_portrait_preview(
         dithered.save(buf, format="PNG")
         results.append(base64.b64encode(buf.getvalue()).decode())
 
-    return {"crops": results, "count": len(results)}
+    return {"crops": results, "count": len(results), "face_detected": landmarks is not None, "errors": errors}
 
 
 # ── Markdown rendering ────────────────────────────────────

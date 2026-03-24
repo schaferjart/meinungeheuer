@@ -1187,6 +1187,12 @@ function buildPortraitSection(body: HTMLElement): void {
       fd.append('file', uploadedFile);
       fd.append('dither_mode', ditherMode);
       fd.append('blur_radius', String(blur));
+      fd.append('z0_pad_top', String(z0PadTop));
+      fd.append('z0_pad_bottom', String(z0PadBottom));
+      fd.append('z0_aspect', String(z0Aspect));
+      fd.append('z1_pad_top', String(z1PadTop));
+      fd.append('z1_pad_bottom', String(z1PadBottom));
+      fd.append('z3_strip_width', String(z3StripWidth));
 
       const headers: Record<string, string> = {};
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
@@ -1198,7 +1204,7 @@ function buildPortraitSection(body: HTMLElement): void {
       });
 
       if (!res.ok) return null;
-      const json = (await res.json()) as { crops: string[] };
+      const json = (await res.json()) as { crops: string[]; face_detected?: boolean; errors?: string[] };
       return json.crops ?? [];
     } catch {
       return null;
@@ -1263,6 +1269,12 @@ function buildPortraitSection(body: HTMLElement): void {
         fd.append('file', uploadedFile);
         fd.append('dither_mode', ditherMode);
         fd.append('blur_radius', String(blur));
+        fd.append('z0_pad_top', String(z0PadTop));
+        fd.append('z0_pad_bottom', String(z0PadBottom));
+        fd.append('z0_aspect', String(z0Aspect));
+        fd.append('z1_pad_top', String(z1PadTop));
+        fd.append('z1_pad_bottom', String(z1PadBottom));
+        fd.append('z3_strip_width', String(z3StripWidth));
 
         const headers: Record<string, string> = {};
         if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
