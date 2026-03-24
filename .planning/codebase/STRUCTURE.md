@@ -1,286 +1,239 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-24
 
 ## Directory Layout
 
 ```
-meinungeheuer/
+meinungeheuer/ (monorepo root)
 ├── apps/
-│   ├── tablet/              # React SPA — visitor-facing UI + admin dashboard
-│   │   ├── src/
-│   │   │   ├── components/
-│   │   │   │   ├── screens/ # One component per state machine screen
-│   │   │   │   ├── CameraDetector.tsx
-│   │   │   │   ├── ScreenTransition.tsx
-│   │   │   │   └── TextReader.tsx
-│   │   │   ├── hooks/       # Custom React hooks
-│   │   │   ├── lib/         # Pure utility functions (API client, prompts, persistence)
-│   │   │   ├── pages/       # Full-page views (Admin)
-│   │   │   ├── App.tsx      # Root component, orchestrates state machine + conversation
-│   │   │   ├── main.tsx     # Entry point, mounts App
-│   │   │   └── index.css    # Tailwind v4 imports
-│   │   ├── public/          # Static assets
-│   │   └── package.json
-│   │
-│   ├── backend/             # Hono REST API server
-│   │   ├── src/
-│   │   │   ├── routes/      # Route handlers (webhook, session, config)
-│   │   │   ├── services/    # Business logic (supabase client, chain, embeddings)
-│   │   │   ├── app.ts       # Hono app with middleware + route mounting
-│   │   │   └── index.ts     # HTTP server entry point
-│   │   └── package.json
-│   │
-│   └── printer-bridge/      # Local Node.js service near printer
-│       ├── src/
-│       │   ├── config.ts    # POS server URL config
-│       │   ├── printer.ts   # HTTP relay to POS server + console fallback
-│       │   ├── index.ts     # Entry: Supabase Realtime subscription + job processing
-│       │   └── test-print.ts # CLI test script
-│       └── package.json
-│
+│   ├── tablet/                 # React visitor interface (Vite)
+│   ├── backend/                # Hono API server (Node.js)
+│   ├── printer-bridge/         # Print job listener (Node.js, local Pi service)
+│   ├── archive/                # Conversation history viewer (React)
+│   ├── config/                 # Admin config dashboard (React)
+│   ├── print-renderer/         # Thermal card layout engine (Python)
+│   └── pos-server/             # Thermal printer HTTP bridge (Python)
 ├── packages/
-│   ├── shared/              # Types, Supabase client, constants — imported by all apps
-│   │   ├── src/
-│   │   │   ├── types.ts     # Zod schemas + TS types for all DB tables + payloads
-│   │   │   ├── supabase.ts  # Database interface + typed client factory
-│   │   │   ├── constants.ts # APP_NAME, defaults, timer values, face detection config
-│   │   │   └── index.ts     # Barrel re-export
-│   │   └── package.json
-│   │
-│   ├── karaoke-reader/      # Standalone publishable React component library
-│   │   ├── src/
-│   │   │   ├── adapters/
-│   │   │   │   └── elevenlabs/
-│   │   │   │       └── index.ts  # ElevenLabs TTS API fetch + useElevenLabsTTS hook
-│   │   │   ├── components/
-│   │   │   │   └── KaraokeReader.tsx  # Main component — word highlighting
-│   │   │   ├── hooks/
-│   │   │   │   ├── useAudioSync.ts    # requestAnimationFrame word tracking
-│   │   │   │   ├── useAutoScroll.ts   # Smooth scroll to active word
-│   │   │   │   ├── useKaraokeReader.ts # Orchestrator: audio lifecycle + status machine
-│   │   │   │   └── index.ts
-│   │   │   ├── utils/
-│   │   │   │   ├── buildWordTimestamps.ts # Character-level -> word-level timestamps
-│   │   │   │   ├── splitTextIntoChunks.ts # Long text chunking for TTS API
-│   │   │   │   ├── computeCacheKey.ts     # SHA-256 cache key from text+voiceId
-│   │   │   │   ├── markdown.ts            # Markdown parsing for display
-│   │   │   │   └── index.ts
-│   │   │   ├── test-utils/
-│   │   │   │   ├── setup.ts       # Vitest setup (happy-dom, jest-dom matchers)
-│   │   │   │   └── mock-audio.ts  # HTMLAudioElement mock for tests
-│   │   │   ├── types.ts     # WordTimestamp, CacheAdapter, TtsStatus, parsed text types
-│   │   │   ├── cache.ts     # Memory + localStorage cache adapter implementations
-│   │   │   └── index.ts     # Barrel export (types, utils, hooks, components)
-│   │   └── package.json
-│   │
-│   └── core/                # Empty — only contains dist/ and node_modules/
-│       └── (no source files)
-│
-├── supabase/
-│   └── migrations/          # SQL migration files (001-007)
-│       ├── 001_extensions.sql
-│       ├── 002_tables.sql   # Core schema: sessions, turns, definitions, print_queue, chain_state, installation_config, texts
-│       ├── 003_indexes.sql
-│       ├── 004_rls.sql
-│       ├── 005_seed.sql
-│       ├── 006_kreativitaetsrant_and_tts_cache.sql
-│       └── 007_anon_insert_definitions.sql
-│
-├── docs/
-│   ├── PRD.md               # Full product requirements document
-│   └── PROMPTS.md           # Agent build prompts per component
-│
-├── CLAUDE.md                # AI assistant instructions
-├── Dockerfile               # 2-stage: node build -> nginx SPA (tablet only)
-├── package.json             # Root workspace scripts
-├── pnpm-workspace.yaml      # Workspace definition
-├── pnpm-lock.yaml
-└── tsconfig.base.json       # Shared TypeScript config (strict, ES2022, bundler resolution)
+│   ├── shared/                 # Types, Supabase client, constants, program registry
+│   ├── core/                   # [Exploratory; minimal usage]
+│   └── karaoke-reader/         # Text-to-speech with karaoke word highlighting
+├── supabase/                   # Database migrations and configuration
+├── scripts/                    # Build and deploy utilities
+├── tools/                      # Utility scripts and helpers
+├── docs/                       # Project documentation
+│   ├── PRD.md                  # Product requirements
+│   ├── PROMPTS.md              # Agent prompt specifications
+│   └── ...
+├── .planning/                  # GSD planning (orchestrator output)
+├── .claude/                    # Claude context and memory
+├── CLAUDE.md                   # Agent instructions (this repo's API)
+└── package.json                # pnpm workspaces root
 ```
 
 ## Directory Purposes
 
-**`apps/tablet/src/components/screens/`:**
-- Purpose: One React component per state machine screen
-- Contains: `SleepScreen.tsx`, `WelcomeScreen.tsx`, `TextDisplayScreen.tsx`, `TermPromptScreen.tsx`, `ConversationScreen.tsx`, `SynthesizingScreen.tsx`, `DefinitionScreen.tsx`, `PrintingScreen.tsx`, `FarewellScreen.tsx`
-- Naming: `{StateName}Screen.tsx` where StateName matches the `StateName` union type exactly
-- Each screen receives `dispatch` as a prop to trigger state transitions
+**apps/tablet/**
+- Purpose: Visitor-facing React interface; state machine; conversation UI
+- Contains: Components (screens, UI), hooks (state, ElevenLabs, face detection), utilities (persist, API)
+- Key files: `src/App.tsx` (main coordinator), `src/hooks/useInstallationMachine.ts` (state), `src/hooks/useConversation.ts` (EL SDK wrapper)
 
-**`apps/tablet/src/hooks/`:**
-- Purpose: Custom React hooks for complex stateful behavior
-- Contains: `useInstallationMachine.ts` (state machine), `useConversation.ts` (ElevenLabs wrapper), `useFaceDetection.ts` (MediaPipe camera detection)
-- Naming: `use{Name}.ts`
+**apps/backend/**
+- Purpose: Configuration API, session persistence, webhook receiver, voice chain processing
+- Contains: Route handlers (config, session, webhook, voice-chain), services (Supabase, embeddings, chain state)
+- Key files: `src/app.ts` (Hono setup), `src/index.ts` (server start), `src/routes/` (all endpoints)
 
-**`apps/tablet/src/lib/`:**
-- Purpose: Pure utility functions and configuration — no React hooks, no components
-- Contains: `api.ts` (backend API client with Zod validation), `systemPrompt.ts` (builds LLM prompts), `firstMessage.ts` (builds agent opening line), `persist.ts` (Supabase write helpers), `supabase.ts` (singleton client), `fullscreen.ts` (fullscreen API wrapper), `supabaseCacheAdapter.ts` (TTS cache backed by Supabase)
+**apps/printer-bridge/**
+- Purpose: Event-driven print job processor; subscribes to Supabase; posts to thermal printer
+- Contains: Supabase Realtime listener, print payload validation, printer integration
+- Key files: `src/index.ts` (main loop), `src/printer.ts` (print logic), `src/config.ts` (env loading)
 
-**`apps/tablet/src/pages/`:**
-- Purpose: Full-page views that are not screens in the state machine
-- Contains: `Admin.tsx` — operator dashboard accessible via `?admin=true`
+**apps/archive/**
+- Purpose: Admin dashboard viewing conversations, definitions, session history
+- Contains: React components for browsing Supabase data
+- Key files: TBD (not analyzed in detail)
 
-**`apps/backend/src/routes/`:**
-- Purpose: Hono route group handlers
-- Contains: `webhook.ts` (ElevenLabs callback handlers), `session.ts` (session start), `config.ts` (config read/write, definitions listing, chain history)
-- Pattern: Each file exports a `Hono` instance that is mounted via `app.route()` in `app.ts`
+**apps/config/**
+- Purpose: Admin panel for live configuration tweaks (modes, terms, programs, runtime settings)
+- Contains: React controls for updating installation_config table
+- Key files: TBD (not analyzed in detail)
 
-**`apps/backend/src/services/`:**
-- Purpose: Business logic separated from route handlers
-- Contains: `supabase.ts` (singleton service-role client), `chain.ts` (chain state management), `embeddings.ts` (OpenRouter embedding generation)
+**apps/print-renderer/**
+- Purpose: Cloud HTTP service rendering thermal card images (JSONB config → PNG)
+- Contains: Python Flask/FastAPI endpoint; ESC/POS image generation
+- Key files: `supabase_config.py` (maps JSONB to config), `config.yaml` (template defaults)
 
-**`packages/shared/src/`:**
-- Purpose: Single source of truth for types and shared utilities
-- Key files: `types.ts` (all Zod schemas + types), `supabase.ts` (Database interface + factory), `constants.ts` (all constants)
-- Build output: `dist/` with `.js` + `.d.ts` files. Other packages import from `@meinungeheuer/shared`.
+**apps/pos-server/**
+- Purpose: Local HTTP-to-ESC/POS bridge; translates HTTP requests to raw printer commands
+- Contains: Python script listening on localhost:9100; sends bytes to thermal printer via USB/serial
+- Key files: `print_server.py` (main loop), `setup.sh` (install deps)
 
-**`packages/karaoke-reader/src/adapters/elevenlabs/`:**
-- Purpose: ElevenLabs-specific TTS fetching with chunking, caching, and timestamp extraction
-- Contains: `index.ts` with `fetchElevenLabsTTS()` function and `useElevenLabsTTS()` React hook
-- Exported via `karaoke-reader/elevenlabs` subpath
+**packages/shared/**
+- Purpose: Single source of truth for types, constants, Supabase client, and conversation programs
+- Contains: Zod schemas (Session, Turn, Definition, etc.), program registry (aphorism, free-association, voice-chain)
+- Key files:
+  - `src/types.ts` — All database table schemas
+  - `src/programs/index.ts` — Program registry and lookup function
+  - `src/programs/{aphorism,free-association,voice-chain}.ts` — Program implementations
+  - `src/supabase.ts` — Supabase client factory
+  - `src/constants.ts` — Installation defaults (DEFAULT_MODE, DEFAULT_TERM, PORTRAIT config, etc.)
+  - `src/voiceChainConfig.ts` — Voice chain state shape
 
-**`supabase/migrations/`:**
-- Purpose: SQL migration files defining the database schema
-- Contains: Extensions (pgvector, uuid), table definitions, indexes, RLS policies, seed data, and incremental schema additions (tts_cache table, anon insert policies)
+**packages/karaoke-reader/**
+- Purpose: Text-to-speech with word-level timing for karaoke-style highlighting
+- Contains: TTS integration (ElevenLabs with-timestamps), timestamp → word mapping, React hook
+- Key files: `src/useTextToSpeechWithTimestamps.ts` (main hook)
+
+**packages/core/**
+- Purpose: [Exploratory package; minimal current usage; may hold core utilities in future]
+- Contains: TBD
+- Key files: TBD
+
+**supabase/**
+- Purpose: Database migrations and schema definition
+- Contains: SQL migration files (numbered, ordered)
+- Key files: `migrations/` (each file is one migration)
+
+**scripts/**
+- Purpose: Build orchestration, data import, utility tasks
+- Contains: Bash/Node scripts for CI/CD, data import, etc.
+- Key files: `import-conversations.mjs` (example)
+
+**docs/**
+- Purpose: Human-readable documentation and specifications
+- Contains: PRD (product requirements), PROMPTS (agent prompt specs), architecture notes
+- Key files: `PRD.md`, `PROMPTS.md`
 
 ## Key File Locations
 
 **Entry Points:**
-- `apps/tablet/src/main.tsx`: Browser entry point (React root mount)
-- `apps/backend/src/index.ts`: Backend HTTP server start
-- `apps/printer-bridge/src/index.ts`: Printer bridge main (Supabase Realtime subscription)
+- Tablet: `apps/tablet/src/main.tsx` (React mount) → `src/App.tsx` (component tree)
+- Backend: `apps/backend/src/index.ts` (server start) → `src/app.ts` (Hono setup)
+- Printer Bridge: `apps/printer-bridge/src/index.ts` (boot, Realtime subscribe)
 
 **Configuration:**
-- `tsconfig.base.json`: Base TypeScript config inherited by all packages
-- `pnpm-workspace.yaml`: Workspace package locations (`apps/*`, `packages/*`)
-- `package.json` (root): Workspace scripts (`dev`, `build`, `typecheck`, `test`, `lint`)
-- `Dockerfile`: Multi-stage build for tablet SPA (Coolify deployment)
+- Shared constants: `packages/shared/src/constants.ts`
+- Backend env: `apps/backend/.env` (template: `.env.example`)
+- Tablet env: `apps/tablet/.env` (VITE_* vars)
+- Printer bridge env: `apps/printer-bridge/.env` (SUPABASE_URL, RENDER_API_KEY, etc.)
+- Database: `packages/shared/src/types.ts` (source of truth for schema)
 
 **Core Logic:**
-- `apps/tablet/src/hooks/useInstallationMachine.ts`: State machine (9 screens, 13 actions)
-- `apps/tablet/src/hooks/useConversation.ts`: ElevenLabs SDK wrapper + role mapping + tool handling
-- `apps/tablet/src/lib/systemPrompt.ts`: Dynamic LLM system prompt builder (different per mode)
-- `apps/tablet/src/lib/firstMessage.ts`: Agent first-message builder (language-aware)
-- `apps/backend/src/routes/webhook.ts`: Definition save + print queue + chain advance orchestration
-- `apps/backend/src/services/chain.ts`: Chain state management (getActive, advance, reset, history)
-- `apps/backend/src/services/embeddings.ts`: Fire-and-forget OpenRouter embedding generation
-- `packages/karaoke-reader/src/adapters/elevenlabs/index.ts`: TTS API integration with chunking + caching
-
-**Type Definitions:**
-- `packages/shared/src/types.ts`: All Zod schemas, TypeScript types, insert variants, payload shapes
-- `packages/shared/src/supabase.ts`: Full `Database` interface (Row/Insert/Update for every table)
-- `packages/karaoke-reader/src/types.ts`: WordTimestamp, CacheAdapter, TtsStatus, parsed text types
+- State machine: `apps/tablet/src/hooks/useInstallationMachine.ts`
+- ElevenLabs integration: `apps/tablet/src/hooks/useConversation.ts`
+- Program registry: `packages/shared/src/programs/index.ts`
+- Persistence: `apps/tablet/src/lib/persist.ts`, `apps/backend/src/routes/session.ts`
+- Print job processing: `apps/printer-bridge/src/index.ts`, `src/printer.ts`
 
 **Testing:**
-- `apps/tablet/src/hooks/useInstallationMachine.test.ts`: State machine unit tests
-- `packages/karaoke-reader/src/**/*.test.{ts,tsx}`: Component, hook, and utility tests (7 test files)
+- Tablet tests: `apps/tablet/src/**/*.test.ts` (co-located with source)
+- Backend tests: `apps/backend/src/**/*.test.ts` (co-located)
+- Printer bridge tests: `apps/printer-bridge/src/**/*.test.ts` (co-located)
+- Shared tests: `packages/shared/src/**/*.test.ts` (co-located)
 
 ## Naming Conventions
 
 **Files:**
-- React components: `PascalCase.tsx` (e.g., `KaraokeReader.tsx`, `ConversationScreen.tsx`, `TextReader.tsx`)
-- Hooks: `use{Name}.ts` (e.g., `useInstallationMachine.ts`, `useConversation.ts`, `useAudioSync.ts`)
-- Pure utilities/lib: `camelCase.ts` (e.g., `systemPrompt.ts`, `firstMessage.ts`, `persist.ts`)
-- Test files: `{source}.test.ts` or `{source}.test.tsx` co-located next to source
-- Route files: `camelCase.ts` (e.g., `webhook.ts`, `session.ts`, `config.ts`)
-- SQL migrations: `NNN_{description}.sql` (e.g., `002_tables.sql`)
+- Components: PascalCase (e.g., `TextDisplayScreen.tsx`, `CameraDetector.tsx`)
+- Hooks: `use{Name}.ts` (e.g., `useInstallationMachine.ts`, `useConversation.ts`)
+- Utilities: camelCase (e.g., `persist.ts`, `api.ts`, `portraitBlur.ts`)
+- Tests: `{name}.test.ts` or `{name}.spec.ts` (co-located with source)
+- Routes/services: camelCase (e.g., `config.ts`, `webhook.ts`, `embeddings.ts`)
 
 **Directories:**
-- App directories: `kebab-case` (e.g., `printer-bridge`, `karaoke-reader`)
-- Source directories: `camelCase` or `kebab-case` (e.g., `test-utils`, `screens`)
+- Screens: `components/screens/` (always)
+- Hooks: `hooks/` (always)
+- Utilities: `lib/` (always)
+- Routes: `routes/` (always)
+- Services: `services/` (always)
+- Pages: `pages/` (admin dashboard in tablet)
 
-**Exports:**
-- Components: named exports, no default exports (e.g., `export function KaraokeReader`)
-- Hooks: named exports (e.g., `export function useConversation`)
-- Route groups: named exports of Hono instances (e.g., `export const webhookRoutes = new Hono()`)
-- Barrel files: `index.ts` re-exports everything (`export * from './types.js'`)
+**Variables & Functions:**
+- camelCase for all variables and functions
+- React components (functions starting with capital letter)
+- Types in TypeScript: PascalCase for type names; camelCase for variable declarations
+- Enums: PascalCase (e.g., PrintStatusSchema values are 'pending', 'printing', 'done', 'error')
+
+**Zod Schemas:**
+- Pattern: `{Name}Schema` (e.g., SessionSchema, DefinitionSchema, PrintPayloadSchema)
+- Export both schema and inferred type: `type {Name} = z.infer<typeof {Name}Schema>`
+- Insert variants omit server fields: `InsertSessionSchema` (no id, created_at)
 
 ## Where to Add New Code
 
-**New Screen:**
-- Create: `apps/tablet/src/components/screens/{StateName}Screen.tsx`
-- Add to state machine: Add the new `StateName` to `StateNameSchema` in `packages/shared/src/types.ts`
-- Add transitions: Update reducer in `apps/tablet/src/hooks/useInstallationMachine.ts`
-- Render: Add case in `renderScreen()` switch in `apps/tablet/src/App.tsx`
-- Pattern: Receive `dispatch: React.Dispatch<InstallationAction>` as prop. Use `dispatch({ type: 'ACTION_NAME' })` to trigger transitions.
+**New Feature (New Screen):**
+1. Create component: `apps/tablet/src/components/screens/{FeatureName}Screen.tsx`
+2. Create test: `apps/tablet/src/components/screens/{FeatureName}Screen.test.ts`
+3. Add to state machine: update `useInstallationMachine.ts` with new StateName, action, and transition
+4. Render in App.tsx switch statement
+5. If needs API: add route to `apps/backend/src/routes/`
 
-**New API Route:**
-- Create route group: `apps/backend/src/routes/{name}.ts` exporting a `new Hono()` instance
-- Mount: Add `app.route('/path', nameRoutes)` in `apps/backend/src/app.ts`
-- Validate: Use Zod schemas for request body/query validation with `.safeParse()`
-- Pattern: Follow existing routes. Use `supabase` from `../services/supabase.js`. Return JSON responses.
+**New Hook:**
+1. Create: `apps/tablet/src/hooks/use{Name}.ts`
+2. Create test: `apps/tablet/src/hooks/use{Name}.test.ts`
+3. Export from hook file; import where needed
 
-**New Backend Service:**
-- Create: `apps/backend/src/services/{name}.ts`
-- Pattern: Export async functions. Import `supabase` from `./supabase.js`. Log with `[{name}]` prefix. Never throw from fire-and-forget operations.
+**New Utility/Helper:**
+1. Create: `apps/tablet/src/lib/{name}.ts` (tablet) or `apps/backend/src/services/{name}.ts` (backend)
+2. Export and import as needed
+3. Add tests co-located
 
-**New Shared Type:**
-- Add Zod schema: `packages/shared/src/types.ts`
-- Add insert variant if DB table: `export const Insert{Name}Schema = {Name}Schema.omit({ id: true, created_at: true })`
-- Add to Database interface: `packages/shared/src/supabase.ts` (Row, Insert, Update shapes)
-- Rebuild: `pnpm --filter @meinungeheuer/shared build` (other apps import compiled output)
+**New Backend Endpoint:**
+1. Create route handler: `apps/backend/src/routes/{resource}.ts`
+2. Register route in `src/app.ts`: `app.route('/api/{resource}', {resource}Routes)`
+3. Add tests in same file
+4. Update `apps/tablet/src/lib/api.ts` if tablet calls it
 
-**New Database Table:**
-- Add migration: `supabase/migrations/NNN_{description}.sql`
-- Add types: `packages/shared/src/types.ts` (Zod schema) + `packages/shared/src/supabase.ts` (Database interface)
-- Add RLS: Include policy in migration or add to `004_rls.sql`
+**New Conversation Program:**
+1. Create: `packages/shared/src/programs/{program-name}.ts`
+2. Implement ConversationProgram interface (buildSystemPrompt, buildFirstMessage, stages, printLayout, resultDisplay)
+3. Register in REGISTRY in `packages/shared/src/programs/index.ts`
+4. Add tests: `packages/shared/src/programs/{program-name}.test.ts`
 
-**New Tablet Hook:**
-- Create: `apps/tablet/src/hooks/use{Name}.ts`
-- Tests: `apps/tablet/src/hooks/use{Name}.test.ts` (co-located)
+**New Database Type:**
+1. Add Zod schema to `packages/shared/src/types.ts`
+2. Export both schema and inferred type
+3. Add Insert variant (omit id, created_at)
+4. Create Supabase migration in `supabase/migrations/`
+5. Update RLS policies as needed
 
-**New Tablet Utility:**
-- Create: `apps/tablet/src/lib/{name}.ts`
-- Pattern: Pure functions, no React dependencies. Export individual functions (not default).
-
-**New Karaoke Reader Feature:**
-- Utility: `packages/karaoke-reader/src/utils/{name}.ts` + test
-- Hook: `packages/karaoke-reader/src/hooks/use{Name}.ts` + test
-- Re-export in barrel: `packages/karaoke-reader/src/hooks/index.ts` and/or `packages/karaoke-reader/src/index.ts`
-- New adapter: `packages/karaoke-reader/src/adapters/{provider}/index.ts`, add subpath export in `package.json`
+**Shared Constants:**
+- Add to `packages/shared/src/constants.ts`
+- Export and import in `packages/shared/src/index.ts`
 
 ## Special Directories
 
-**`packages/core/`:**
-- Purpose: Appears to be an empty/placeholder package
-- Generated: Has `dist/` and `node_modules/` but no source files
-- Committed: Yes, but no functional code
+**packages/shared/dist/:**
+- Purpose: Compiled JavaScript output from TypeScript source
+- Generated: Yes (via `pnpm build` in shared package)
+- Committed: Yes (force-committed with `-f` flag on Pi to avoid recompilation)
+- Note: On Pi with limited RAM, always commit dist/ so deployment doesn't trigger tsc
 
-**`.planning/`:**
-- Purpose: GSD planning documents (codebase analysis, milestones, phases)
-- Generated: By Claude Code mapping commands
-- Committed: Yes
+**apps/tablet/dist/:**
+- Purpose: Vite production build output (SPA)
+- Generated: Yes (via `pnpm build`)
+- Committed: No (.gitignore)
 
-**`.planning-karaoke-reader/`:**
-- Purpose: Planning documents specific to the karaoke-reader package development
-- Generated: By Claude Code during karaoke-reader development
-- Committed: Yes
+**apps/backend/dist/:**
+- Purpose: Compiled JavaScript from TypeScript
+- Generated: Yes (via `pnpm build`)
+- Committed: No (.gitignore)
 
-**`.entire/`:**
-- Purpose: Metadata/logs from the Entire tool
-- Generated: Yes
-- Committed: Check `.gitignore`
+**apps/pos-server/venv/:**
+- Purpose: Python virtual environment for POS server dependencies
+- Generated: Yes (via `bash setup.sh`)
+- Committed: No (gitignored)
 
-**`dist/` directories (in each package/app):**
-- Purpose: TypeScript compilation output
-- Generated: Yes, by `pnpm build`
-- Committed: Yes for `packages/shared/dist/` (other apps depend on it at build time). Typically `.gitignore`d for apps.
+**supabase/.temp/:**
+- Purpose: Temporary files (API response caches, etc.)
+- Generated: Yes (at runtime)
+- Committed: No
 
-## Build Dependencies
-
-Build order is critical due to workspace dependencies:
-
-1. `packages/shared` must build first (other packages/apps import its compiled output)
-2. `packages/karaoke-reader` must build before `apps/tablet` (tablet imports it)
-3. Apps can build in parallel after their dependencies
-
-The root `pnpm build` script enforces this:
-```bash
-pnpm --filter @meinungeheuer/shared build && pnpm -r --filter '!@meinungeheuer/shared' build
-```
-
-The Dockerfile explicitly sequences: shared -> karaoke-reader -> tablet.
+**Supabase Storage Buckets (in production):**
+- `portraits-blurred` — Blurred portrait JPEGs (public read, anon write via RLS)
+- `render-jobs` — Temporary files from print-renderer
+- All URLs returned as public URLs (no auth needed to download)
 
 ---
 
-*Structure analysis: 2026-03-08*
+*Structure analysis: 2026-03-24*

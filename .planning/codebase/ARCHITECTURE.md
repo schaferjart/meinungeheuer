@@ -1,169 +1,259 @@
 # Architecture
 
-**Analysis Date:** 2026-03-08
+**Analysis Date:** 2026-03-24
 
 ## Pattern Overview
 
-**Overall:** Event-driven monorepo with a linear pipeline: Tablet (React SPA) -> ElevenLabs Conversational AI (external WebSocket) -> Custom LLM (via OpenRouter) -> Cloud Backend (Hono REST API) -> Supabase (PostgreSQL) -> Printer Bridge (local Node.js service) -> ESC/POS Thermal Printer
+**Overall:** Monorepo with distributed event-driven architecture. Tablet (React) drives the conversation loop; visitor interactions trigger ElevenLabs voice AI WebSocket session; definitions flow to backend for storage and routing; printer bridge listens to Supabase Realtime for print jobs.
 
 **Key Characteristics:**
-- Monorepo with pnpm workspaces: 3 apps + 3 packages (shared, karaoke-reader, core)
-- State machine-driven UI (explicit reducer, not a library)
-- Shared types package (`@meinungeheuer/shared`) is the single source of truth for DB schemas, Zod validators, and constants
-- Fire-and-forget pattern for non-critical operations (embeddings, TTS cache writes, transcript persistence)
-- Dual persistence paths: tablet writes directly to Supabase (anon key), backend writes via service role key (webhook flow)
-- Realtime-driven print pipeline: backend INSERT into `print_queue` -> Supabase Realtime -> printer bridge picks up the job
+- Client-side state machine coordinates all transitions (9 screens)
+- Fire-and-forget persistence — tablet writes directly to Supabase
+- ElevenLabs SDK handles full voice pipeline (STT + LLM + TTS)
+- Backend serves config, webhooks, and chain state — not in hot path
+- Printer bridge is event-driven subscriber to print_queue table
+- Multiple conversation "programs" (aphorism, free-association, voice-chain) — pluggable via registry
 
 ## Layers
 
-**Presentation Layer (Tablet):**
-- Purpose: Visitor-facing React SPA running in kiosk mode on a tablet browser
+**Presentation (Tablet):**
+- Purpose: Visitor-facing React interface; 9-screen state machine; real-time UI state
 - Location: `apps/tablet/src/`
-- Contains: Screen components, state machine, ElevenLabs conversation hook, face detection, admin dashboard
-- Depends on: `@meinungeheuer/shared` (types, constants, Supabase client factory), `karaoke-reader` (TTS text highlighting), ElevenLabs SDK (`@11labs/react`), Supabase JS client (direct writes)
-- Used by: Visitors and operators (admin mode via `?admin=true`)
+- Contains: Screen components, hooks (state machine, ElevenLabs integration, face detection), UI utilities
+- Depends on: @meinungeheuer/shared (types, constants), ElevenLabs React SDK, Supabase JS client
+- Used by: Visitors (kiosk mode); admins (?admin=true URL param)
 
-**API Layer (Backend):**
-- Purpose: REST API for config, session management, webhook handling, chain state, embeddings
+**Conversation Engine:**
+- Purpose: ElevenLabs WebSocket integration; prompt building; agent configuration
+- Location: `apps/tablet/src/hooks/useConversation.ts`; `apps/backend/src/routes/`
+- Contains: ElevenLabs SDK wrapper, system prompt injection, tool handling (save_definition)
+- Depends on: ElevenLabs @elevenlabs/react SDK, backend API for voice chain overrides
+- Used by: Tablet state machine to manage voice interaction lifecycle
+
+**Persistence Layer:**
+- Purpose: Fire-and-forget writes to Supabase; avoids blocking UI
+- Location: `apps/tablet/src/lib/persist.ts`; `apps/backend/src/routes/session.ts`
+- Contains: Definition inserts, print job enqueues, transcript storage, portrait uploads
+- Depends on: Supabase JS client, Supabase Storage
+- Used by: App.tsx (after conversation milestones), tablet persistence functions
+
+**Backend API (Hono):**
+- Purpose: Configuration delivery, session creation, webhook handling, voice chain state
 - Location: `apps/backend/src/`
-- Contains: Hono route handlers, service modules (Supabase, chain, embeddings)
-- Depends on: `@meinungeheuer/shared` (types, Supabase client factory), Hono framework, OpenAI SDK (via OpenRouter for embeddings)
-- Used by: Tablet (config fetch, session start), ElevenLabs (webhook callbacks), Admin dashboard
+- Contains: 4 route groups (config, session, webhook, voice-chain), shared services
+- Depends on: Supabase service role client, OpenAI (embeddings), PostgreSQL
+- Used by: Tablet (config fetch, session persist, voice chain apply-voice), ElevenLabs (webhooks)
 
-**Print Bridge (Printer Bridge):**
-- Purpose: Local service that listens for print jobs via Supabase Realtime and relays them to a POS thermal printer server
+**Print Bridge (Local Service):**
+- Purpose: Event-driven print job processor; connects Supabase to thermal printer
 - Location: `apps/printer-bridge/src/`
-- Contains: Realtime subscription, job processor, HTTP relay to POS server
-- Depends on: `@meinungeheuer/shared` (types, Supabase client factory)
-- Used by: Triggered by Supabase Realtime INSERT events on `print_queue`
+- Contains: Supabase Realtime listener, print payload validator, POS server HTTP client
+- Depends on: Supabase (Realtime + service role client), print-renderer (cloud), POS server (local HTTP)
+- Used by: Nobody calls it directly; it subscribes to print_queue table autonomously
 
-**Shared Types (Package):**
-- Purpose: Single source of truth for TypeScript types, Zod schemas, constants, and typed Supabase client factory
+**Shared Types & Constants:**
+- Purpose: Single source of truth for types, Supabase client factory, program registry
 - Location: `packages/shared/src/`
-- Contains: `types.ts` (all DB table schemas + insert variants + payload shapes), `constants.ts` (timers, thresholds), `supabase.ts` (typed client factory with full Database interface)
-- Depends on: `@supabase/supabase-js`, `zod`
-- Used by: All three apps import from `@meinungeheuer/shared`
+- Contains: Zod schemas (Session, Turn, Definition, PrintQueueRow, etc.), type exports, constants (DEFAULT_MODE, PORTRAIT config, etc.), program registry
+- Depends on: Zod (runtime validation), Supabase JS client
+- Used by: All apps (tablet, backend, printer-bridge)
 
-**Karaoke Reader (Package):**
-- Purpose: Standalone, publishable React component library for word-by-word text highlighting synced to audio playback
-- Location: `packages/karaoke-reader/src/`
-- Contains: `KaraokeReader` component, `useKaraokeReader` / `useAudioSync` / `useAutoScroll` hooks, ElevenLabs TTS adapter, text chunking/timestamp utilities, cache adapters (memory, localStorage)
-- Depends on: React (peer dep)
-- Used by: Tablet's `TextReader` component via `import { KaraokeReader } from 'karaoke-reader'`
+**Conversation Programs (Registry):**
+- Purpose: Define prompt logic, screen stages, print layout per installation mode
+- Location: `packages/shared/src/programs/`
+- Contains: aphorism.ts, free-association.ts, voice-chain.ts (each implements ConversationProgram interface)
+- Depends on: Shared types
+- Used by: Tablet (to route screens and build prompts), backend (to fetch agent config)
 
 ## Data Flow
 
-**Main Visitor Flow (Mode A: text_term):**
+**Startup Flow:**
 
-1. Tablet boots -> fetches config from `GET /api/config` (backend reads `installation_config` + `texts` from Supabase)
-2. State machine starts at `sleep` -> auto-wakes to `welcome` -> transitions to `text_display`
-3. `TextDisplayScreen` renders `TextReader` which uses `karaoke-reader/elevenlabs` adapter to fetch TTS audio+timestamps from ElevenLabs API (with Supabase-backed cache)
-4. `KaraokeReader` component plays audio with word-by-word highlighting; on complete -> dispatches `READY` -> state transitions to `conversation`
-5. `App` starts ElevenLabs conversation session via `useConversation` hook with dynamic system prompt (built by `buildSystemPrompt()`)
-6. ElevenLabs SDK handles STT + LLM + TTS over WebSocket; transcript displayed in `ConversationScreen`
-7. AI agent calls `save_definition` tool -> received by client tool handler in `useConversation` AND by webhook `POST /webhook/definition` on backend
-8. Client-side: dispatches `DEFINITION_RECEIVED` -> state to `synthesizing` -> `definition` -> `printing` -> `farewell`
-9. Backend webhook: saves definition to Supabase `definitions` table, inserts `print_queue` job, advances chain (Mode C), fire-and-forget embedding generation
-10. Printer bridge picks up `print_queue` INSERT via Supabase Realtime, claims job, POSTs to POS server, marks done
+1. Tablet mounts App.tsx
+2. CameraDetector subscribes to face detection (MediaPipe) — runs regardless of screen
+3. InstallationMachine initializes to 'sleep' screen
+4. useEffect fires: fetchConfig(backend) → resolves mode, term, contextText, program, runtime config
+5. RuntimeConfigContext provides merged config to all screens
 
-**Definition Persistence (Dual Path):**
+**Visitor Interaction Flow (Happy Path):**
 
-1. **Client-side (immediate):** `persistDefinition()` in `apps/tablet/src/lib/persist.ts` inserts directly to Supabase `definitions` table using anon key. Handles duplicate (23505 error code) gracefully since webhook may also insert.
-2. **Server-side (webhook):** `POST /webhook/definition` inserts via service role key, also handles session creation, print queue insertion, chain advancement, and embedding generation.
+1. Face detected or tap → WAKE action → welcome screen (3s auto)
+2. TIMER_3S → conditional routing based on program stages:
+   - If consent required: consent screen
+   - Else if textReading: text_display (karaoke reader synced to TTS)
+   - Else if termPrompt: term_prompt (show the term to explore)
+   - Else: conversation
+3. At conversation screen:
+   - useConversation hook: startConversation() → ElevenLabs WebSocket connect
+   - After ElevenLabs 'connected': startSession(backend) → Supabase insert + SET_SESSION_ID action
+   - useAudioCapture: if voice_chain program, startRecording() when EL connected
+   - usePortraitCapture: 5s into conversation, captureFrame() → portraitBlobRef
+   - ElevenLabs receives audio → STT → LLM (with injected system prompt) → TTS
+   - Transcript updates in real-time via onMessage callback
+   - Agent calls save_definition (client tool) → SDK delivers payload → handleDefinitionReceived callback
+4. handleDefinitionReceived:
+   - Creates Definition object (client-side ID)
+   - persistDefinition() → Supabase (fire-and-forget, no await)
+   - If portrait captured and program.stages.portrait: uploadPortrait() → POS server
+   - setTimeout 2s → DEFINITION_READY action
+5. DEFINITION_READY → synthesizing screen
+6. Screen transitions to definition (displays the definition)
+7. When screen === 'definition': persistPrintJob() → Supabase print_queue INSERT (fire-and-forget)
+8. Print bridge Realtime listener detects new row → renderAndPrint() → POS server
+9. User reads definition, taps to continue (or timeout) → printing screen
+10. Print bridge updates print_queue status → printing screen notices and auto-transitions to farewell
+11. Farewell screen (15s) → RESET action → back to sleep, CameraDetector running
 
-**State Management:**
-- Tablet state is a single `useReducer`-based state machine in `apps/tablet/src/hooks/useInstallationMachine.ts`
-- 9 screens: `sleep` -> `welcome` -> `text_display` -> `term_prompt` -> `conversation` -> `synthesizing` -> `definition` -> `printing` -> `farewell`
-- Actions are explicit discriminated unions (`InstallationAction`). Screen transitions are guarded: each action only fires from the expected screen.
-- No external state management library (no Redux, Zustand, etc.)
-- Conversation state (transcript, connection status) is managed by `useConversation` hook wrapping `@11labs/react`'s `useConversation`
+**Voice Chain Mode Variation:**
+
+- Before conversation: if program.id === 'voice_chain' and config.voice_chain provided:
+  - voiceChainRef.current has { voice_clone_id, speech_profile, icebreaker }
+  - useConversation receives voiceId, speechProfile, voiceChainIcebreaker as overrides
+  - ElevenLabs uses cloned voice + injected icebreaker for first message
+- During conversation: audioCapture records visitor separately (mic, not WebSocket)
+- After conversation (handleConversationEnd): if consent === true and audioBlob.size > 50KB:
+  - submitVoiceChainData(backend) → backend /api/voice-chain endpoint
+  - Backend: extract speech profile, submit audio to ElevenLabs cloning API
+  - Backend: compute embeddings, store in voice_chain_states table
+- On next visitor: fetchConfig re-fetches voice_chain state with cloned voice ID ready
+
+**Definition Persistence (Fire-and-Forget):**
+
+1. Tablet calls persistDefinition() (no await in UI code)
+2. Function catches all errors, logs, never throws
+3. If duplicate (RLS blocks exist): silently returns
+4. Backend webhook (optional) may also insert same definition via ElevenLabs callback
+5. Backend `/webhook/definition` endpoint receives definition from ElevenLabs agent
+6. Backend inserts and computes embeddings (OpenAI)
+
+**Print Job Flow (Supabase Realtime):**
+
+1. persistPrintJob() → print_queue INSERT with payload: { term, definition_text, citations, language, session_number, template, timestamp }
+2. Printer bridge subscribed to `print_queue` table, filter: `status=eq.pending`
+3. On INSERT event: processJob() → claim row (update status='printing'), validate payload via Zod
+4. For definition (type='text'): POST to print-renderer (cloud) → get rendered image → POST to POS server
+5. For portrait (type='portrait'): download pre-rendered from Storage → POST to POS server
+6. Update print_queue: status='done', printed_at=now
+7. Error case: catch, log, update status='error'
+8. Bridge never throws; logs all errors and continues
+
+**Config Fetch Fallback:**
+
+- If backend /api/config returns error or timeout:
+  - Tablet logs warning, uses DEFAULT_RUNTIME_CONFIG
+  - contextText becomes null
+  - AI has no text reference but program still runs
+  - This is intentional: installation should never crash on network failure
 
 ## Key Abstractions
 
-**Installation State Machine:**
-- Purpose: Controls the entire visitor journey through 9 sequential screens
-- File: `apps/tablet/src/hooks/useInstallationMachine.ts`
-- Pattern: `useReducer` with typed actions and guarded transitions. Each `case` checks `state.screen` before allowing transition.
-- State shape: `InstallationState` holds screen, mode, term, contextText, definition, language, sessionId
+**InstallationMachine (State Machine):**
+- Purpose: Single reducer managing all tablet state transitions
+- Examples: `apps/tablet/src/hooks/useInstallationMachine.ts`
+- Pattern: useReducer with 9 states (sleep, welcome, consent, text_display, term_prompt, conversation, synthesizing, definition, printing, farewell)
+- Invariant: screen can only transition via specific actions (WAKE, TIMER_3S, READY, etc.)
 
-**ElevenLabs Conversation Wrapper:**
-- Purpose: Wraps the ElevenLabs SDK's `useConversation` hook, adding role mapping (user/ai -> visitor/agent), transcript accumulation, system prompt injection, and client-side tool handling for `save_definition`
-- File: `apps/tablet/src/hooks/useConversation.ts`
-- Pattern: Composition hook. Builds system prompt dynamically from `apps/tablet/src/lib/systemPrompt.ts` and first message from `apps/tablet/src/lib/firstMessage.ts`. Injects both into ElevenLabs session via `overrides` at start time.
+**ConversationProgram (Program Registry):**
+- Purpose: Pluggable installation modes with different prompt logic, stages, and output formats
+- Examples: `packages/shared/src/programs/{aphorism,free-association,voice-chain}.ts`
+- Pattern: Static TypeScript objects implementing ConversationProgram interface; registered in REGISTRY
+- Usage: getProgram(id) looks up by string ID; falls back to 'aphorism' with warning
 
-**Supabase Client Factory:**
-- Purpose: Provides a fully typed Supabase client with the entire `Database` interface
-- File: `packages/shared/src/supabase.ts`
-- Pattern: `createSupabaseClient(url, key)` returns `SupabaseClient<Database>`. Backend uses service role key (bypasses RLS). Tablet uses anon key. Printer bridge uses either.
+**PromptParams (Dependency Injection for Prompts):**
+- Purpose: Pass dynamic values (term, contextText, language, speechProfile, voiceChainIcebreaker) to prompt builders
+- Pattern: All programs receive same params object; build system prompt and first message deterministically
+- Benefit: System prompt never hardcoded in ElevenLabs dashboard; always injected at session start via SDK callback
 
-**Zod Schema / Type System:**
-- Purpose: Runtime validation at all API boundaries, shared type definitions for all DB tables
-- File: `packages/shared/src/types.ts`
-- Pattern: Each DB table has a full Zod schema (e.g., `SessionSchema`), an inferred TypeScript type (e.g., `Session`), and an insert variant (e.g., `InsertSessionSchema` omitting `id`, `created_at`). API routes validate with `.safeParse()`.
+**Fire-and-Forget Persistence:**
+- Purpose: Never block UI on database writes; accept eventual consistency
+- Pattern: persistDefinition(), persistPrintJob(), persistTranscript() all catch errors internally, log, and return void
+- Benefit: Tablet never waits for Supabase; definitions and print jobs queue asynchronously
+- Risk: Errors silently swallowed; must debug via Supabase direct SQL query
 
-**KaraokeReader Component:**
-- Purpose: Renders text with word-by-word karaoke highlighting synced to audio playback
-- File: `packages/karaoke-reader/src/components/KaraokeReader.tsx`
-- Pattern: Composes `useKaraokeReader` (audio lifecycle + word sync) and `useAutoScroll` (scrolls to active word). Uses direct DOM manipulation via `data-kr-state` attributes for 60fps performance. Supports markdown (headers, strikethrough, lists).
+**Supabase Realtime (Event-Driven Bridge):**
+- Purpose: Decouple printer bridge from tablet; bridge runs on local Pi, subscribes autonomously
+- Pattern: Realtime subscription on print_queue; on INSERT → processJob()
+- Benefit: Print bridge doesn't need API; tablet doesn't need to know about printer
+- Constraint: Print bridge must be running; no print without it (design choice, not architecture)
 
-**Cache Adapter Interface:**
-- Purpose: Pluggable TTS cache storage
-- File: `packages/karaoke-reader/src/types.ts` (interface), `packages/karaoke-reader/src/cache.ts` (memory + localStorage), `apps/tablet/src/lib/supabaseCacheAdapter.ts` (Supabase-backed)
-- Pattern: `CacheAdapter` interface with `get(key)` and `set(key, value)`. Implementations never throw. The tablet uses a Supabase adapter backed by the `tts_cache` table.
+**ElevenLabs Tool Handling (save_definition):**
+- Purpose: Agent calls client-side tool; SDK delivers JSON payload to browser; tablet handles side effects
+- Pattern: onDisconnect callback with details.toolData → handleDefinitionReceived() → persistDefinition() + dispatch DEFINITION_RECEIVED
+- Benefit: AI doesn't wait for database; definition flows immediately from agent → tablet → Supabase
+- Constraint: Tool result discarded by ElevenLabs (doesn't wait for tablet response)
 
 ## Entry Points
 
-**Tablet App:**
-- Location: `apps/tablet/src/main.tsx`
-- Triggers: Browser loads the SPA (served by nginx in Docker, or Vite dev server)
-- Responsibilities: Mounts `<App />` which either renders `<Admin />` (if `?admin=true`) or `<InstallationApp />` (the visitor experience)
+**Tablet:**
+- Location: `apps/tablet/src/main.tsx` → `src/App.tsx`
+- Triggers: Browser load (kiosk mode) or ?admin=true (admin dashboard)
+- Responsibilities: Mount React app, initialize state machine, subscribe to config, render screens
 
-**Backend Server:**
-- Location: `apps/backend/src/index.ts`
-- Triggers: Node.js process start (`tsx watch` in dev, `node dist/index.js` in prod)
-- Responsibilities: Creates Hono app from `apps/backend/src/app.ts`, starts HTTP server on port 3001 (configurable via `PORT` env var)
+**Backend:**
+- Location: `apps/backend/src/index.ts` → `src/app.ts`
+- Triggers: Node process start (docker, pm2, or manual)
+- Responsibilities: Listen on port 3001, serve /api/* routes, webhook receiver
 
 **Printer Bridge:**
 - Location: `apps/printer-bridge/src/index.ts`
-- Triggers: Node.js process start, runs continuously on a local machine near the printer
-- Responsibilities: Drains pre-existing pending jobs, subscribes to Supabase Realtime for new `print_queue` INSERTs, processes each job by POSTing to POS server
+- Triggers: Node process start (local service on Pi, manually started)
+- Responsibilities: Load config, connect to Supabase, subscribe to print_queue, process jobs forever
 
-**Backend Route Definitions:**
-- `apps/backend/src/app.ts`: Mounts route groups: `/webhook` (ElevenLabs webhooks), `/api/session` (session management), `/api/config` (config + definitions + chain)
-- `apps/backend/src/routes/webhook.ts`: `POST /webhook/definition`, `POST /webhook/conversation-data`
-- `apps/backend/src/routes/session.ts`: `POST /api/session/start`
-- `apps/backend/src/routes/config.ts`: `GET /api/config`, `POST /api/config/update`, `GET /api/definitions`, `GET /api/chain`
+**ElevenLabs Webhooks:**
+- Location: `apps/backend/src/routes/webhook.ts` (POST /webhook/definition)
+- Triggers: ElevenLabs agent triggers save_definition tool
+- Responsibilities: Insert definition, compute embeddings, optionally update voice_chain state
 
 ## Error Handling
 
-**Strategy:** Never crash long-running services. Catch, log, continue. Non-critical failures are fire-and-forget.
+**Strategy:** Defensive; never crash a service; log errors; retry where sensible; accept silent failures for non-critical paths.
 
 **Patterns:**
-- **Backend webhook:** Each step (session lookup, definition insert, print queue insert, chain advance, embedding) is individually try/caught. A failure in one step does not prevent the next. Print queue insert failure is logged but does not fail the webhook response.
-- **Tablet persistence:** `persistDefinition()` and `persistTranscript()` in `apps/tablet/src/lib/persist.ts` are fire-and-forget (`void persistDefinition(...)`) -- errors logged, never block UI.
-- **Printer bridge:** `processJob()` never throws. Claim failures, validation failures, and print failures are all caught and logged. Job status updated to `error` in Supabase.
-- **Cache adapters:** All cache implementations swallow errors. `get()` returns null on failure. `set()` is fire-and-forget.
-- **ElevenLabs conversation:** `startConversation().catch()` and `endConversation().catch()` are caught at the call site in `App.tsx`. Connection errors logged via `onError` callback.
-- **Face detection:** Camera permission denial logs a warning and renders nothing. The tap-to-start fallback on SleepScreen remains functional.
-- **Zod validation:** API routes use `.safeParse()` and return 400 with structured error details on validation failure.
+
+**Tablet (UI never crashes):**
+- All async operations wrapped in .catch() with console.warn
+- useConversation fails gracefully: if EL disconnects without definition, synthesize fallback
+- Config fetch failure: fall back to defaults (contextText = null, mode = 'term_only')
+- Persistence failures (Supabase): logged but never block state transitions
+- Face detection failure: fallback to tap-to-start on sleep screen
+
+**Backend (Services stay alive):**
+- Global error handler: app.onError() logs and returns 500 JSON
+- Route handlers wrapped in try-catch; all errors caught and converted to HTTP responses
+- Supabase query failures: return appropriate HTTP status (404, 500) without throwing
+- ElevenLabs webhook: catch parse errors, log, return 400 with error message
+
+**Printer Bridge (Print job never crashes bridge):**
+- processJob() never throws; all errors caught in try-catch
+- Zod validation failure: log and mark job 'error' (don't retry)
+- POS server unreachable: catch and mark 'error'
+- Supabase Realtime disconnect: re-subscribe automatically (built into SDK)
+- Bridge continues listening for next job regardless of previous job outcome
 
 ## Cross-Cutting Concerns
 
-**Logging:** `console.log` / `console.warn` / `console.error` everywhere with bracketed prefixes: `[App]`, `[bridge]`, `[webhook/definition]`, `[chain]`, `[embeddings]`, `[MeinUngeheuer]`, `[Persist]`, `[TTS Cache]`. No external logging framework.
+**Logging:**
+- Console.log/warn/error throughout with [ComponentName] prefixes (e.g., [App], [bridge], [MeinUngeheuer])
+- Structured logging for debugging; no log aggregation configured
+- Backend uses Hono logger middleware for HTTP request logging
 
-**Validation:** Zod schemas at all API boundaries. Request bodies validated with `.safeParse()` in webhook and session routes. Config responses validated client-side in `apps/tablet/src/lib/api.ts`. Print payloads validated in printer bridge before processing.
+**Validation:**
+- Zod schemas at API boundaries: `configRoutes`, webhook handler, print job processor
+- PromptParams passed as plain object (not validated) — caller responsible
+- Database row types validated via Zod after fetch (PrintPayloadSchema, PortraitPrintPayloadSchema)
 
 **Authentication:**
-- Webhook routes: Protected by `WEBHOOK_SECRET` (query param or Bearer token). Skipped in dev (no secret configured).
-- Admin config mutation: Same `WEBHOOK_SECRET` via `adminMiddleware` in `apps/backend/src/routes/config.ts`.
-- Supabase: Backend uses service role key (full access, bypasses RLS). Tablet uses anon key with RLS policies.
-- ElevenLabs: Agent ID passed as config, API key for TTS via `VITE_ELEVENLABS_API_KEY` (client-side).
+- Tablet: Anonymous (Supabase anon key); RLS policies enforce read/write scopes
+- Backend: WEBHOOK_SECRET env var for mutation endpoints (Bearer token or query param)
+- Printer bridge: Service role key (trusted local service)
+- ElevenLabs: API key in .env (VITE_ELEVENLABS_API_KEY on tablet, retrieved at session init)
 
-**Three Operating Modes:**
-- **Mode A (text_term):** Visitor reads a text -> karaoke highlighting -> AI conversation about the text -> aphorism emerges from conversation (not predefined)
-- **Mode B (term_only):** A predefined term is shown -> AI conversation about the term -> definition produced
-- **Mode C (chain):** Previous visitor's definition is the starting text -> AI picks a concept -> conversation -> new definition -> becomes next visitor's context. Chain state managed in `chain_state` table.
+**Configuration:**
+- Tablet: Runtime config from backend /api/config merged with defaults
+- Backend: Supabase installation_config table + environment variables
+- Printer bridge: config.yaml + environment variables
+- Programs: Static TypeScript objects; not database-driven
 
 ---
 
-*Architecture analysis: 2026-03-08*
+*Architecture analysis: 2026-03-24*
