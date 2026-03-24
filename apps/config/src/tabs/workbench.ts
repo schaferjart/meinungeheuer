@@ -1001,6 +1001,10 @@ function buildSliceSection(body: HTMLElement): void {
       fd.append('dot_size', String(dotSize));
       fd.append('dither_mode', ditherMode);
       fd.append('paper_px', '576');
+      fd.append('contrast', String(contrast));
+      fd.append('brightness', String(brightness));
+      fd.append('sharpness', String(sharpness));
+      fd.append('blur', String(blur));
 
       const headers: Record<string, string> = {};
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
@@ -1182,8 +1186,7 @@ function buildPortraitSection(body: HTMLElement): void {
       const fd = new FormData();
       fd.append('file', uploadedFile);
       fd.append('dither_mode', ditherMode);
-      fd.append('blur', String(blur));
-      fd.append('skip_transform', 'true');
+      fd.append('blur_radius', String(blur));
 
       const headers: Record<string, string> = {};
       if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;
@@ -1259,8 +1262,7 @@ function buildPortraitSection(body: HTMLElement): void {
         const fd = new FormData();
         fd.append('file', uploadedFile);
         fd.append('dither_mode', ditherMode);
-        fd.append('blur', String(blur));
-        fd.append('skip_transform', 'true');
+        fd.append('blur_radius', String(blur));
 
         const headers: Record<string, string> = {};
         if (creds.renderApiKey) headers['X-Api-Key'] = creds.renderApiKey;

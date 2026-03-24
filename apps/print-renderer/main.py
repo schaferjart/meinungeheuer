@@ -114,41 +114,54 @@ def render_dither(
 def render_portrait_preview(
     file: UploadFile = File(...),
     dither_mode: str = Form("bayer"),
-    blur: float = Form(10),
+    blur_radius: float = Form(10),
     contrast: float = Form(1.3),
     brightness: float = Form(1.0),
     sharpness: float = Form(1.2),
-    skip_transform: bool = Form(True),
 ):
-    """Face detection + zoom crops + dither. Returns base64 PNGs for each crop.
+    """Dither a portrait image and return base64 PNG crops.
+    Uses face detection if mediapipe is available, falls back to simple crops.
     No style transfer, no Storage upload, no print_queue insert.
     """
-    from pipeline import detect_face_landmarks, compute_zoom_crops, process_portrait
-
     image_bytes = file.file.read()
-    config = get_render_config(_CONFIG_PATH)
-    portrait_cfg = config.get("portrait", {})
+    img = open_image(image_bytes)
+    paper_px = get_paper_px(get_render_config(_CONFIG_PATH))
 
-    # Override with request params
-    local_cfg = {
-        "paper_px": config.get("_meta", {}).get("paper_px", 576),
-        "contrast": contrast,
-        "brightness": brightness,
-        "sharpness": sharpness,
-        "blur": blur,
-        "dither_mode": dither_mode,
-    }
+    # Try face detection for smart crops, fall back to simple divisions
+    crops_to_render = []
+    try:
+        from pipeline import detect_face_landmarks, compute_zoom_crops
+        landmarks = detect_face_landmarks(img)
+        if landmarks:
+            zooms = compute_zoom_crops(img, landmarks)
+        else:
+            # No face found — simple quadrant crops
+            w, h = img.size
+            zooms = [
+                {"name": "full", "box": (0, 0, w, h)},
+                {"name": "top", "box": (0, 0, w, h // 2)},
+                {"name": "center", "box": (w // 4, h // 4, 3 * w // 4, 3 * h // 4)},
+                {"name": "bottom", "box": (0, h // 2, w, h)},
+            ]
+        for z in zooms:
+            cropped = img.crop(z["box"])
+            crops_to_render.append(cropped)
+    except Exception:
+        # Mediapipe not available — just use the full image
+        crops_to_render.append(img)
 
-    results = process_portrait(image_bytes, local_cfg)
-
-    import base64 as b64mod
-    crops = []
-    for name, img in results:
+    # Dither each crop
+    results = []
+    for cropped in crops_to_render:
+        grey = _prepare(cropped, paper_px, contrast, brightness, sharpness)
+        if blur_radius > 0:
+            grey = _apply_blur(grey, blur_radius)
+        dithered = dither_image(grey, dither_mode)
         buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        crops.append(b64mod.b64encode(buf.getvalue()).decode())
+        dithered.save(buf, format="PNG")
+        results.append(base64.b64encode(buf.getvalue()).decode())
 
-    return {"crops": crops, "count": len(crops)}
+    return {"crops": results, "count": len(results)}
 
 
 # ── Markdown rendering ────────────────────────────────────
@@ -277,6 +290,10 @@ def render_slice(
     label_position: str = Form("above"),
     dither_mode: str | None = Form(None),
     paper_px: int | None = Form(None),
+    contrast: float | None = Form(None),
+    brightness: float | None = Form(None),
+    sharpness: float | None = Form(None),
+    blur: float | None = Form(None),
 ):
     """Slice an image into strips, optionally dither, add labels, return as base64 PNGs."""
     from PIL import Image, ImageDraw, ImageFont
@@ -313,18 +330,18 @@ def render_slice(
             y1 = h if i == count - 1 else (i + 1) * strip_h
             strips.append(img.crop((0, y0, w, y1)))
 
-    # Dither + label each strip
+    # Dither + label each strip (request params override config)
+    _contrast = contrast if contrast is not None else halftone_cfg.get("contrast", 1.3)
+    _brightness = brightness if brightness is not None else halftone_cfg.get("brightness", 1.0)
+    _sharpness = sharpness if sharpness is not None else halftone_cfg.get("sharpness", 1.2)
+    _blur = blur if blur is not None else halftone_cfg.get("blur", 0)
+
     results = []
     for i, strip in enumerate(strips):
-        # Dither
-        contrast = halftone_cfg.get("contrast", 1.3)
-        brightness = halftone_cfg.get("brightness", 1.0)
-        sharpness = halftone_cfg.get("sharpness", 1.2)
-        blur = halftone_cfg.get("blur", 0)
 
-        grey = _prepare(strip, _paper_px, contrast, brightness, sharpness)
-        if blur:
-            grey = _apply_blur(grey, blur)
+        grey = _prepare(strip, _paper_px, _contrast, _brightness, _sharpness)
+        if _blur:
+            grey = _apply_blur(grey, _blur)
         dithered = dither_image(grey, _dither_mode)
 
         # Convert to RGB for labeling
