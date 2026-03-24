@@ -139,3 +139,26 @@ Before marking any component done:
 2. Core logic has tests
 3. Error states handled (network failure, API timeout, missing data)
 4. Component works independently (testable without other components running)
+
+## Pi Constraints
+
+- **RAM is extremely limited.** `npx tsc` and full `pnpm install` will OOM-kill. Use `pnpm install --filter <pkg>... --ignore-scripts` and commit compiled `packages/shared/dist/` to git so the Pi never needs to build.
+- After changing `packages/shared/src/`, always: `pnpm --filter @meinungeheuer/shared build` then `git add -f packages/shared/dist/` (dist is gitignored, needs `-f`).
+- To update Pi: `git pull origin main && sudo systemctl restart printer-bridge pos-server`. No build step.
+
+## Coolify Deployment
+
+- **Lockfile:** After adding any dependency, run `pnpm install` locally and commit `pnpm-lock.yaml`. Coolify uses `--frozen-lockfile` and will fail otherwise.
+- **Base Directory:** Apps that depend on `packages/shared/` (tablet, backend) need Base Directory `/`. Self-contained apps (print-renderer) can use their own dir.
+- **Inject Build Args:** Only enable for Vite apps (tablet, archive) that need `VITE_*` at build time. Disable for runtime-only services (backend, print-renderer).
+
+## Print-Renderer Config
+
+- The renderer reads config from **Supabase `render_config` table first**, falling back to `config.yaml`. When adding a new template: (1) add JSONB column to `render_config`, (2) add mapping in `supabase_config.py` `_row_to_config()`, (3) add section to `config.yaml` as fallback.
+- The bridge needs `RENDER_API_KEY` in its `.env` or render requests return 401 silently.
+
+## Silent Failures to Watch For
+
+- **RLS blocks are silent.** If data doesn't appear, check RLS policies. The `turns` table needed a public SELECT policy for the archive to read conversations.
+- **Zod strips unknown fields.** If you add a field to a payload but don't add it to the Zod schema in `packages/shared/src/types.ts`, it gets dropped during validation. This breaks silently.
+- **`persistTranscript` and `persistDefinition` swallow errors.** When debugging data issues, query Supabase directly.
