@@ -1481,6 +1481,18 @@ function buildPortraitSection(body: HTMLElement): void {
 
   // ── DOM ────────────────────────────────────────────────────────────────────
 
+  // Portrait Tuner link
+  const tunerLinkRow = document.createElement('div');
+  tunerLinkRow.style.cssText = 'margin-bottom:10px;font-size:11px;font-family:monospace;';
+  const tunerLink = document.createElement('a');
+  tunerLink.href = '/portrait-tuner.html';
+  tunerLink.target = '_blank';
+  tunerLink.rel = 'noopener';
+  tunerLink.textContent = 'Open Portrait Crop Tuner (browser-side MediaPipe)';
+  tunerLink.style.cssText = 'color:#0f0;text-decoration:underline;cursor:pointer;';
+  tunerLinkRow.appendChild(tunerLink);
+  body.appendChild(tunerLinkRow);
+
   // File chooser
   body.appendChild(makeFileField('Portrait photo', 'image/*', (f) => {
     uploadedFile = f;
