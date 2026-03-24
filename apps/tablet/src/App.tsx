@@ -244,7 +244,7 @@ function InstallationApp() {
     (reason: string) => {
       console.log('[App] Conversation ended, reason:', reason);
       // Persist transcript to Supabase
-      void persistTranscript(conversationIdRef.current, transcriptRef.current);
+      void persistTranscript(state.sessionId, transcriptRef.current);
 
       // Voice chain: stop recording and submit captured data to backend.
       // Only submit if the visitor explicitly consented to voice cloning.
