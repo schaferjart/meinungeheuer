@@ -17,18 +17,15 @@ body { background: #000; color: #eee; font-family: monospace; height: 100vh; dis
 
 #main { display: flex; flex: 1 1 0; min-height: 0; }
 
-/* ── Left: canvas panel ───────────────────────────────── */
 #canvas-panel {
   flex: 1 1 0; min-width: 0; display: flex; align-items: center;
   justify-content: center; position: relative; background: #0a0a0a; overflow: hidden;
 }
 #main-canvas { display: block; max-width: 100%; max-height: 100%; object-fit: contain; cursor: default; }
-#canvas-panel.no-image { background: #0a0a0a; }
 #upload-hint {
   position: absolute; color: #333; font-size: 13px; text-align: center; pointer-events: none;
 }
 
-/* ── Right: controls panel ────────────────────────────── */
 #controls {
   width: 300px; flex: 0 0 300px; background: #0d0d0d; border-left: 1px solid #1a1a1a;
   display: flex; flex-direction: column; overflow-y: auto;
@@ -39,17 +36,25 @@ body { background: #000; color: #eee; font-family: monospace; height: 100vh; dis
 .ctrl-section h2 { font-size: 10px; color: #555; letter-spacing: 0.1em; text-transform: uppercase; padding-bottom: 4px; border-bottom: 1px solid #1a1a1a; }
 
 .file-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.file-row label { font-size: 11px; color: #aaa; }
 input[type=file] { font-size: 11px; color: #aaa; background: #111; border: 1px solid #333; padding: 3px 6px; cursor: pointer; }
 input[type=file]::file-selector-button { background: #1a1a1a; color: #ccc; border: 1px solid #333; padding: 2px 8px; cursor: pointer; font-family: monospace; font-size: 11px; }
 
-.slider-row { display: flex; flex-direction: column; gap: 2px; }
-.slider-row .lbl { font-size: 11px; color: #aaa; display: flex; justify-content: space-between; }
-.slider-row .lbl span { color: #0f0; font-weight: bold; }
-input[type=range] { width: 100%; accent-color: #0f0; cursor: pointer; }
+.param-row { display: flex; align-items: center; gap: 6px; }
+.param-label { font-size: 11px; color: #aaa; width: 110px; flex: 0 0 110px; }
+.param-slider { flex: 1 1 0; accent-color: #0f0; cursor: pointer; }
+.param-number {
+  width: 62px; flex: 0 0 62px;
+  background: #0a0a0a; border: 1px solid #2a2a2a; color: #0f0;
+  font-family: monospace; font-size: 11px; padding: 2px 4px;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.param-number::-webkit-inner-spin-button,
+.param-number::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 
-.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #aaa; cursor: pointer; }
-.checkbox-row input { accent-color: #0f0; cursor: pointer; }
+.zoom-color-0 { color: #fff; }
+.zoom-color-1 { color: #ff0; }
+.zoom-color-2 { color: #0ff; }
+.zoom-color-3 { color: #f0f; }
 
 #no-face-msg { font-size: 11px; color: #c80; display: none; line-height: 1.4; }
 
@@ -59,7 +64,6 @@ input[type=range] { width: 100%; accent-color: #0f0; cursor: pointer; }
   line-height: 1.5;
 }
 
-/* ── Bottom: crop previews ────────────────────────────── */
 #preview-strip {
   flex: 0 0 auto; border-top: 1px solid #1a1a1a; background: #050505;
   display: flex; align-items: flex-end; gap: 0; overflow-x: auto; padding: 10px 14px;
@@ -68,11 +72,8 @@ input[type=range] { width: 100%; accent-color: #0f0; cursor: pointer; }
   display: flex; flex-direction: column; align-items: center; gap: 5px;
   flex: 0 0 auto; margin-right: 16px;
 }
-.crop-item canvas { display: block; background: #111; border: 1px solid #222; border-radius: 2px; }
-.crop-item .crop-lbl {
-  font-size: 9px; color: #444; text-align: center; text-transform: uppercase;
-  letter-spacing: 0.07em; line-height: 1.4;
-}
+.crop-item canvas { display: block; background: #111; border: 1px solid #222; }
+.crop-item .crop-lbl { font-size: 9px; color: #444; text-align: center; text-transform: uppercase; letter-spacing: 0.07em; }
 </style>
 </head>
 <body>
@@ -101,79 +102,57 @@ input[type=range] { width: 100%; accent-color: #0f0; cursor: pointer; }
       </div>
 
       <div class="ctrl-section">
-        <h2>Options</h2>
-        <label class="checkbox-row">
-          <input type="checkbox" id="show-overlay" checked>
-          Show landmark overlay
-        </label>
-      </div>
+        <h2>Global — height (all zooms share top/bottom)</h2>
 
-      <div class="ctrl-section">
-        <h2>Center</h2>
-        <div class="slider-row">
-          <div class="lbl">center_x <span id="v_cx">0.50</span></div>
-          <input type="range" id="s_cx" min="0" max="100" value="50" step="1">
+        <div class="param-row">
+          <div class="param-label">pad_top</div>
+          <input type="range" class="param-slider" id="sl-pad-top" min="0" max="1000" value="300" step="1">
+          <input type="number" class="param-number" id="num-pad-top" value="0.30" step="0.01" min="0">
         </div>
-      </div>
 
-      <div class="ctrl-section">
-        <h2>Zoom 0 — Full Portrait</h2>
-        <div class="slider-row">
-          <div class="lbl">pad_top <span id="v_z0pt">0.30</span></div>
-          <input type="range" id="s_z0pt" min="0" max="1000" value="30" step="1">
+        <div class="param-row">
+          <div class="param-label">pad_bottom</div>
+          <input type="range" class="param-slider" id="sl-pad-bottom" min="0" max="1000" value="800" step="1">
+          <input type="number" class="param-number" id="num-pad-bottom" value="0.80" step="0.01" min="0">
         </div>
-        <div class="slider-row">
-          <div class="lbl">pad_bottom <span id="v_z0pb">0.80</span></div>
-          <input type="range" id="s_z0pb" min="0" max="1000" value="80" step="1">
-        </div>
-        <div class="slider-row">
-          <div class="lbl">aspect <span id="v_z0ar">0.67</span></div>
-          <input type="range" id="s_z0ar" min="1" max="1000" value="67" step="1">
+
+        <div class="param-row">
+          <div class="param-label">center_x</div>
+          <input type="range" class="param-slider" id="sl-center-x" min="0" max="1000" value="500" step="1">
+          <input type="number" class="param-number" id="num-center-x" value="0.50" step="0.001" min="0" max="1">
         </div>
       </div>
 
       <div class="ctrl-section">
-        <h2>Zoom 1 — Face Close-up</h2>
-        <div class="slider-row">
-          <div class="lbl">pad_top <span id="v_z1pt">0.15</span></div>
-          <input type="range" id="s_z1pt" min="0" max="1000" value="15" step="1">
+        <h2>Per-zoom width (fraction of crop height)</h2>
+
+        <div class="param-row">
+          <div class="param-label zoom-color-0">zoom 0 width</div>
+          <input type="range" class="param-slider" id="sl-w0" min="1" max="1000" value="670" step="1">
+          <input type="number" class="param-number" id="num-w0" value="0.67" step="0.01" min="0.01">
         </div>
-        <div class="slider-row">
-          <div class="lbl">pad_bottom <span id="v_z1pb">0.15</span></div>
-          <input type="range" id="s_z1pb" min="0" max="1000" value="15" step="1">
+
+        <div class="param-row">
+          <div class="param-label zoom-color-1">zoom 1 width</div>
+          <input type="range" class="param-slider" id="sl-w1" min="1" max="1000" value="500" step="1">
+          <input type="number" class="param-number" id="num-w1" value="0.50" step="0.01" min="0.01">
         </div>
-        <div class="slider-row">
-          <div class="lbl">aspect <span id="v_z1ar">1.00</span></div>
-          <input type="range" id="s_z1ar" min="1" max="1000" value="100" step="1">
+
+        <div class="param-row">
+          <div class="param-label zoom-color-2">zoom 2 width</div>
+          <input type="range" class="param-slider" id="sl-w2" min="1" max="1000" value="300" step="1">
+          <input type="number" class="param-number" id="num-w2" value="0.30" step="0.01" min="0.01">
+        </div>
+
+        <div class="param-row">
+          <div class="param-label zoom-color-3">zoom 3 width</div>
+          <input type="range" class="param-slider" id="sl-w3" min="1" max="1000" value="150" step="1">
+          <input type="number" class="param-number" id="num-w3" value="0.15" step="0.01" min="0.01">
         </div>
       </div>
 
       <div class="ctrl-section">
-        <h2>Zoom 2 — Eyes</h2>
-        <div class="slider-row">
-          <div class="lbl">eye_pad <span id="v_z2ep">0.50</span></div>
-          <input type="range" id="s_z2ep" min="1" max="1000" value="50" step="1">
-        </div>
-        <div class="slider-row">
-          <div class="lbl">aspect <span id="v_z2ar">2.00</span></div>
-          <input type="range" id="s_z2ar" min="1" max="1000" value="200" step="1">
-        </div>
-      </div>
-
-      <div class="ctrl-section">
-        <h2>Zoom 3 — Vertical Strip</h2>
-        <div class="slider-row">
-          <div class="lbl">strip_width <span id="v_z3sw">0.25</span></div>
-          <input type="range" id="s_z3sw" min="1" max="1000" value="25" step="1">
-        </div>
-        <div class="slider-row">
-          <div class="lbl">offset_x <span id="v_z3ox">0.00</span></div>
-          <input type="range" id="s_z3ox" min="-500" max="500" value="0" step="1">
-        </div>
-      </div>
-
-      <div class="ctrl-section">
-        <h2>config.yaml</h2>
+        <h2>YAML output</h2>
         <div id="config-output"></div>
       </div>
 
@@ -183,558 +162,424 @@ input[type=range] { width: 100%; accent-color: #0f0; cursor: pointer; }
 
 <div id="preview-strip">
   <div class="crop-item">
-    <canvas id="prev-z0" width="100" height="150"></canvas>
-    <div class="crop-lbl">Zoom 0<br>Full Portrait</div>
+    <canvas id="prev-0" width="80" height="120"></canvas>
+    <div class="crop-lbl zoom-color-0">Zoom 0</div>
   </div>
   <div class="crop-item">
-    <canvas id="prev-z1" width="100" height="100"></canvas>
-    <div class="crop-lbl">Zoom 1<br>Face</div>
+    <canvas id="prev-1" width="80" height="120"></canvas>
+    <div class="crop-lbl zoom-color-1">Zoom 1</div>
   </div>
   <div class="crop-item">
-    <canvas id="prev-z2" width="160" height="80"></canvas>
-    <div class="crop-lbl">Zoom 2<br>Eyes</div>
+    <canvas id="prev-2" width="80" height="120"></canvas>
+    <div class="crop-lbl zoom-color-2">Zoom 2</div>
   </div>
   <div class="crop-item">
-    <canvas id="prev-z3" width="60" height="150"></canvas>
-    <div class="crop-lbl">Zoom 3<br>Strip</div>
+    <canvas id="prev-3" width="80" height="120"></canvas>
+    <div class="crop-lbl zoom-color-3">Zoom 3</div>
   </div>
 </div>
 
 <script type="module">
-import { FaceLandmarker, FilesetResolver }
-  from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+// ── MediaPipe CDN ──────────────────────────────────────────────────────────
+import { FaceDetector, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
 
-// ── State ──────────────────────────────────────────────────────────────────────
+const STATUS = document.getElementById('detect-status');
+const MAIN_CANVAS = document.getElementById('main-canvas');
+const CTX = MAIN_CANVAS.getContext('2d');
+const UPLOAD_HINT = document.getElementById('upload-hint');
+const NO_FACE_MSG = document.getElementById('no-face-msg');
+const CONFIG_OUT = document.getElementById('config-output');
+const PREVIEW_CANVASES = [0,1,2,3].map(i => document.getElementById(`prev-${i}`));
 
-let faceLandmarker = null;
-let sourceImg = null;         // HTMLImageElement
-let imgW = 0, imgH = 0;
+// ── State ──────────────────────────────────────────────────────────────────
+let sourceImage = null; // HTMLImageElement
+let faceDetector = null;
+let mpReady = false;
 
-// Landmark state (pixel coords on natural image)
-let lm = null;
-/*
-  lm = {
-    forehead_top: [x, y],
-    chin: [x, y],
-    nose_tip: [x, y],
-    left_eye_outer: [x, y],
-    left_eye_inner: [x, y],
-    right_eye_inner: [x, y],
-    right_eye_outer: [x, y],
-    left_eye_center: [x, y],
-    right_eye_center: [x, y],
-    face_center_x: number,
-  }
-*/
-
-// Drag state
-let dragging = null;          // null | { key: string, offsetX: number, offsetY: number }
-
-// ── DOM refs ───────────────────────────────────────────────────────────────────
-const mainCanvas   = document.getElementById('main-canvas');
-const ctx          = mainCanvas.getContext('2d');
-const fileInput    = document.getElementById('file-input');
-const showOverlayEl= document.getElementById('show-overlay');
-const noFaceMsg    = document.getElementById('no-face-msg');
-const uploadHint   = document.getElementById('upload-hint');
-const detectStatus = document.getElementById('detect-status');
-const configOutput = document.getElementById('config-output');
-
-const prevZ0 = document.getElementById('prev-z0');
-const prevZ1 = document.getElementById('prev-z1');
-const prevZ2 = document.getElementById('prev-z2');
-const prevZ3 = document.getElementById('prev-z3');
-
-// Slider + value display map
-const sliders = {
-  z0pt: { s: document.getElementById('s_z0pt'), v: document.getElementById('v_z0pt'), scale: 100 },
-  z0pb: { s: document.getElementById('s_z0pb'), v: document.getElementById('v_z0pb'), scale: 100 },
-  z0ar: { s: document.getElementById('s_z0ar'), v: document.getElementById('v_z0ar'), scale: 100 },
-  z1pt: { s: document.getElementById('s_z1pt'), v: document.getElementById('v_z1pt'), scale: 100 },
-  z1pb: { s: document.getElementById('s_z1pb'), v: document.getElementById('v_z1pb'), scale: 100 },
-  z1ar: { s: document.getElementById('s_z1ar'), v: document.getElementById('v_z1ar'), scale: 100 },
-  z2ep: { s: document.getElementById('s_z2ep'), v: document.getElementById('v_z2ep'), scale: 100 },
-  z2ar: { s: document.getElementById('s_z2ar'), v: document.getElementById('v_z2ar'), scale: 100 },
-  z3sw: { s: document.getElementById('s_z3sw'), v: document.getElementById('v_z3sw'), scale: 100 },
-  z3ox: { s: document.getElementById('s_z3ox'), v: document.getElementById('v_z3ox'), scale: 100 },
-  cx:   { s: document.getElementById('s_cx'),   v: document.getElementById('v_cx'),   scale: 100 },
+// Landmarks in image-pixel coordinates
+const lm = {
+  forehead: { x: 0, y: 0 },
+  chin:     { x: 0, y: 0 },
+  eyeL:     { x: 0, y: 0 },
+  eyeR:     { x: 0, y: 0 },
 };
 
-function getParams() {
-  return {
-    z0: { padTop: parseInt(sliders.z0pt.s.value)/100, padBottom: parseInt(sliders.z0pb.s.value)/100, aspect: parseInt(sliders.z0ar.s.value)/100 },
-    z1: { padTop: parseInt(sliders.z1pt.s.value)/100, padBottom: parseInt(sliders.z1pb.s.value)/100, aspect: parseInt(sliders.z1ar.s.value)/100 },
-    z2: { eyePad: parseInt(sliders.z2ep.s.value)/100, aspect: parseInt(sliders.z2ar.s.value)/100 },
-    z3: { stripWidth: parseInt(sliders.z3sw.s.value)/100, offsetX: parseInt(sliders.z3ox.s.value)/100 },
-    centerXOverride: parseInt(sliders.cx.s.value) / 100,
-    showOverlay: showOverlayEl.checked,
-  };
+// Sliders/numbers are the source of truth for all params
+// but we also keep JS copies for fast use in render
+let padTop    = 0.30;
+let padBottom = 0.80;
+let centerX   = 0.50;
+const widths  = [0.67, 0.50, 0.30, 0.15];
+
+// ── DOM refs ───────────────────────────────────────────────────────────────
+const SL  = { padTop: document.getElementById('sl-pad-top'),   padBottom: document.getElementById('sl-pad-bottom'),   centerX: document.getElementById('sl-center-x'),   w: [0,1,2,3].map(i => document.getElementById(`sl-w${i}`)) };
+const NUM = { padTop: document.getElementById('num-pad-top'),  padBottom: document.getElementById('num-pad-bottom'),  centerX: document.getElementById('num-center-x'),  w: [0,1,2,3].map(i => document.getElementById(`num-w${i}`)) };
+
+// ── Param binding helpers ──────────────────────────────────────────────────
+// scale: slider integer → float   (sliderVal / scale = float)
+function bindParam(sl, num, scale, onChange) {
+  sl.addEventListener('input', () => {
+    const v = sl.value / scale;
+    num.value = v.toFixed(scale >= 1000 ? 3 : 2);
+    onChange(v);
+  });
+  num.addEventListener('change', () => {
+    const v = parseFloat(num.value);
+    if (isNaN(v)) return;
+    sl.value = Math.round(v * scale);
+    onChange(v);
+  });
+  num.addEventListener('input', () => {
+    const v = parseFloat(num.value);
+    if (isNaN(v)) return;
+    sl.value = Math.round(v * scale);
+    onChange(v);
+  });
 }
 
-// ── MediaPipe init ─────────────────────────────────────────────────────────────
-
-async function initMediaPipe() {
-  try {
-    detectStatus.textContent = 'Loading MediaPipe…';
-    const filesetResolver = await FilesetResolver.forVisionTasks(
-      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
-    );
-    faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-      baseOptions: {
-        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-        delegate: 'GPU',
-      },
-      runningMode: 'IMAGE',
-      numFaces: 1,
-    });
-    detectStatus.textContent = 'MediaPipe ready';
-    detectStatus.style.color = '#0f0';
-  } catch (e) {
-    detectStatus.textContent = 'MediaPipe failed — check console';
-    detectStatus.style.color = '#c44';
-    console.error('MediaPipe init error:', e);
-  }
-}
-
-function detectFaceLandmarks(imgEl) {
-  if (!faceLandmarker) return null;
-  let result;
-  try {
-    result = faceLandmarker.detect(imgEl);
-  } catch (e) {
-    console.warn('FaceLandmarker.detect error:', e);
-    return null;
-  }
-  if (!result.faceLandmarks || result.faceLandmarks.length === 0) return null;
-
-  const raw = result.faceLandmarks[0];
-  const w = imgEl.naturalWidth;
-  const h = imgEl.naturalHeight;
-
-  const px = (idx) => [Math.round(raw[idx].x * w), Math.round(raw[idx].y * h)];
-
-  const lec = [
-    Math.round((raw[33].x + raw[133].x) / 2 * w),
-    Math.round((raw[33].y + raw[133].y) / 2 * h),
-  ];
-  const rec = [
-    Math.round((raw[362].x + raw[263].x) / 2 * w),
-    Math.round((raw[362].y + raw[263].y) / 2 * h),
-  ];
-  const fcx = Math.round((raw[33].x + raw[133].x + raw[362].x + raw[263].x) / 4 * w);
-
-  return {
-    forehead_top: px(10),
-    chin: px(152),
-    nose_tip: px(4),
-    left_eye_outer: px(33),
-    left_eye_inner: px(133),
-    right_eye_inner: px(362),
-    right_eye_outer: px(263),
-    left_eye_center: lec,
-    right_eye_center: rec,
-    face_center_x: fcx,
-  };
-}
-
-// ── Default landmark fallback (vertically centered face placeholders) ──────────
-
-function makeFallbackLandmarks(w, h) {
-  const cx = Math.round(w / 2);
-  const fhY = Math.round(h * 0.22);
-  const chY = Math.round(h * 0.72);
-  const eyeY = Math.round(h * 0.38);
-  const eyeSpread = Math.round(w * 0.14);
-  return {
-    forehead_top: [cx, fhY],
-    chin: [cx, chY],
-    nose_tip: [cx, Math.round(h * 0.50)],
-    left_eye_outer:  [cx - eyeSpread, eyeY],
-    left_eye_inner:  [cx - Math.round(eyeSpread * 0.4), eyeY],
-    right_eye_inner: [cx + Math.round(eyeSpread * 0.4), eyeY],
-    right_eye_outer: [cx + eyeSpread, eyeY],
-    left_eye_center: [cx - Math.round(eyeSpread * 0.7), eyeY],
-    right_eye_center:[cx + Math.round(eyeSpread * 0.7), eyeY],
-    face_center_x: cx,
-  };
-}
-
-// ── Crop math ──────────────────────────────────────────────────────────────────
-
-function computeZ0(p) {
-  if (!lm) return null;
-  const fhY = lm.forehead_top[1], chY = lm.chin[1];
-  const faceH = chY - fhY;
-  const cx = lm.face_center_x;
-  const top    = Math.max(0, Math.round(fhY - faceH * p.padTop));
-  const bottom = Math.min(imgH, Math.round(chY + faceH * p.padBottom));
-  const cropH  = Math.max(1, bottom - top);
-  const cropW  = Math.max(1, Math.round(cropH * p.aspect));
-  const left   = Math.max(0, Math.min(Math.round(cx - cropW / 2), imgW - cropW));
-  return { left, top, width: Math.min(cropW, imgW - left), height: cropH };
-}
-
-function computeZ1(p) {
-  if (!lm) return null;
-  const fhY = lm.forehead_top[1], chY = lm.chin[1];
-  const faceH = chY - fhY;
-  const cx = lm.face_center_x;
-  const top    = Math.max(0, Math.round(fhY - faceH * p.padTop));
-  const bottom = Math.min(imgH, Math.round(chY + faceH * p.padBottom));
-  const cropH  = Math.max(1, bottom - top);
-  const cropW  = Math.max(1, Math.round(cropH * p.aspect));
-  const left   = Math.max(0, Math.min(Math.round(cx - cropW / 2), imgW - cropW));
-  return { left, top, width: Math.min(cropW, imgW - left), height: cropH };
-}
-
-function computeZ2(p) {
-  if (!lm) return null;
-  const lec = lm.left_eye_center, rec = lm.right_eye_center;
-  const eyeSpanX = Math.abs(rec[0] - lec[0]);
-  const halfW    = Math.round(eyeSpanX * p.eyePad);
-  const eyeCy    = Math.round((lec[1] + rec[1]) / 2);
-  const cx       = lm.face_center_x;
-  const cropW    = Math.max(1, halfW * 2);
-  const cropH    = Math.max(1, Math.round(cropW / p.aspect));
-  const left     = Math.max(0, Math.min(Math.round(cx - cropW / 2), imgW - cropW));
-  const top      = Math.max(0, Math.min(Math.round(eyeCy - cropH / 2), imgH - cropH));
-  return { left, top, width: Math.min(cropW, imgW - left), height: Math.min(cropH, imgH - top) };
-}
-
-function computeZ3(p) {
-  const sw   = Math.max(1, Math.round(imgW * p.stripWidth));
-  const basX = lm ? lm.face_center_x : Math.round(imgW / 2);
-  const cx   = basX + Math.round(imgW * p.offsetX);
-  const left = Math.max(0, Math.min(Math.round(cx - sw / 2), imgW - sw));
-  return { left, top: 0, width: Math.min(sw, imgW - left), height: imgH };
-}
-
-// ── Canvas scale helper ────────────────────────────────────────────────────────
-// Returns { scaleX, scaleY, offsetX, offsetY } from natural image coords to canvas display coords
-
-function getCanvasScale() {
-  const dw = mainCanvas.width;
-  const dh = mainCanvas.height;
-  if (!imgW || !imgH || !dw || !dh) return { scaleX: 1, scaleY: 1, offX: 0, offY: 0 };
-  const scale = Math.min(dw / imgW, dh / imgH);
-  const drawW = imgW * scale;
-  const drawH = imgH * scale;
-  return {
-    scaleX: scale,
-    scaleY: scale,
-    offX: Math.round((dw - drawW) / 2),
-    offY: Math.round((dh - drawH) / 2),
-  };
-}
-
-// Convert natural-image pixel to canvas display pixel
-function imgToCanvas(px, py) {
-  const s = getCanvasScale();
-  return [s.offX + px * s.scaleX, s.offY + py * s.scaleY];
-}
-
-// Convert canvas display pixel to natural-image pixel
-function canvasToImg(cx, cy) {
-  const s = getCanvasScale();
-  return [Math.round((cx - s.offX) / s.scaleX), Math.round((cy - s.offY) / s.scaleY)];
-}
-
-// ── Main render ────────────────────────────────────────────────────────────────
-
-function render() {
-  if (!sourceImg) return;
-  const p = getParams();
-
-  // Update value displays
-  sliders.z0pt.v.textContent = (parseInt(sliders.z0pt.s.value)/100).toFixed(2);
-  sliders.z0pb.v.textContent = (parseInt(sliders.z0pb.s.value)/100).toFixed(2);
-  sliders.z0ar.v.textContent = (parseInt(sliders.z0ar.s.value)/100).toFixed(2);
-  sliders.z1pt.v.textContent = (parseInt(sliders.z1pt.s.value)/100).toFixed(2);
-  sliders.z1pb.v.textContent = (parseInt(sliders.z1pb.s.value)/100).toFixed(2);
-  sliders.z1ar.v.textContent = (parseInt(sliders.z1ar.s.value)/100).toFixed(2);
-  sliders.z2ep.v.textContent = (parseInt(sliders.z2ep.s.value)/100).toFixed(2);
-  sliders.z2ar.v.textContent = (parseInt(sliders.z2ar.s.value)/100).toFixed(2);
-  sliders.z3sw.v.textContent = (parseInt(sliders.z3sw.s.value)/100).toFixed(2);
-  sliders.z3ox.v.textContent = (parseInt(sliders.z3ox.s.value)/100).toFixed(2);
-  sliders.cx.v.textContent   = (parseInt(sliders.cx.s.value)/100).toFixed(2);
-
-  // Override face_center_x with slider (slider is 0–1 as fraction of image width)
-  if (lm) {
-    lm.face_center_x = Math.round(p.centerXOverride * imgW);
-  }
-
-  // Fit image on main canvas preserving aspect ratio
-  const panelEl = document.getElementById('canvas-panel');
-  const maxW = panelEl.clientWidth  || 600;
-  const maxH = panelEl.clientHeight || 500;
-  const scale = Math.min(maxW / imgW, maxH / imgH, 1);
-  mainCanvas.width  = Math.round(imgW * scale);
-  mainCanvas.height = Math.round(imgH * scale);
-  ctx.drawImage(sourceImg, 0, 0, mainCanvas.width, mainCanvas.height);
-
-  if (p.showOverlay && lm) {
-    drawOverlay(p);
-  }
-
-  // Crop previews
-  const c0 = computeZ0(p.z0);
-  const c1 = computeZ1(p.z1);
-  const c2 = computeZ2(p.z2);
-  const c3 = computeZ3(p.z3);
-
-  drawCropPreview(prevZ0, c0);
-  drawCropPreview(prevZ1, c1);
-  drawCropPreview(prevZ2, c2);
-  drawCropPreview(prevZ3, c3);
-
-  // Config output
-  configOutput.textContent =
-    `zoom_0:\n  pad_top: ${p.z0.padTop.toFixed(2)}\n  pad_bottom: ${p.z0.padBottom.toFixed(2)}\n  aspect: ${p.z0.aspect.toFixed(2)}\n` +
-    `zoom_1:\n  pad_top: ${p.z1.padTop.toFixed(2)}\n  pad_bottom: ${p.z1.padBottom.toFixed(2)}\n  aspect: ${p.z1.aspect.toFixed(2)}\n` +
-    `zoom_2:\n  eye_pad: ${p.z2.eyePad.toFixed(2)}\n  aspect: ${p.z2.aspect.toFixed(2)}\n` +
-    `zoom_3:\n  strip_width: ${p.z3.stripWidth.toFixed(2)}\n  offset_x: ${p.z3.offsetX.toFixed(2)}`;
-}
-
-function drawOverlay(p) {
-  const s = getCanvasScale();
-
-  function dot(x, y, color, r = 4) {
-    const [cx, cy] = imgToCanvas(x, y);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  function hline(y, color) {
-    const [, cy] = imgToCanvas(0, y);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(0, cy);
-    ctx.lineTo(mainCanvas.width, cy);
-    ctx.stroke();
-  }
-
-  function vline(x, color) {
-    const [cx] = imgToCanvas(x, 0);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([5, 5]);
-    ctx.beginPath();
-    ctx.moveTo(cx, 0);
-    ctx.lineTo(cx, mainCanvas.height);
-    ctx.stroke();
-  }
-
-  ctx.setLineDash([]);
-
-  // Forehead / chin dashed lines (green)
-  hline(lm.forehead_top[1], 'rgba(0,255,0,0.5)');
-  hline(lm.chin[1], 'rgba(0,255,0,0.5)');
-
-  // Eye horizontal line (blue)
-  const eyeY = Math.round((lm.left_eye_center[1] + lm.right_eye_center[1]) / 2);
-  hline(eyeY, 'rgba(80,160,255,0.45)');
-
-  // Face center vertical (red)
-  vline(lm.face_center_x, 'rgba(255,40,40,0.45)');
-
-  ctx.setLineDash([]);
-
-  // Landmark dots
-  dot(lm.forehead_top[0],    lm.forehead_top[1],    'rgba(0,255,80,0.85)',  5);
-  dot(lm.chin[0],            lm.chin[1],            'rgba(0,255,80,0.85)',  5);
-  dot(lm.nose_tip[0],        lm.nose_tip[1],        'rgba(255,80,80,0.85)', 4);
-  dot(lm.left_eye_center[0], lm.left_eye_center[1], 'rgba(80,160,255,0.85)',4);
-  dot(lm.right_eye_center[0],lm.right_eye_center[1],'rgba(80,160,255,0.85)',4);
-  dot(lm.left_eye_outer[0],  lm.left_eye_outer[1],  'rgba(80,200,255,0.6)', 3);
-  dot(lm.left_eye_inner[0],  lm.left_eye_inner[1],  'rgba(80,200,255,0.6)', 3);
-  dot(lm.right_eye_outer[0], lm.right_eye_outer[1], 'rgba(80,200,255,0.6)', 3);
-  dot(lm.right_eye_inner[0], lm.right_eye_inner[1], 'rgba(80,200,255,0.6)', 3);
-
-  // Labels
-  ctx.font = `${Math.max(9, Math.round(10 * s.scaleX))}px monospace`;
-  ctx.fillStyle = 'rgba(0,255,80,0.7)';
-  const [fhCx, fhCy] = imgToCanvas(lm.forehead_top[0], lm.forehead_top[1]);
-  ctx.fillText('forehead #10', fhCx + 6, fhCy - 3);
-  const [chCx, chCy] = imgToCanvas(lm.chin[0], lm.chin[1]);
-  ctx.fillText('chin #152', chCx + 6, chCy + 12);
-
-  // Draw crop box outlines on main canvas
-  function drawCropRect(box, color) {
-    if (!box) return;
-    const [bx, by] = imgToCanvas(box.left, box.top);
-    const bw = box.width  * s.scaleX;
-    const bh = box.height * s.scaleY;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 3]);
-    ctx.strokeRect(bx, by, bw, bh);
-    ctx.setLineDash([]);
-  }
-
-  drawCropRect(computeZ0(p.z0), 'rgba(255,255,0,0.35)');
-  drawCropRect(computeZ1(p.z1), 'rgba(255,165,0,0.35)');
-  drawCropRect(computeZ2(p.z2), 'rgba(0,200,255,0.35)');
-  drawCropRect(computeZ3(p.z3), 'rgba(200,80,255,0.35)');
-}
-
-function drawCropPreview(canvas, box) {
-  const pCtx = canvas.getContext('2d');
-  if (!sourceImg || !box || box.width < 1 || box.height < 1) {
-    pCtx.clearRect(0, 0, canvas.width, canvas.height);
-    return;
-  }
-  // Scale to fit preview canvas
-  const scaleX = canvas.width  / box.width;
-  const scaleY = canvas.height / box.height;
-  const sc = Math.min(scaleX, scaleY);
-  const dw = Math.round(box.width  * sc);
-  const dh = Math.round(box.height * sc);
-  const dx = Math.round((canvas.width  - dw) / 2);
-  const dy = Math.round((canvas.height - dh) / 2);
-  pCtx.clearRect(0, 0, canvas.width, canvas.height);
-  pCtx.drawImage(sourceImg, box.left, box.top, box.width, box.height, dx, dy, dw, dh);
-}
-
-// ── Landmark drag ──────────────────────────────────────────────────────────────
-
-const DRAGGABLE_KEYS = [
-  'forehead_top', 'chin', 'nose_tip',
-  'left_eye_center', 'right_eye_center',
-  'left_eye_outer', 'left_eye_inner',
-  'right_eye_outer', 'right_eye_inner',
-];
-
-function getHitLandmark(canvasX, canvasY) {
-  if (!lm) return null;
-  const HIT_RADIUS = 10; // pixels on canvas
-  let best = null, bestDist = HIT_RADIUS;
-  for (const key of DRAGGABLE_KEYS) {
-    const pt = key === 'face_center_x' ? null : lm[key];
-    if (!pt) continue;
-    const [cx, cy] = imgToCanvas(pt[0], pt[1]);
-    const d = Math.hypot(canvasX - cx, canvasY - cy);
-    if (d < bestDist) { bestDist = d; best = key; }
-  }
-  return best;
-}
-
-mainCanvas.addEventListener('mousemove', (e) => {
-  const rect = mainCanvas.getBoundingClientRect();
-  const cx = e.clientX - rect.left;
-  const cy = e.clientY - rect.top;
-
-  if (dragging) {
-    const [ix, iy] = canvasToImg(cx, cy);
-    const key = dragging.key;
-    const prev = lm[key];
-    lm[key] = [
-      Math.max(0, Math.min(imgW, ix)),
-      Math.max(0, Math.min(imgH, iy)),
-    ];
-    // Sync face_center_x when an eye point moves
-    if (key.includes('eye')) {
-      lm.face_center_x = Math.round(
-        (lm.left_eye_outer[0] + lm.left_eye_inner[0] + lm.right_eye_inner[0] + lm.right_eye_outer[0]) / 4
-      );
-    }
-    // Sync face_center_x from forehead/chin x
-    if (key === 'forehead_top' || key === 'chin') {
-      // Keep face_center_x on the vertical axis of forehead/chin midpoint
-      lm.face_center_x = Math.round((lm.forehead_top[0] + lm.chin[0]) / 2);
-    }
-    render();
-    return;
-  }
-
-  const hit = getHitLandmark(cx, cy);
-  mainCanvas.style.cursor = hit ? 'grab' : 'default';
+bindParam(SL.padTop, NUM.padTop, 100, v => { padTop = v; render(); });
+bindParam(SL.padBottom, NUM.padBottom, 100, v => { padBottom = v; render(); });
+bindParam(SL.centerX, NUM.centerX, 1000, v => { centerX = v; render(); });
+[0,1,2,3].forEach(i => {
+  bindParam(SL.w[i], NUM.w[i], 100, v => { widths[i] = v; render(); });
 });
 
-mainCanvas.addEventListener('mousedown', (e) => {
-  if (!lm) return;
-  const rect = mainCanvas.getBoundingClientRect();
-  const cx = e.clientX - rect.left;
-  const cy = e.clientY - rect.top;
-  const hit = getHitLandmark(cx, cy);
-  if (hit) {
-    dragging = { key: hit };
-    mainCanvas.style.cursor = 'grabbing';
-    e.preventDefault();
-  }
-});
-
-window.addEventListener('mouseup', () => {
-  if (dragging) {
-    dragging = null;
-    mainCanvas.style.cursor = 'default';
-  }
-});
-
-// ── File load ──────────────────────────────────────────────────────────────────
-
-fileInput.addEventListener('change', async (e) => {
+// ── File input ─────────────────────────────────────────────────────────────
+document.getElementById('file-input').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
-
-  detectStatus.textContent = 'Loading image…';
-  detectStatus.style.color = '#aaa';
-
   const url = URL.createObjectURL(file);
   const img = new Image();
-  img.onload = async () => {
-    sourceImg = img;
-    imgW = img.naturalWidth;
-    imgH = img.naturalHeight;
-    uploadHint.style.display = 'none';
-
-    detectStatus.textContent = 'Detecting face…';
-    detectStatus.style.color = '#aaa';
-
-    // Must wait for MediaPipe to be ready
-    if (!faceLandmarker) {
-      detectStatus.textContent = 'MediaPipe not ready yet — try again';
-      detectStatus.style.color = '#c80';
-      lm = makeFallbackLandmarks(imgW, imgH);
-      noFaceMsg.style.display = 'block';
-    } else {
-      const detected = detectFaceLandmarks(img);
-      if (detected) {
-        lm = detected;
-        noFaceMsg.style.display = 'none';
-        detectStatus.textContent = `Face detected — ${imgW}×${imgH}`;
-        detectStatus.style.color = '#0f0';
-        // Sync center slider to detected face center
-        sliders.cx.s.value = String(Math.round(lm.face_center_x / imgW * 100));
-      } else {
-        lm = makeFallbackLandmarks(imgW, imgH);
-        noFaceMsg.style.display = 'block';
-        detectStatus.textContent = `No face detected — ${imgW}×${imgH}`;
-        detectStatus.style.color = '#c80';
-      }
-    }
-
-    render();
+  img.onload = () => {
+    sourceImage = img;
+    UPLOAD_HINT.style.display = 'none';
+    if (mpReady) detectFace(img).then(render);
+    else render();
   };
   img.src = url;
 });
 
-// ── Slider events ──────────────────────────────────────────────────────────────
+// ── Crop computation ───────────────────────────────────────────────────────
+function computeCrop(imgW, imgH, padTop, padBottom, centerX, widthRatio) {
+  const fhY = lm.forehead.y;
+  const chY = lm.chin.y;
+  const faceH = chY - fhY;
 
-for (const key of Object.keys(sliders)) {
-  sliders[key].s.addEventListener('input', render);
+  const top    = Math.max(0, Math.round(fhY - faceH * padTop));
+  const bottom = Math.min(imgH, Math.round(chY + faceH * padBottom));
+  const cropH  = bottom - top;
+
+  const cropW = Math.round(cropH * widthRatio);
+  const cx    = Math.round(centerX * imgW);
+  const left  = Math.max(0, Math.min(cx - Math.floor(cropW / 2), imgW - cropW));
+
+  return { left, top, width: Math.min(cropW, imgW), height: cropH };
 }
-showOverlayEl.addEventListener('change', render);
 
-// ── Window resize: re-render to fit panel ─────────────────────────────────────
+// ── Render ─────────────────────────────────────────────────────────────────
+const ZOOM_COLORS = ['#ffffff', '#ffff00', '#00ffff', '#ff00ff'];
 
-window.addEventListener('resize', () => { if (sourceImg) render(); });
+function render() {
+  if (!sourceImage) return;
 
-// ── Boot ───────────────────────────────────────────────────────────────────────
+  const iW = sourceImage.naturalWidth;
+  const iH = sourceImage.naturalHeight;
 
+  // Fit canvas into panel
+  const panel = MAIN_CANVAS.parentElement;
+  const panelW = panel.clientWidth;
+  const panelH = panel.clientHeight;
+  const scale = Math.min(panelW / iW, panelH / iH, 1);
+  const displayW = Math.round(iW * scale);
+  const displayH = Math.round(iH * scale);
+
+  MAIN_CANVAS.width  = displayW;
+  MAIN_CANVAS.height = displayH;
+
+  CTX.drawImage(sourceImage, 0, 0, displayW, displayH);
+
+  // Darken base slightly
+  CTX.fillStyle = 'rgba(0,0,0,0.18)';
+  CTX.fillRect(0, 0, displayW, displayH);
+  CTX.drawImage(sourceImage, 0, 0, displayW, displayH);
+
+  // Compute crops (in image coords)
+  const crops = widths.map(w => computeCrop(iW, iH, padTop, padBottom, centerX, w));
+
+  // Shared top/bottom lines (in display coords)
+  const topY    = Math.round(crops[0].top    * scale);
+  const bottomY = Math.round((crops[0].top + crops[0].height) * scale);
+
+  // Draw shared horizontal dashed lines
+  CTX.save();
+  CTX.strokeStyle = 'rgba(255,255,255,0.5)';
+  CTX.lineWidth = 1;
+  CTX.setLineDash([6, 4]);
+  CTX.beginPath(); CTX.moveTo(0, topY);    CTX.lineTo(displayW, topY);    CTX.stroke();
+  CTX.beginPath(); CTX.moveTo(0, bottomY); CTX.lineTo(displayW, bottomY); CTX.stroke();
+  CTX.restore();
+
+  // Draw per-zoom vertical edges
+  crops.forEach((c, i) => {
+    const x1 = Math.round(c.left * scale);
+    const x2 = Math.round((c.left + c.width) * scale);
+    CTX.save();
+    CTX.strokeStyle = ZOOM_COLORS[i];
+    CTX.lineWidth = 1.5;
+    CTX.setLineDash([5, 3]);
+    CTX.beginPath(); CTX.moveTo(x1, topY); CTX.lineTo(x1, bottomY); CTX.stroke();
+    CTX.beginPath(); CTX.moveTo(x2, topY); CTX.lineTo(x2, bottomY); CTX.stroke();
+    // Label
+    CTX.setLineDash([]);
+    CTX.fillStyle = ZOOM_COLORS[i];
+    CTX.font = '10px monospace';
+    CTX.fillText(`z${i}`, x1 + 3, topY + 12 + i * 13);
+    CTX.restore();
+  });
+
+  // Center-x vertical red dashed line
+  const cxPx = Math.round(centerX * displayW);
+  CTX.save();
+  CTX.strokeStyle = 'rgba(255,60,60,0.7)';
+  CTX.lineWidth = 1;
+  CTX.setLineDash([3, 5]);
+  CTX.beginPath(); CTX.moveTo(cxPx, 0); CTX.lineTo(cxPx, displayH); CTX.stroke();
+  CTX.restore();
+
+  // Landmark dots
+  const dots = [
+    { pt: lm.forehead, color: '#0f0',  label: 'forehead' },
+    { pt: lm.chin,     color: '#0f0',  label: 'chin' },
+    { pt: lm.eyeL,     color: '#08f',  label: 'eyeL' },
+    { pt: lm.eyeR,     color: '#08f',  label: 'eyeR' },
+  ];
+  dots.forEach(({ pt, color, label }) => {
+    const dx = Math.round(pt.x * scale);
+    const dy = Math.round(pt.y * scale);
+    CTX.save();
+    CTX.beginPath();
+    CTX.arc(dx, dy, 5, 0, Math.PI * 2);
+    CTX.fillStyle = color;
+    CTX.globalAlpha = 0.85;
+    CTX.fill();
+    CTX.strokeStyle = '#000';
+    CTX.lineWidth = 1;
+    CTX.stroke();
+    CTX.restore();
+  });
+
+  // Update preview canvases
+  updatePreviews(crops, iW, iH);
+
+  // Update YAML
+  updateYaml();
+}
+
+function updatePreviews(crops, iW, iH) {
+  const PREV_H = 140;
+  crops.forEach((c, i) => {
+    const canvas = PREVIEW_CANVASES[i];
+    if (c.height <= 0 || c.width <= 0) return;
+    const scale = PREV_H / c.height;
+    const pw = Math.max(1, Math.round(c.width * scale));
+    canvas.width  = pw;
+    canvas.height = PREV_H;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(sourceImage, c.left, c.top, c.width, c.height, 0, 0, pw, PREV_H);
+  });
+}
+
+function updateYaml() {
+  CONFIG_OUT.textContent = `portrait_crops:\n  pad_top: ${padTop.toFixed(2)}\n  pad_bottom: ${padBottom.toFixed(2)}\n  center_x: ${centerX.toFixed(3)}\n  zoom_0_width: ${widths[0].toFixed(2)}\n  zoom_1_width: ${widths[1].toFixed(2)}\n  zoom_2_width: ${widths[2].toFixed(2)}\n  zoom_3_width: ${widths[3].toFixed(2)}`;
+}
+
+// ── MediaPipe face detection ───────────────────────────────────────────────
+async function initMediaPipe() {
+  try {
+    STATUS.textContent = 'Loading MediaPipe…';
+    const vision = await FilesetResolver.forVisionTasks(
+      'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+    );
+    faceDetector = await FaceDetector.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite',
+        delegate: 'GPU'
+      },
+      runningMode: 'IMAGE',
+      minDetectionConfidence: 0.5
+    });
+    mpReady = true;
+    STATUS.textContent = 'MediaPipe ready';
+    if (sourceImage) detectFace(sourceImage).then(render);
+  } catch (err) {
+    STATUS.textContent = 'MediaPipe failed';
+    console.error(err);
+  }
+}
+
+async function detectFace(img) {
+  if (!faceDetector) return;
+  try {
+    const result = faceDetector.detect(img);
+    if (!result.detections || result.detections.length === 0) {
+      NO_FACE_MSG.style.display = 'block';
+      STATUS.textContent = 'No face detected';
+      setDefaultLandmarks(img);
+      return;
+    }
+    NO_FACE_MSG.style.display = 'none';
+    STATUS.textContent = 'Face detected';
+
+    const det = result.detections[0];
+    const kps = det.keypoints; // [rightEye, leftEye, nose, mouth, rightEar, leftEar]
+    const box = det.boundingBox;
+
+    const iW = img.naturalWidth;
+    const iH = img.naturalHeight;
+
+    // MediaPipe keypoints are normalized 0-1
+    const eyeR = kps[0]; // right eye (from viewer's perspective = face's left)
+    const eyeL = kps[1]; // left eye
+    const nose  = kps[2];
+
+    lm.eyeR = { x: eyeR.x * iW, y: eyeR.y * iH };
+    lm.eyeL = { x: eyeL.x * iW, y: eyeL.y * iH };
+
+    // Estimate forehead and chin from bounding box
+    const faceTop    = box.originY;
+    const faceBottom = box.originY + box.height;
+    const faceH      = box.height;
+
+    lm.forehead = { x: (box.originX + box.width / 2), y: faceTop + faceH * 0.05 };
+    lm.chin     = { x: (box.originX + box.width / 2), y: faceBottom - faceH * 0.02 };
+
+    // Auto-set center_x from eye midpoint
+    const midX = (lm.eyeL.x + lm.eyeR.x) / 2 / iW;
+    setCenterX(midX);
+
+  } catch (err) {
+    console.error('Detection error:', err);
+    setDefaultLandmarks(img);
+  }
+}
+
+function setDefaultLandmarks(img) {
+  const iW = img.naturalWidth;
+  const iH = img.naturalHeight;
+  lm.forehead = { x: iW * 0.5, y: iH * 0.15 };
+  lm.chin     = { x: iW * 0.5, y: iH * 0.75 };
+  lm.eyeL     = { x: iW * 0.42, y: iH * 0.35 };
+  lm.eyeR     = { x: iW * 0.58, y: iH * 0.35 };
+}
+
+function setCenterX(v) {
+  centerX = Math.max(0, Math.min(1, v));
+  SL.centerX.value = Math.round(centerX * 1000);
+  NUM.centerX.value = centerX.toFixed(3);
+}
+
+// ── Landmark dragging ──────────────────────────────────────────────────────
+let dragState = null; // { key, startX, startY }
+
+function hitTest(mx, my, scale) {
+  const pts = { forehead: lm.forehead, chin: lm.chin, eyeL: lm.eyeL, eyeR: lm.eyeR };
+  for (const [key, pt] of Object.entries(pts)) {
+    const dx = mx - pt.x * scale;
+    const dy = my - pt.y * scale;
+    if (Math.sqrt(dx*dx + dy*dy) < 10) return key;
+  }
+  // Check center-x line
+  const iW = sourceImage ? sourceImage.naturalWidth : 1;
+  const panel = MAIN_CANVAS.parentElement;
+  const displayScale = Math.min(panel.clientWidth / iW, panel.clientHeight / (sourceImage ? sourceImage.naturalHeight : 1), 1);
+  const cxPx = centerX * MAIN_CANVAS.width;
+  if (Math.abs(mx - cxPx) < 8) return 'centerX';
+  return null;
+}
+
+MAIN_CANVAS.addEventListener('mousedown', e => {
+  if (!sourceImage) return;
+  const rect = MAIN_CANVAS.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const scale = MAIN_CANVAS.width / sourceImage.naturalWidth;
+  const hit = hitTest(mx, my, scale);
+  if (hit) {
+    dragState = { key: hit, scale };
+    e.preventDefault();
+  }
+});
+
+window.addEventListener('mousemove', e => {
+  if (!dragState || !sourceImage) return;
+  const rect = MAIN_CANVAS.getBoundingClientRect();
+  const mx = (e.clientX - rect.left);
+  const my = (e.clientY - rect.top);
+  const s  = dragState.scale;
+  const imgX = mx / s;
+  const imgY = my / s;
+  const iW = sourceImage.naturalWidth;
+  const iH = sourceImage.naturalHeight;
+
+  if (dragState.key === 'forehead') {
+    lm.forehead.y = Math.max(0, Math.min(iH, imgY));
+    syncPadSliders();
+  } else if (dragState.key === 'chin') {
+    lm.chin.y = Math.max(0, Math.min(iH, imgY));
+    syncPadSliders();
+  } else if (dragState.key === 'eyeL') {
+    lm.eyeL.x = Math.max(0, Math.min(iW, imgX));
+    lm.eyeL.y = Math.max(0, Math.min(iH, imgY));
+    const midX = (lm.eyeL.x + lm.eyeR.x) / 2 / iW;
+    setCenterX(midX);
+  } else if (dragState.key === 'eyeR') {
+    lm.eyeR.x = Math.max(0, Math.min(iW, imgX));
+    lm.eyeR.y = Math.max(0, Math.min(iH, imgY));
+    const midX = (lm.eyeL.x + lm.eyeR.x) / 2 / iW;
+    setCenterX(midX);
+  } else if (dragState.key === 'centerX') {
+    setCenterX(imgX / iW);
+  }
+  render();
+});
+
+window.addEventListener('mouseup', () => { dragState = null; });
+
+// Update cursor on hover
+MAIN_CANVAS.addEventListener('mousemove', e => {
+  if (dragState) return;
+  if (!sourceImage) return;
+  const rect = MAIN_CANVAS.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const scale = MAIN_CANVAS.width / sourceImage.naturalWidth;
+  const hit = hitTest(mx, my, scale);
+  MAIN_CANVAS.style.cursor = hit ? 'grab' : 'default';
+});
+
+// ── Sync sliders when landmarks are dragged ────────────────────────────────
+function syncPadSliders() {
+  if (!sourceImage) return;
+  const iH = sourceImage.naturalHeight;
+  const fhY = lm.forehead.y;
+  const chY = lm.chin.y;
+  const faceH = chY - fhY;
+  if (faceH <= 0) return;
+
+  const top    = computeCrop(sourceImage.naturalWidth, iH, padTop, padBottom, centerX, widths[0]).top;
+  const bottom = top + computeCrop(sourceImage.naturalWidth, iH, padTop, padBottom, centerX, widths[0]).height;
+
+  // Reverse-solve pad_top and pad_bottom from current landmark positions
+  // top = fhY - faceH * padTop  =>  padTop = (fhY - top) / faceH
+  // But we don't know top without padTop... so we just keep padTop/padBottom as-is
+  // and only update the landmark positions, then re-render.
+  // The sliders reflect pad_top/pad_bottom as fractions; dragging forehead/chin
+  // is mainly for repositioning the reference face, not for changing the pad fractions.
+  // (This is the expected UX: drag to reposition face detection reference, not to change padding.)
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+updateYaml();
 initMediaPipe();
 </script>
 </body>
