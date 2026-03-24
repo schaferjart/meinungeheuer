@@ -3,15 +3,18 @@ import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@meinungeheuer
 import type { Definition, ConversationProgram } from '@meinungeheuer/shared';
 
 /** Build a partial Definition object from conversation results (client-side only). */
-function makeClientDefinition(d: {
-  term: string;
-  definition_text: string;
-  citations: string[];
-  language: string;
-}): Definition {
+function makeClientDefinition(
+  d: {
+    term: string;
+    definition_text: string;
+    citations: string[];
+    language: string;
+  },
+  sessionId: string | null = null,
+): Definition {
   return {
     id: crypto.randomUUID(),
-    session_id: null,
+    session_id: sessionId,
     term: d.term,
     definition_text: d.definition_text,
     citations: d.citations,
@@ -26,7 +29,7 @@ import { useInstallationMachine } from './hooks/useInstallationMachine';
 import { useConversation } from './hooks/useConversation';
 import { usePortraitCapture } from './hooks/usePortraitCapture';
 import { useAudioCapture } from './hooks/useAudioCapture';
-import { fetchConfig, submitVoiceChainData } from './lib/api';
+import { fetchConfig, startSession, submitVoiceChainData } from './lib/api';
 import type { ConfigResponse } from './lib/api';
 import { RuntimeConfigContext, DEFAULT_RUNTIME_CONFIG } from './lib/configContext';
 import type { RuntimeConfig } from './lib/configContext';
@@ -180,7 +183,7 @@ function InstallationApp() {
     dispatch({ type: 'FACE_LOST' });
   }, [dispatch]);
 
-  const { screen, mode, term, contextText, definition, language } = state;
+  const { screen, mode, term, contextText, definition, language, parentSessionId } = state;
 
   // Re-fetch voice chain state each time we return to sleep (between visitors)
   const prevScreenRef = useRef(screen);
@@ -208,9 +211,15 @@ function InstallationApp() {
   // -----------------------------------------------------------------------
   // ElevenLabs conversation hook
   // -----------------------------------------------------------------------
+
+  // Ref so that async callbacks always read the latest session ID even after
+  // the session row is created asynchronously following conversation start.
+  const sessionIdRef = useRef(state.sessionId);
+  sessionIdRef.current = state.sessionId;
+
   const handleDefinitionReceived = useCallback(
     (result: { term: string; definition_text: string; citations: string[]; language: string }) => {
-      const def = makeClientDefinition(result);
+      const def = makeClientDefinition(result, sessionIdRef.current);
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
 
@@ -228,7 +237,7 @@ function InstallationApp() {
 
       setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
     },
-    [dispatch, state.sessionId, uploadPortrait],
+    [dispatch, uploadPortrait],
   );
 
   const handleConversationEnd = useCallback(
@@ -252,7 +261,7 @@ function InstallationApp() {
           if (audioBlob && audioBlob.size > 50_000) {
             void submitVoiceChainData(BACKEND_URL, {
               audio: audioBlob,
-              sessionId: state.sessionId ?? 'unknown',
+              sessionId: sessionIdRef.current ?? 'unknown',
               transcript: transcriptRef.current.map((t) => ({ role: t.role, content: t.content })),
               portraitBlurredUrl: null,
             });
@@ -267,17 +276,20 @@ function InstallationApp() {
       if (state.screen === 'conversation' && !state.definition) {
         dispatch({
           type: 'DEFINITION_RECEIVED',
-          definition: makeClientDefinition({
-            term,
-            definition_text: 'Die Unterhaltung wurde beendet.',
-            citations: [],
-            language,
-          }),
+          definition: makeClientDefinition(
+            {
+              term,
+              definition_text: 'Die Unterhaltung wurde beendet.',
+              citations: [],
+              language,
+            },
+            sessionIdRef.current,
+          ),
         });
         setTimeout(() => dispatch({ type: 'DEFINITION_READY' }), 2000);
       }
     },
-    [dispatch, state.screen, state.definition, state.sessionId, state.voiceCloneConsent, term, language, stopRecording],
+    [dispatch, state.screen, state.definition, state.voiceCloneConsent, term, language, stopRecording],
   );
 
   const voiceChain = voiceChainRef.current;
@@ -311,19 +323,37 @@ function InstallationApp() {
   const transcriptRef = useRef(transcript);
   transcriptRef.current = transcript;
 
-  // Start the ElevenLabs session when we enter the conversation screen
+  // Start the ElevenLabs session when we enter the conversation screen.
+  // After ElevenLabs connects, persist a session row to Supabase with the
+  // elevenlabs_conversation_id so that definitions and turns can be linked.
   const conversationStartedRef = useRef(false);
   useEffect(() => {
     if (screen === 'conversation' && !conversationStartedRef.current) {
       conversationStartedRef.current = true;
-      // Generate a session ID for tracking this conversation
-      if (!state.sessionId) {
-        dispatch({ type: 'SET_SESSION_ID', id: crypto.randomUUID() });
-      }
       console.log('[App] Starting ElevenLabs conversation...');
-      startConversation().catch((err) => {
-        console.error('[App] Failed to start conversation:', err);
-      });
+      startConversation()
+        .then((elevenLabsConversationId) => {
+          console.log('[App] ElevenLabs conversation started, id:', elevenLabsConversationId);
+          // Persist the session row to Supabase. Fire-and-forget — failure is logged
+          // but never blocks the conversation or UI transitions.
+          startSession(BACKEND_URL, {
+            mode,
+            term,
+            context_text: contextText ?? null,
+            parent_session_id: parentSessionId,
+            elevenlabs_conversation_id: elevenLabsConversationId,
+          })
+            .then((res) => {
+              console.log('[App] Session persisted, id:', res.session_id);
+              dispatch({ type: 'SET_SESSION_ID', id: res.session_id });
+            })
+            .catch((err: unknown) => {
+              console.warn('[App] Session persist failed (non-fatal):', err);
+            });
+        })
+        .catch((err: unknown) => {
+          console.error('[App] Failed to start conversation:', err);
+        });
     }
     // Reset the flag when we leave the conversation screen
     if (screen !== 'conversation') {
