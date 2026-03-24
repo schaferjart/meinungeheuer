@@ -1,63 +1,86 @@
-# MeinUngeheuer MVP — End-to-End Installation
+# MeinUngeheuer — Art Installation
 
 ## What This Is
 
-Art installation: spoken AI dialogue with visitors, producing personalized glossary definitions printed on thermal cards with visitor portrait. Tablet mounted on wall detects visitors via face recognition (no touch), reads text aloud with karaoke highlighting, then AI challenges their understanding via voice conversation. Distilled definition + visitor face printed on thermal card.
+Art installation: spoken AI dialogue with visitors, producing personalized glossary definitions printed on thermal cards with visitor portrait. Wall-mounted tablet detects visitors via face recognition (no touch), reads text aloud with karaoke highlighting, then AI challenges their understanding via voice conversation. Distilled definition + visitor face printed on thermal card.
 
 ## Core Value
 
 A fully autonomous, unattended art installation where the entire loop — detect visitor → read text → converse → distill → print — runs without human intervention.
 
-## Context
+## Current State
 
-Brownfield project with substantial existing code:
-- **Tablet app** (React/Vite) — state machine, screens, ElevenLabs SDK integration, karaoke text reader, face detection
-- **Backend** (Hono) — config API, webhook handler, chain state management
-- **Printer bridge** (Node.js) — Supabase Realtime listener, HTTP relay to POS server
-- **Shared package** — types, Supabase client, constants
-- **POS thermal printer** (Python, separate repo) — ESC/POS rendering, dithering, portrait pipeline, Flask HTTP server
+Shipped **v2.0** (2026-03-24) — End-to-End Autonomous Installation.
+
+**What works:**
+- Full autonomous loop: face detect → wake → text display → conversation → save_definition → print → portrait → sleep
+- Two conversation programs: aphorism (text_term with Kleist text) and free_association (no text, no portrait)
+- Program switching via DB config (`installation_config.program`)
+- PWA kiosk mode with face-triggered wake/sleep
+- Thermal print pipeline: tablet → Supabase print_queue → printer-bridge → POS server → ESC/POS printer
+- Portrait capture from shared camera stream, uploaded to POS server
+
+**Tech stack:** React/Vite tablet, Hono backend, Node.js printer-bridge, Python POS server, Supabase (PostgreSQL + Realtime), ElevenLabs Conversational AI SDK.
+
+**Codebase:** ~20,083 LOC TypeScript, 271 commits, 207+ tests passing.
 
 ## Requirements
 
-### Critical Bugs
-- Bot prematurely ends conversations — agent calls save_definition too early or ElevenLabs platform timeout triggers disconnect. Must investigate actual cause (linked conversation: conv_1301kk6w6hh3fxs80gcrqzp3v5bf).
-- Fullscreen mode on Safari — may show video controls or fail to enter proper fullscreen. Must be browser-agnostic.
+### Validated
 
-### Integration Gaps
-- Face detection exists but may not work on target tablet (camera permissions, Safari). Must work autonomously — no touch allowed.
-- Printer bridge → POS server connection untested end-to-end. POS server lives in separate repo (github.com/schaferjart/POS-thermal-printer).
-- Visitor face capture → dithered portrait on thermal card not implemented. POS server already has portrait pipeline.
+- ✓ SDK migration to @elevenlabs/react — v2.0
+- ✓ Portrait capture and print — v2.0
+- ✓ Agent text citation improvements — v2.0
+- ✓ Program architecture (pluggable programs + templates) — v2.0
+- ✓ PWA standalone + fullscreen kiosk — v2.0 (verified by integration checker)
+- ✓ Face detection wake/sleep — v2.0 (verified by integration checker)
+- ✓ POS server monorepo integration — v2.0 (verified by integration checker)
+- ✓ Printer bridge E2E wiring — v2.0 (verified by integration checker)
 
-### Architecture Improvements
-- Agent text context: full text IS injected into system prompt already, but agent may not cite it well enough. Improve prompt engineering for authentic text engagement.
-- POS-thermal-printer repo should be integrated into monorepo as apps/pos-server/ (Python microservice).
-- ElevenLabs Knowledge Base could be explored for future RAG, but for MVP the per-session prompt injection works.
+### Pending Human Verification
 
-### Modular Programs Architecture
-The installation has a fixed shared phase (karaoke text reading) followed by pluggable modules:
-- **Reading phase** (shared): Text is read aloud with karaoke highlighting. TTS audio cached in Supabase. Always the same regardless of conversation program.
-- **Conversation programs** (pluggable): After reading, a "program" defines the conversation style. MVP program: "definition extraction" (Socratic dialogue → distill single concept). Future programs could explore different conversational formats. Programs should be independently testable.
-- **Print templates** (pluggable): Output format is also swappable. MVP template: dictionary card (definition + citations + visitor portrait). Future templates could vary layout, content density, visual treatment.
+- Conversation premature ending fix — code guardrails in place, needs 10+ min runtime test and ElevenLabs dashboard `end_call` tool removal confirmation
 
-Each program is a configuration (system prompt + conversation rules + print template) that can be selected per installation or per session.
+### Active
 
-### MVP Scope
-Everything needed for one complete autonomous loop:
-1. Visitor approaches wall-mounted tablet
-2. Face detection triggers wake (no touch)
-3. Text displayed with karaoke reading
-4. AI conversation (agent has full text context, cites properly, does NOT end prematurely)
-5. Definition distilled → shown on screen
-6. Definition + visitor portrait printed on thermal card
-7. Installation resets when visitor leaves
+(To be defined in next milestone)
 
-Program architecture must support future conversation types, but MVP ships with one program ("definition extraction").
+### Out of Scope
 
-### Non-MVP (Later)
-- Additional conversation programs (beyond definition extraction)
-- Additional print templates
 - Mode C (chain mode) end-to-end testing
 - Admin dashboard
 - Embeddings-based semantic search
 - Multiple printer support
 - Gallery view of past definitions
+- Mobile app
+- Video chat
+
+## Key Decisions
+
+| Decision | Rationale | Outcome |
+|----------|-----------|---------|
+| ElevenLabs Conversational AI (not custom STT→LLM→TTS) | Single WebSocket, less latency | ✓ Good |
+| PWA standalone (not Fullscreen API) | Safari compatibility, Guided Access | ✓ Good |
+| Node.js bridge + Python POS server (separate services) | POS server is upstream repo, different runtime | ✓ Good |
+| Programs as TypeScript code (not DB records) | Code-authored, self-contained, testable | ✓ Good |
+| One ElevenLabs agent, programs via prompt overrides | Simpler config, no agent duplication | ✓ Good |
+| Stage-driven state machine (not mode strings) | Programs define stages, reducer is generic | ✓ Good |
+| Shared videoRef lifted to App.tsx | iOS Safari single-stream constraint | ✓ Good |
+| CRITICAL CONSTRAINT block after RULES in prompts | Maximum LLM attention for anti-ending guardrails | ⚠️ Needs runtime verification |
+
+## Constraints
+
+- Raspberry Pi: extremely limited RAM, no `npx tsc` or full `pnpm install`
+- iOS Safari: single camera stream, no Fullscreen API without Guided Access
+- ElevenLabs: agent config via API, system prompt overridden at session start
+- Thermal printer: 384px width, ESC/POS commands, dithered portraits
+
+## Technical Debt
+
+- POS server `/print/dictionary` ignores incoming `template` field (hardcodes `dictionary_entry`)
+- `listPrograms()` exported but unused
+- `addParagraphNumbers` duplicated in `systemPrompt.ts` and `aphorism.ts`
+- Phases 02/03 lack formal VERIFICATION.md (code verified by integration checker)
+
+---
+*Last updated: 2026-03-24 after v2.0 milestone*
