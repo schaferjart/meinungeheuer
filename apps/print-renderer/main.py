@@ -263,19 +263,15 @@ def process_portrait_endpoint(
         _render_cfg = get_render_config(_CONFIG_PATH)
         portrait_cfg = _render_cfg.get("portrait", {})
         config = {
-            "n8n_webhook_url": os.environ.get("N8N_WEBHOOK_URL") or portrait_cfg.get("n8n_webhook_url"),
-            "openrouter_api_key_env": portrait_cfg.get("openrouter_api_key_env", "OPENROUTER_API_KEY"),
-            "style_prompt": portrait_cfg.get("style_prompt", "Transform this portrait into a monochrome sculpture."),
+            **portrait_cfg,
             "paper_px": _render_cfg.get("halftone", {}).get("paper_px", 576),
             "contrast": _render_cfg.get("halftone", {}).get("contrast", 1.3),
             "brightness": _render_cfg.get("halftone", {}).get("brightness", 1.0),
             "sharpness": _render_cfg.get("halftone", {}).get("sharpness", 1.2),
-            "blur": portrait_cfg.get("blur", 10),
-            "dither_mode": portrait_cfg.get("dither_mode", "bayer"),
         }
 
-        # Stage B: Style transfer (optional)
-        if not skip_transform and config.get("n8n_webhook_url"):
+        # Stage B: Style transfer (skips gracefully if no API key)
+        if not skip_transform:
             image_bytes = transform_to_statue_bytes(image_bytes, config)
 
         # Stage C: Face detection + crops + dithering
