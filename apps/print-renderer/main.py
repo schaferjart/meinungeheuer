@@ -281,6 +281,15 @@ def process_portrait_endpoint(
         job_id = str(uuid.uuid4())
         image_urls = []
 
+        # Save the AI-rendered image (before cropping/dithering)
+        styled_path = f"portraits/{job_id}/styled.png"
+        supabase_client.storage.from_("prints").upload(
+            styled_path, image_bytes,
+            file_options={"content-type": "image/png"}
+        )
+        styled_url = supabase_client.storage.from_("prints").get_public_url(styled_path)
+        image_urls.append({"name": "styled", "url": styled_url})
+
         for name, img in results:
             buf = io.BytesIO()
             img.save(buf, format="PNG")
