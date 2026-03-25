@@ -127,14 +127,8 @@ def transform_to_statue_bytes(image_bytes: bytes, config: dict) -> bytes:
 
 # ── Face Landmark Detection ──────────────────────────────────────────
 
-def detect_face_landmarks(image: Image.Image) -> dict:
-    """
-    Detect face landmarks using mediapipe face mesh (468 precise landmarks).
-    Returns dict with pixel coordinates or None if no face detected.
-    """
-    w, h = image.size
-    rgb = np.array(image.convert("RGB"))
-
+def _detect_face_landmarks_solutions(rgb: np.ndarray, w: int, h: int):
+    """Legacy mp.solutions API (works on macOS, some Linux builds)."""
     with mp.solutions.face_mesh.FaceMesh(
         static_image_mode=True,
         max_num_faces=1,
@@ -144,10 +138,82 @@ def detect_face_landmarks(image: Image.Image) -> dict:
         results = mesh.process(rgb)
 
     if not results.multi_face_landmarks:
-        print("[PORTRAIT] No face detected by mediapipe")
+        return None
+    return results.multi_face_landmarks[0].landmark
+
+
+def _detect_face_landmarks_tasks(rgb: np.ndarray, w: int, h: int):
+    """New mp.tasks API (works everywhere mediapipe is installed)."""
+    import tempfile
+    import urllib.request
+
+    BaseOptions = mp.tasks.BaseOptions
+    FaceLandmarker = mp.tasks.vision.FaceLandmarker
+    FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
+    VisionRunningMode = mp.tasks.vision.RunningMode
+
+    # Download model if not cached
+    model_path = os.path.join(tempfile.gettempdir(), "face_landmarker_v2_with_blendshapes.task")
+    if not os.path.exists(model_path):
+        print("[PORTRAIT] Downloading face_landmarker model...")
+        urllib.request.urlretrieve(
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+            model_path,
+        )
+
+    options = FaceLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=model_path),
+        running_mode=VisionRunningMode.IMAGE,
+        num_faces=1,
+        min_face_detection_confidence=0.5,
+    )
+
+    with FaceLandmarker.create_from_options(options) as landmarker:
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        result = landmarker.detect(mp_image)
+
+    if not result.face_landmarks:
         return None
 
-    lm = results.multi_face_landmarks[0].landmark
+    # Convert Tasks API landmarks to same format as solutions API
+    class LandmarkProxy:
+        def __init__(self, lm_list, w, h):
+            self._lm = lm_list
+            self._w = w
+            self._h = h
+        def __getitem__(self, idx):
+            lm = self._lm[idx]
+            class P:
+                x = lm.x
+                y = lm.y
+            return P()
+
+    return LandmarkProxy(result.face_landmarks[0], w, h)
+
+
+def detect_face_landmarks(image: Image.Image) -> dict:
+    """
+    Detect face landmarks using mediapipe (468 precise landmarks).
+    Tries mp.solutions first, falls back to mp.tasks API.
+    Returns dict with pixel coordinates or None if no face detected.
+    """
+    w, h = image.size
+    rgb = np.array(image.convert("RGB"))
+
+    # Try solutions API first, fall back to tasks API
+    lm = None
+    try:
+        lm = _detect_face_landmarks_solutions(rgb, w, h)
+    except Exception as e:
+        print(f"[PORTRAIT] mp.solutions failed: {e}, trying tasks API")
+        try:
+            lm = _detect_face_landmarks_tasks(rgb, w, h)
+        except Exception as e2:
+            print(f"[PORTRAIT] mp.tasks also failed: {e2}")
+
+    if lm is None:
+        print("[PORTRAIT] No face detected by mediapipe")
+        return None
 
     def px(idx):
         return int(lm[idx].x * w), int(lm[idx].y * h)
