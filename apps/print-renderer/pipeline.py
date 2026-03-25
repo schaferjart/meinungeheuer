@@ -80,49 +80,84 @@ def select_best_photo(image_paths: list[str], config: dict) -> str:
 
 def transform_to_statue_bytes(image_bytes: bytes, config: dict) -> bytes:
     """
-    Style transfer via n8n webhook. Accepts raw image bytes, returns
-    transformed image bytes.
+    Style transfer via OpenRouter image generation model (Gemini Flash Image).
+    Sends portrait + style prompt, receives transformed image.
+    Falls back to original image if API key is missing or call fails.
     """
-    webhook_url = config.get("n8n_webhook_url")
-    api_key = os.environ.get(config.get("openrouter_api_key_env", "OPENROUTER_API_KEY"), "")
-    prompt = config.get("style_prompt", "Transform this portrait into a monochrome sculpture.")
-
-    if not webhook_url:
-        raise RuntimeError("n8n_webhook_url not set in config")
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        raise RuntimeError("OPENROUTER_API_KEY not set")
+        print("[PORTRAIT] No OPENROUTER_API_KEY — skipping style transfer")
+        return image_bytes
+
+    model = config.get("selection_model", "google/gemini-2.5-flash-image")
+    prompt = config.get("style_prompt", "Transform this portrait into a monochrome wax sculpture.")
 
     img = open_image(image_bytes)
     buf = io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="JPEG", quality=90)
     b64 = base64.b64encode(buf.getvalue()).decode()
 
-    print(f"[PORTRAIT] Sending to n8n ({img.size[0]}x{img.size[1]})...")
+    print(f"[PORTRAIT] Style transfer via {model} ({img.size[0]}x{img.size[1]})...")
 
-    resp = requests.post(
-        webhook_url,
-        json={"image": b64, "prompt": prompt},
-        headers={
-            "Content-Type": "application/json",
-            "X-OpenRouter-Key": api_key,
-        },
-        timeout=180,
-    )
-    resp.raise_for_status()
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": model,
+                "messages": [{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{b64}"},
+                        },
+                        {
+                            "type": "text",
+                            "text": prompt,
+                        },
+                    ],
+                }],
+            },
+            timeout=180,
+        )
+        resp.raise_for_status()
+        result = resp.json()
 
-    if not resp.text:
-        raise RuntimeError("n8n webhook returned empty response")
+        # OpenRouter returns images in message.images[] (separate from content)
+        choice = result["choices"][0]["message"]
 
-    result = resp.json()
+        # Check message.images array (OpenRouter Gemini image generation format)
+        images = choice.get("images", [])
+        if isinstance(images, list):
+            for img_obj in images:
+                if isinstance(img_obj, dict) and img_obj.get("type") == "image_url":
+                    img_data = img_obj["image_url"]["url"]
+                    if img_data.startswith("data:"):
+                        img_data = img_data.split(",", 1)[1]
+                    print("[PORTRAIT] Style transfer complete")
+                    return base64.b64decode(img_data)
 
-    if "error" in result:
-        raise RuntimeError(f"n8n error: {result['error']}")
+        # Fallback: check content array (some models put images there)
+        content = choice.get("content", "")
+        if isinstance(content, list):
+            for part in content:
+                if isinstance(part, dict) and part.get("type") == "image_url":
+                    img_data = part["image_url"]["url"]
+                    if img_data.startswith("data:"):
+                        img_data = img_data.split(",", 1)[1]
+                    print("[PORTRAIT] Style transfer complete")
+                    return base64.b64decode(img_data)
 
-    if "image" not in result:
-        raise RuntimeError(f"n8n webhook returned no image. Keys: {list(result.keys())}")
+        print(f"[PORTRAIT] No image in response — using original")
+        return image_bytes
 
-    print("[PORTRAIT] Transform complete")
-    return base64.b64decode(result["image"])
+    except Exception as e:
+        print(f"[PORTRAIT] Style transfer failed: {e} — using original")
+        return image_bytes
 
 
 # ── Face Landmark Detection ──────────────────────────────────────────
@@ -255,82 +290,57 @@ def detect_face_landmarks(image: Image.Image) -> dict:
 
 # ── Zoom Crop Geometry ───────────────────────────────────────────────
 
-def compute_zoom_crops(image: Image.Image, landmarks: dict) -> list[dict]:
+def compute_zoom_crops(image: Image.Image, landmarks: dict, config: dict) -> list[dict]:
     """
-    Compute 4 zoom crop regions from face landmarks.
+    Compute 4 zoom crop regions using the shared-height model.
 
-    zoom_0: shoulders to hairline — full portrait
-    zoom_1: chin to forehead, outer-eye-to-outer-eye width
-    zoom_2: eye-center to eye-center width, nose-bridge height
-    zoom_3: narrow vertical strip through face center
+    All zooms share the same height (forehead - pad_top to chin + pad_bottom).
+    Each zoom only varies its width (height * widthRatio) and horizontal offset.
+    This matches the portrait-tuner.html crop model exactly.
     """
     w, h = image.size
-    face_cx = landmarks["face_center_x"]
     forehead_y = landmarks["forehead_top"][1]
     chin_y = landmarks["chin"][1]
     face_h = chin_y - forehead_y
 
-    left_eye_out_x = landmarks["left_eye_outer"][0]
-    right_eye_out_x = landmarks["right_eye_outer"][0]
-    left_eye_cx = landmarks["left_eye_center"][0]
-    right_eye_cx = landmarks["right_eye_center"][0]
-    eye_y = (landmarks["left_eye_center"][1] + landmarks["right_eye_center"][1]) // 2
-    nose_y = landmarks["nose_tip"][1]
+    # Global params — shared across all zooms
+    pad_top = config.get("z0_pad_top", 0.3)
+    pad_bottom = config.get("z0_pad_bottom", 0.8)
 
-    def clamp_box(left, top, right, bottom):
-        left = max(0, left)
-        top = max(0, top)
-        right = min(w, right)
-        bottom = min(h, bottom)
-        return (left, top, right, bottom)
+    # Shared height
+    top = max(0, round(forehead_y - face_h * pad_top))
+    bottom = min(h, round(chin_y + face_h * pad_bottom))
+    crop_h = bottom - top
 
-    # zoom_0: shoulders to hairline
-    pad_top = int(face_h * 0.3)
-    pad_bottom = int(face_h * 0.8)
-    z0_top = forehead_y - pad_top
-    z0_bottom = chin_y + pad_bottom
-    z0_h = z0_bottom - z0_top
-    z0_w = int(z0_h * 0.67)
-    z0_left = face_cx - z0_w // 2
-    zoom_0 = clamp_box(z0_left, z0_top, z0_left + z0_w, z0_bottom)
+    # Center X from landmarks (midpoint between eyes, as fraction of image width)
+    center_x_frac = landmarks["face_center_x"] / w
 
-    # zoom_1: chin to forehead, outer-eye width + padding
-    eye_span = right_eye_out_x - left_eye_out_x
-    pad_x = int(eye_span * 0.35)
-    pad_top1 = int(face_h * 0.15)
-    pad_bottom1 = int(face_h * 0.15)
-    z1_left = left_eye_out_x - pad_x
-    z1_right = right_eye_out_x + pad_x
-    z1_top = forehead_y - pad_top1
-    z1_bottom = chin_y + pad_bottom1
-    zoom_1 = clamp_box(z1_left, z1_top, z1_right, z1_bottom)
-
-    # zoom_2: mid-eye to mid-eye width, centered on nose bridge
-    ipd = right_eye_cx - left_eye_cx
-    pad_x2 = int(ipd * 0.15)
-    z2_left = left_eye_cx - pad_x2
-    z2_right = right_eye_cx + pad_x2
-    z2_w = z2_right - z2_left
-    z2_center_y = (eye_y + nose_y) // 2
-    z2_h = int(z2_w * 1.4)
-    z2_top = z2_center_y - z2_h // 2
-    zoom_2 = clamp_box(z2_left, z2_top, z2_right, z2_top + z2_h)
-
-    # zoom_3: narrow strip through face center (nose width)
-    nose_x = landmarks["nose_tip"][0]
-    inner_eye_span = landmarks["right_eye_inner"][0] - landmarks["left_eye_inner"][0]
-    strip_w = int(inner_eye_span * 0.55)
-    z3_left = nose_x - strip_w // 2
-    z3_top = forehead_y - int(face_h * 0.05)
-    z3_bottom = chin_y + int(face_h * 0.1)
-    zoom_3 = clamp_box(z3_left, z3_top, z3_left + strip_w, z3_bottom)
-
-    return [
-        {"name": "zoom_0", "box": zoom_0},
-        {"name": "zoom_1", "box": zoom_1},
-        {"name": "zoom_2", "box": zoom_2},
-        {"name": "zoom_3", "box": zoom_3},
+    # Per-zoom width ratios (accept both naming conventions from config)
+    width_ratios = [
+        config.get("zoom_0_width", config.get("z0_aspect", 0.67)),
+        config.get("zoom_1_width", 0.50),
+        config.get("zoom_2_width", 0.30),
+        config.get("zoom_3_width", config.get("z3_strip_width", 0.15)),
     ]
+    offsets = [
+        config.get("zoom_0_offset", 0),
+        config.get("zoom_1_offset", 0),
+        config.get("zoom_2_offset", 0),
+        config.get("zoom_3_offset", 0),
+    ]
+
+    zooms = []
+    for i, (wr, off) in enumerate(zip(width_ratios, offsets)):
+        crop_w = round(crop_h * wr)
+        cx = round((center_x_frac + off) * w)
+        left = max(0, min(cx - crop_w // 2, w - crop_w))
+        right = min(w, left + crop_w)
+        zooms.append({
+            "name": f"zoom_{i}",
+            "box": (left, top, right, bottom),
+        })
+
+    return zooms
 
 
 # ── Fallback Crops (no face detected) ───────────────────────────────
@@ -366,14 +376,18 @@ def process_portrait(
 
     landmarks = detect_face_landmarks(image)
     if not landmarks:
-        zooms = [
-            {"name": "zoom_0", "box": (0, 0, image.size[0], image.size[1])},
-            {"name": "zoom_1", "box": _fallback_box(image, 0.7)},
-            {"name": "zoom_2", "box": _fallback_box(image, 0.4)},
-            {"name": "zoom_3", "box": _fallback_strip(image)},
-        ]
+        # No face — shared-height fallback using full image height
+        w, h = image.size
+        center_x = w // 2
+        width_ratios = [0.67, 0.50, 0.30, 0.15]
+        zooms = []
+        for i, wr in enumerate(width_ratios):
+            crop_w = round(h * wr)
+            left = max(0, center_x - crop_w // 2)
+            right = min(w, left + crop_w)
+            zooms.append({"name": f"zoom_{i}", "box": (left, 0, right, h)})
     else:
-        zooms = compute_zoom_crops(image, landmarks)
+        zooms = compute_zoom_crops(image, landmarks, config)
 
     paper_px = config.get("paper_px", 576)
     contrast = config.get("contrast", 1.3)
