@@ -119,7 +119,7 @@ def get_render_config(config_path: str = "config.yaml") -> dict[str, Any]:
 def get_active_template(config: dict[str, Any]) -> str:
     """Get the active template name from config."""
     meta = config.get("_meta", {})
-    return meta.get("template", "dictionary")
+    return meta.get("template", "helvetica")
 
 
 def get_paper_px(config: dict[str, Any]) -> int:

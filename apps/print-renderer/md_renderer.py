@@ -91,17 +91,14 @@ def _load_font(path, size, index=0):
 
     is_bold = index == 1
 
-    # Fallback: map macOS system fonts to Linux equivalents
+    # Fallback: map macOS system fonts to bundled Liberation Sans
     basename = os.path.basename(resolved)
     if basename == "HelveticaNeue.ttc":
-        linux_font = "DejaVuSans-Bold.ttf" if is_bold else "DejaVuSans.ttf"
-        for search_dir in ("/usr/share/fonts/truetype/dejavu",
-                           "/usr/share/fonts/TTF",
-                           "/usr/share/fonts/dejavu-sans-fonts"):
-            candidate = os.path.join(search_dir, linux_font)
-            if os.path.exists(candidate):
-                print(f"[md_renderer] Font fallback: {resolved} → {candidate}")
-                return ImageFont.truetype(candidate, size=size)
+        linux_font = "LiberationSans-Bold.ttf" if is_bold else "LiberationSans-Regular.ttf"
+        bundled = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fonts", linux_font)
+        if os.path.exists(bundled):
+            print(f"[md_renderer] Font fallback: {resolved} → {bundled}")
+            return ImageFont.truetype(bundled, size=size)
 
     # Last resort: bundled fonts
     fallback = FONT_BOLD if is_bold else FONT_THIN

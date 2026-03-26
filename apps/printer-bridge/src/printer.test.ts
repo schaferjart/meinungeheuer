@@ -57,7 +57,7 @@ describe('renderAndPrint', () => {
     expect(renderUrl).toBe('http://renderer:8000/render/dictionary');
     const renderBody = JSON.parse(renderOpts.body as string) as Record<string, unknown>;
     expect(renderBody['word']).toBe('VOGEL');
-    expect(renderBody['template']).toBe('dictionary');
+    expect(renderBody['template']).toBe('helvetica');
 
     // Second call should be to POS server /print/image
     const [posUrl] = mockFetch.mock.calls[1] as [string, RequestInit];
