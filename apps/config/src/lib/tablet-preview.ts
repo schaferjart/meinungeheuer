@@ -31,7 +31,7 @@ function createPreviewLabel(): HTMLElement {
   label.textContent = 'TABLET PREVIEW';
   label.style.cssText = [
     'font-size:10px',
-    'font-family:system-ui,sans-serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-weight:600',
     'letter-spacing:0.08em',
     'text-transform:uppercase',
@@ -87,7 +87,7 @@ export function createTextDisplayPreview(config: Record<string, unknown>): HTMLE
 
   const textEl = document.createElement('div');
   textEl.style.cssText = [
-    'font-family:Georgia,serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-size:13px',
     'line-height:1.9',
     'letter-spacing:0.02em',
@@ -149,7 +149,7 @@ export function createTermPromptPreview(config: Record<string, unknown>): HTMLEl
   const termEl = document.createElement('div');
   termEl.textContent = term;
   termEl.style.cssText = [
-    'font-family:Georgia,serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-size:28px',
     'font-weight:700',
     'color:#ffffff',
@@ -218,7 +218,7 @@ export function createConversationPreview(config: Record<string, unknown>): HTML
   const dotLabel = document.createElement('div');
   dotLabel.textContent = isDE ? 'Hört zu' : 'Listening';
   dotLabel.style.cssText = [
-    'font-family:system-ui,sans-serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-size:9px',
     'color:#777777',
     'letter-spacing:0.04em',
@@ -238,7 +238,7 @@ export function createConversationPreview(config: Record<string, unknown>): HTML
   for (const msg of messages) {
     const msgEl = document.createElement('div');
     msgEl.style.cssText = [
-      'font-family:Georgia,serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:11px',
       'line-height:1.6',
       msg.role === 'visitor' ? 'opacity:0.55' : 'opacity:1',
@@ -311,7 +311,7 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
     aphoText.textContent =
       '"Ordnung ist nicht das Gegenteil von Freiheit — sie ist deren Bedingung."';
     aphoText.style.cssText = [
-      'font-family:Georgia,serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:14px',
       'line-height:1.7',
       'color:#ffffff',
@@ -323,7 +323,7 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
     const citation = document.createElement('div');
     citation.textContent = '— MeinUngeheuer, 2025';
     citation.style.cssText = [
-      'font-family:Georgia,serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:10px',
       'color:#999999',
       'text-align:center',
@@ -335,7 +335,7 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
     const termEl = document.createElement('div');
     termEl.textContent = 'KREATIVITÄT';
     termEl.style.cssText = [
-      'font-family:Georgia,serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:22px',
       'font-weight:700',
       'color:#ffffff',
@@ -351,7 +351,7 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
     defText.textContent =
       'Der Zustand, in dem Ordnung und Überraschung gleichzeitig bestehen und sich gegenseitig bedingen, ohne sich aufzuheben.';
     defText.style.cssText = [
-      'font-family:Georgia,serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:12px',
       'line-height:1.65',
       'color:#e0e0e0',
@@ -361,7 +361,7 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
     const citation = document.createElement('div');
     citation.textContent = '— Aus einem Gespräch, 23. März 2025';
     citation.style.cssText = [
-      'font-family:Georgia,serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:10px',
       'color:#777777',
       'margin-left:8px',
@@ -377,7 +377,7 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
       day: 'numeric',
     });
     date.style.cssText = [
-      'font-family:system-ui,sans-serif',
+      'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
       'font-size:9px',
       'color:#555555',
       'position:absolute',
@@ -421,7 +421,7 @@ export function createWelcomePreview(): HTMLElement {
   const title = document.createElement('div');
   title.textContent = 'MeinUngeheuer';
   title.style.cssText = [
-    'font-family:Georgia,serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-size:22px',
     'font-weight:400',
     'color:#ffffff',
@@ -433,7 +433,7 @@ export function createWelcomePreview(): HTMLElement {
   const subtitle = document.createElement('div');
   subtitle.textContent = 'Näher treten';
   subtitle.style.cssText = [
-    'font-family:system-ui,sans-serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-size:10px',
     'color:#555555',
     'letter-spacing:0.1em',
@@ -463,7 +463,7 @@ export function createFarewellPreview(): HTMLElement {
   const title = document.createElement('div');
   title.textContent = 'Auf Wiedersehen';
   title.style.cssText = [
-    'font-family:Georgia,serif',
+    'font-family:Helvetica,'Helvetica Neue',Arial,sans-serif',
     'font-size:18px',
     'font-weight:400',
     'color:#888888',

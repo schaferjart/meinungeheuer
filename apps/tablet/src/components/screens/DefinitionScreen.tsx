@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { TIMERS } from '@meinungeheuer/shared';
+import { TIMERS, FONT_FAMILY } from '@meinungeheuer/shared';
 import type { Definition } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
@@ -53,7 +53,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
       {/* Term */}
       <p
         style={{
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: FONT_FAMILY,
           fontSize: 'clamp(1.8rem, 4vw, 3rem)',
           fontWeight: 700,
           color: '#ffffff',
@@ -80,7 +80,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
       {/* Definition text */}
       <p
         style={{
-          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontFamily: FONT_FAMILY,
           fontSize: 'clamp(1.1rem, 2.4vw, 1.6rem)',
           fontWeight: 400,
           color: 'rgba(255,255,255,0.95)',
@@ -106,7 +106,7 @@ export function DefinitionScreen({ dispatch, definition }: DefinitionScreenProps
             <p
               key={i}
               style={{
-                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontFamily: FONT_FAMILY,
                 fontSize: 'clamp(0.85rem, 1.6vw, 1.05rem)',
                 fontStyle: 'italic',
                 color: 'rgba(255,255,255,0.45)',

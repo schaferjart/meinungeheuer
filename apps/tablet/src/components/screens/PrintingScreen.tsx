@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { TIMERS } from '@meinungeheuer/shared';
+import { TIMERS, FONT_FAMILY } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface PrintingScreenProps {
@@ -47,7 +47,7 @@ export function PrintingScreen({ dispatch, language }: PrintingScreenProps) {
     <div className="flex flex-col items-center justify-center w-full h-full bg-black select-none">
       <p
         style={{
-          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontFamily: FONT_FAMILY,
           fontSize: 'clamp(1rem, 2.2vw, 1.4rem)',
           fontWeight: 400,
           color: 'rgba(255,255,255,0.7)',

@@ -354,7 +354,7 @@ export function Admin() {
                     <dt className="font-medium text-gray-500 uppercase text-xs tracking-wider">
                       Current Chain Context
                     </dt>
-                    <dd className="mt-0.5 text-sm text-gray-700 bg-gray-50 rounded p-2 font-serif">
+                    <dd className="mt-0.5 text-sm text-gray-700 bg-gray-50 rounded p-2">
                       <span className="font-semibold">{config.chain_context.term}:</span>{' '}
                       {config.chain_context.definition_text}
                     </dd>

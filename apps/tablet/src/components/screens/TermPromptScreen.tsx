@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { TIMERS } from '@meinungeheuer/shared';
+import { TIMERS, FONT_FAMILY } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface TermPromptScreenProps {
@@ -23,7 +23,7 @@ export function TermPromptScreen({ dispatch, term, language }: TermPromptScreenP
     <div className="flex flex-col items-center justify-center w-full h-full bg-black select-none">
       <p
         style={{
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: FONT_FAMILY,
           fontSize: 'clamp(3rem, 10vw, 7rem)',
           fontWeight: 700,
           color: '#ffffff',
@@ -39,7 +39,7 @@ export function TermPromptScreen({ dispatch, term, language }: TermPromptScreenP
 
       <p
         style={{
-          fontFamily: "Georgia, 'Times New Roman', serif",
+          fontFamily: FONT_FAMILY,
           fontSize: 'clamp(1rem, 2.2vw, 1.4rem)',
           fontWeight: 400,
           color: 'rgba(255,255,255,0.6)',
