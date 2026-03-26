@@ -140,6 +140,15 @@ function InstallationApp() {
 
         // Resolve the conversation program from config
         const program = getProgram(config.program ?? 'aphorism');
+        // Merge DB stage overrides on top of program defaults (null = use default)
+        const mergedStages = { ...program.stages };
+        if (config.stages) {
+          if (config.stages.textReading !== null && config.stages.textReading !== undefined) mergedStages.textReading = config.stages.textReading;
+          if (config.stages.termPrompt !== null && config.stages.termPrompt !== undefined) mergedStages.termPrompt = config.stages.termPrompt;
+          if (config.stages.portrait !== null && config.stages.portrait !== undefined) mergedStages.portrait = config.stages.portrait;
+          if (config.stages.printing !== null && config.stages.printing !== undefined) mergedStages.printing = config.stages.printing;
+        }
+        program.stages = mergedStages;
         programRef.current = program;
 
         dispatch({
@@ -148,7 +157,7 @@ function InstallationApp() {
           term: config.term ?? '',
           contextText,
           parentSessionId: config.parentSessionId ?? null,
-          stages: program.stages,
+          stages: mergedStages,
         });
 
         // Merge runtime config from backend response — fall back to defaults per field
