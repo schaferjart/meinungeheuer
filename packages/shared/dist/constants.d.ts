@@ -1,4 +1,10 @@
 export declare const APP_NAME = "MeinUngeheuer";
+/**
+ * Single font family used across all apps (tablet, archive, config, etc.).
+ * Change this one value to update the font everywhere.
+ */
+export declare const FONT_FAMILY = "Helvetica, 'Helvetica Neue', Arial, sans-serif";
+export declare const FONT_FAMILY_CSS = "Helvetica, 'Helvetica Neue', Arial, sans-serif";
 export declare const DEFAULT_TERM = "KREATIVIT\u00C4T";
 export declare const DEFAULT_MODE: "text_term";
 export declare const FACE_DETECTION: {

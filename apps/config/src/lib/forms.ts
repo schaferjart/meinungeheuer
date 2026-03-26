@@ -26,7 +26,7 @@ const CSS = `
     border: 1px solid #2a2a2a;
     border-radius: 5px;
     font-size: 13px;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
     outline: none;
     transition: border-color 0.15s;
     width: 100%;
@@ -168,7 +168,7 @@ const CSS = `
     border-radius: 5px;
     font-size: 13px;
     font-weight: 600;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
     cursor: pointer;
     transition: background 0.15s, opacity 0.15s;
     margin-top: 4px;

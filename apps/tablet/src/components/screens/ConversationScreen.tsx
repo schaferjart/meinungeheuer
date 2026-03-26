@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { FONT_FAMILY } from '@meinungeheuer/shared';
 import type { Role } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
@@ -52,7 +53,7 @@ export function ConversationScreen({
         {transcript.length === 0 && (
           <p
             style={{
-              fontFamily: "Georgia, 'Times New Roman', serif",
+              fontFamily: FONT_FAMILY,
               fontSize: 'clamp(1.2rem, 2.6vw, 1.6rem)',
               color: 'rgba(255,255,255,0.25)',
               textAlign: 'center',
@@ -72,7 +73,7 @@ export function ConversationScreen({
               style={{
                 display: 'inline-block',
                 maxWidth: '80%',
-                fontFamily: "Georgia, 'Times New Roman', serif",
+                fontFamily: FONT_FAMILY,
                 fontSize: 'clamp(1.1rem, 2.8vw, 1.6rem)',
                 fontWeight: 400,
                 fontStyle: entry.role === 'visitor' ? 'italic' : 'normal',
@@ -115,7 +116,7 @@ export function ConversationScreen({
         {micLabel && (
           <span
             style={{
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: FONT_FAMILY,
               fontSize: '0.75rem',
               color: 'rgba(255,255,255,0.4)',
               letterSpacing: '0.12em',

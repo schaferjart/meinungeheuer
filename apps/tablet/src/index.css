@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, monospace;
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
@@ -11,7 +17,7 @@ html, body, #root {
 }
 
 body {
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -51,7 +51,7 @@ const PROGRAMS_CSS = `
     border: 1px solid #2a2a2a;
     border-radius: 5px;
     font-size: 13px;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
     outline: none;
     cursor: pointer;
     transition: border-color 0.15s;
@@ -82,7 +82,7 @@ const PROGRAMS_CSS = `
     border: none;
     border-radius: 5px;
     font-size: 13px;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
     font-weight: 500;
     cursor: pointer;
     white-space: nowrap;
@@ -114,7 +114,7 @@ const PROGRAMS_CSS = `
     font-size: 13px;
     color: #e0e0e0;
     transition: border-color 0.15s, color 0.15s;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
     user-select: none;
   }
   .pipeline-block:hover {
@@ -171,7 +171,7 @@ const PROGRAMS_CSS = `
     font-size: 12px;
     color: #777777;
     min-height: 18px;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
   }
 
   /* ── Empty state ── */
@@ -180,7 +180,7 @@ const PROGRAMS_CSS = `
     color: #777777;
     padding: 40px 0;
     text-align: center;
-    font-family: system-ui, sans-serif;
+    font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
   }
 `;
 
@@ -585,7 +585,7 @@ function buildBlockConfigForm(
     default: {
       const note = document.createElement('div');
       note.textContent = 'No configuration fields defined for this block type.';
-      note.style.cssText = 'font-size:13px;color:#777777;font-family:system-ui,sans-serif;';
+      note.style.cssText = 'font-size:13px;color:#777777;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
       container.appendChild(note);
     }
   }
@@ -623,7 +623,7 @@ function addSubLabel(container: HTMLElement, text: string): void {
   el.textContent = text;
   el.style.cssText =
     'font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;' +
-    'color:#777777;margin-top:16px;margin-bottom:8px;font-family:system-ui,sans-serif;';
+    'color:#777777;margin-top:16px;margin-bottom:8px;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
   container.appendChild(el);
 }
 
@@ -660,7 +660,7 @@ export function render(container: HTMLElement): void {
 
   const loadingEl = document.createElement('div');
   loadingEl.textContent = 'Loading programs...';
-  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:system-ui,sans-serif;padding:20px 0;';
+  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;padding:20px 0;';
   container.appendChild(loadingEl);
 
   // ── Build UI after data load ───────────────────────────────────────────────

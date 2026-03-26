@@ -11,8 +11,8 @@
   --fg: #fff;
   --line: rgba(255, 255, 255, 0.15);
   --dim: rgba(255, 255, 255, 0.5);
-  --font-body: Georgia, 'Times New Roman', serif;
-  --font-meta: system-ui, sans-serif;
+  --font-body: Helvetica, 'Helvetica Neue', Arial, sans-serif;
+  --font-meta: Helvetica, 'Helvetica Neue', Arial, sans-serif;
 }
 
 html {

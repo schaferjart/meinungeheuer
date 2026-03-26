@@ -3,6 +3,7 @@ import { KaraokeReader, stripMarkdownForTTS } from 'karaoke-reader';
 import { useElevenLabsTTS } from 'karaoke-reader/elevenlabs';
 import type { TtsStatus } from 'karaoke-reader';
 import 'karaoke-reader/styles.css';
+import { FONT_FAMILY } from '@meinungeheuer/shared';
 import { createSupabaseTTSCache } from '../lib/supabaseCacheAdapter';
 import { useRuntimeConfig } from '../lib/configContext';
 
@@ -194,7 +195,7 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
             '--kr-highlight': '#fcd34d',
             '--kr-spoken-opacity': '0.4',
             '--kr-upcoming-opacity': '0.9',
-            '--kr-font-family': "Georgia, 'Times New Roman', serif",
+            '--kr-font-family': FONT_FAMILY,
             '--kr-font-size': 'clamp(1.2rem, 3vw, 1.8rem)',
             '--kr-line-height': '1.8',
             '--kr-letter-spacing': '0.02em',
@@ -222,7 +223,7 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
           <p
             className="text-white/50"
             style={{
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: FONT_FAMILY,
               fontSize: 'clamp(0.8rem, 1.5vw, 1rem)',
             }}
           >
@@ -268,7 +269,7 @@ export function TextReader({ text, voiceId, apiKey, language, onComplete }: Text
           <p
             className="text-white/20"
             style={{
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: FONT_FAMILY,
               fontSize: '0.7rem',
               letterSpacing: '0.1em',
             }}
@@ -388,7 +389,7 @@ function ActionButton({ label, onClick, variant = 'default' }: ActionButtonProps
       onClick={onClick}
       className={`${textOpacity} cursor-pointer`}
       style={{
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: FONT_FAMILY,
         fontSize: 'clamp(0.9rem, 1.8vw, 1.1rem)',
         fontWeight: 400,
         backgroundColor: 'transparent',
