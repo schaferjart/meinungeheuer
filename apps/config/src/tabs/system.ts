@@ -297,7 +297,7 @@ export function render(container: HTMLElement): void {
   // Loading indicator
   const loadingEl = document.createElement('div');
   loadingEl.textContent = 'Loading...';
-  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+  loadingEl.style.cssText = 'color:#777777;font-size:14px;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
   container.appendChild(loadingEl);
 
   // ── Build UI ────────────────────────────────────────────────────────────────
@@ -350,7 +350,7 @@ export function render(container: HTMLElement): void {
 
     const noteEl = document.createElement('p');
     noteEl.textContent = 'Stored in the secrets table (authenticated access only). Values are write-only once saved.';
-    noteEl.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+    noteEl.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
     body2.appendChild(noteEl);
 
     body2.appendChild(
@@ -443,7 +443,7 @@ export function render(container: HTMLElement): void {
 
     const displayNote = document.createElement('p');
     displayNote.textContent = 'Controls karaoke text reader appearance on the tablet.';
-    displayNote.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+    displayNote.style.cssText = 'font-size:12px;color:#777777;margin-bottom:14px;line-height:1.5;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
     body4.appendChild(displayNote);
 
     body4.appendChild(
@@ -618,7 +618,7 @@ export function render(container: HTMLElement): void {
 
     if (error) {
       const errEl = document.createElement('div');
-      errEl.style.cssText = 'font-size:12px;color:#e05b5b;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+      errEl.style.cssText = 'font-size:12px;color:#e05b5b;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
       errEl.textContent = 'Failed to load print jobs: ' + error.message;
       container.appendChild(errEl);
       return;
@@ -626,7 +626,7 @@ export function render(container: HTMLElement): void {
 
     if (!data || data.length === 0) {
       const emptyEl = document.createElement('div');
-      emptyEl.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+      emptyEl.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
       emptyEl.textContent = 'No print jobs found.';
       container.appendChild(emptyEl);
       return;

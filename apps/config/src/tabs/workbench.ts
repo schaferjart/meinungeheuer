@@ -1659,11 +1659,11 @@ function buildPortraitSection(body: HTMLElement): void {
   ditherControlRow.style.cssText = 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;';
   const ditherLabel = document.createElement('span');
   ditherLabel.textContent = 'Dither:';
-  ditherLabel.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+  ditherLabel.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
   ditherControlRow.appendChild(ditherLabel);
   for (const mode of ['floyd', 'bayer', 'halftone']) {
     const lbl = document.createElement('label');
-    lbl.style.cssText = 'font-size:12px;color:#aaaaaa;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;display:flex;gap:4px;align-items:center;cursor:pointer;';
+    lbl.style.cssText = 'font-size:12px;color:#aaaaaa;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;display:flex;gap:4px;align-items:center;cursor:pointer;';
     const radio = document.createElement('input');
     radio.type = 'radio';
     radio.name = 'portrait-dither-mode';
@@ -1676,7 +1676,7 @@ function buildPortraitSection(body: HTMLElement): void {
   }
   const blurLbl = document.createElement('span');
   blurLbl.textContent = 'Blur:';
-  blurLbl.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;margin-left:8px;';
+  blurLbl.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;margin-left:8px;';
   ditherControlRow.appendChild(blurLbl);
   const blurSlider = document.createElement('input');
   blurSlider.type = 'range'; blurSlider.min = '0'; blurSlider.max = '30'; blurSlider.step = '1'; blurSlider.value = String(blur);
@@ -2116,7 +2116,7 @@ function makeInlineSlider(
 
   const lbl = document.createElement('span');
   lbl.textContent = label;
-  lbl.style.cssText = 'font-size:11px;color:#888888;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;width:68px;flex-shrink:0;';
+  lbl.style.cssText = 'font-size:11px;color:#888888;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;width:68px;flex-shrink:0;';
   row.appendChild(lbl);
 
   const inp = document.createElement('input');
@@ -2130,7 +2130,7 @@ function makeInlineSlider(
 
   const val = document.createElement('span');
   val.textContent = initial.toFixed(2);
-  val.style.cssText = 'font-size:11px;color:#cccccc;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;width:36px;text-align:right;flex-shrink:0;';
+  val.style.cssText = 'font-size:11px;color:#cccccc;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;width:36px;text-align:right;flex-shrink:0;';
   row.appendChild(val);
 
   inp.addEventListener('input', () => {
@@ -2146,7 +2146,7 @@ function makeInlineSlider(
 
 function makeCheckboxToggle(label: string, initial: boolean, onChange: (v: boolean) => void): HTMLElement {
   const lbl = document.createElement('label');
-  lbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;color:#aaaaaa;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;cursor:pointer;';
+  lbl.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:12px;color:#aaaaaa;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;cursor:pointer;';
   const inp = document.createElement('input');
   inp.type = 'checkbox';
   inp.checked = initial;
@@ -2426,7 +2426,7 @@ function buildTextManagementSection(body: HTMLElement): void {
     if (texts.length === 0) {
       const empty = document.createElement('div');
       empty.textContent = 'No texts found.';
-      empty.style.cssText = 'color:#777777;font-size:13px;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;margin-bottom:12px;';
+      empty.style.cssText = 'color:#777777;font-size:13px;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;margin-bottom:12px;';
       tableWrap.appendChild(empty);
       return;
     }
@@ -2684,7 +2684,7 @@ function buildDefinitionBrowserSection(body: HTMLElement): void {
     if (definitions.length === 0) {
       const empty = document.createElement('div');
       empty.textContent = 'No definitions found.';
-      empty.style.cssText = 'color:#777777;font-size:13px;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;margin-bottom:12px;';
+      empty.style.cssText = 'color:#777777;font-size:13px;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;margin-bottom:12px;';
       tableWrap.appendChild(empty);
       return;
     }
@@ -2848,7 +2848,7 @@ function buildPromptsSection(body: HTMLElement): void {
   refBox.style.cssText =
     'background:#0a0a0a;border:1px solid #2a2a2a;border-radius:5px;padding:10px 12px;margin-bottom:14px;font-size:12px;font-family:monospace;color:#777777;line-height:1.7;';
   refBox.innerHTML =
-    '<span style="font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;display:block;margin-bottom:6px;">Template variables</span>' +
+    '<span style="font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;display:block;margin-bottom:6px;">Template variables</span>' +
     '{{term}} &nbsp; {{contextText}} &nbsp; {{language}} &nbsp; {{speechProfile}}';
   body.appendChild(refBox);
 
@@ -2933,7 +2933,7 @@ function buildPromptsSection(body: HTMLElement): void {
     if (programs.length === 0) {
       const empty = document.createElement('div');
       empty.textContent = 'No programs found.';
-      empty.style.cssText = 'color:#777777;font-size:13px;font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;';
+      empty.style.cssText = 'color:#777777;font-size:13px;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;';
       selectorWrap.appendChild(empty);
       return;
     }
