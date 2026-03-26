@@ -17,18 +17,13 @@ dictionary:
   margin: 20
   paper_px: 576
 
-# Helvetica Neue template (clean, minimal)
+# Helvetica template (Liberation Sans — metrically identical Helvetica clone)
 helvetica:
-  font_word: "/System/Library/Fonts/HelveticaNeue.ttc"
-  font_word_index: 1
-  font_body: "/System/Library/Fonts/HelveticaNeue.ttc"
-  font_body_index: 7
-  font_bold: "/System/Library/Fonts/HelveticaNeue.ttc"
-  font_bold_index: 1
-  font_cite: "/System/Library/Fonts/HelveticaNeue.ttc"
-  font_cite_index: 12
-  font_date: "/System/Library/Fonts/HelveticaNeue.ttc"
-  font_date_index: 5
+  font_word: "fonts/LiberationSans-Bold.ttf"
+  font_body: "fonts/LiberationSans-Regular.ttf"
+  font_bold: "fonts/LiberationSans-Bold.ttf"
+  font_cite: "fonts/LiberationSans-Regular.ttf"
+  font_date: "fonts/LiberationSans-Regular.ttf"
   size_word: 36
   size_body: 22
   size_cite: 19
