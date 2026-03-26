@@ -243,6 +243,7 @@ def process_portrait_endpoint(
     file: UploadFile = File(...),
     session_id: str | None = None,
     skip_transform: bool = False,
+    zoom_index: int | None = Form(None),
 ):
     """
     Full portrait pipeline: style transfer -> face detection -> crop -> dither.
@@ -276,6 +277,8 @@ def process_portrait_endpoint(
 
         # Stage C: Face detection + crops + dithering
         results = process_portrait(image_bytes, config)
+        if zoom_index is not None:
+            results = [r for r in results if r[0] == f"zoom_{zoom_index}"]
 
         # Upload to Supabase Storage
         job_id = str(uuid.uuid4())
