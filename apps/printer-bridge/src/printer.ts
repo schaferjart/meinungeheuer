@@ -44,7 +44,7 @@ export async function renderAndPrint(
       word: payload.term,
       definition: payload.definition_text,
       citations: payload.citations,
-      template: payload.template ?? 'dictionary',
+      template: payload.template ?? 'helvetica',
       definition_id: payload.definition_id ?? null,
     };
 
@@ -105,7 +105,7 @@ export async function renderAndPrint(
       word: payload.term,
       definition: payload.definition_text,
       citations: payload.citations,
-      template: payload.template ?? 'dictionary',
+      template: payload.template ?? 'helvetica',
       timestamp: payload.timestamp,
       session_number: payload.session_number,
       chain_ref: payload.chain_ref,

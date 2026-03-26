@@ -15,8 +15,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 _PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 _FONTS_DIR = os.path.join(_PROJECT_DIR, "fonts")
 
-FONT_THIN = os.path.join(_FONTS_DIR, "Burra-Thin.ttf")
-FONT_BOLD = os.path.join(_FONTS_DIR, "Burra-Bold.ttf")
+FONT_THIN = os.path.join(_FONTS_DIR, "LiberationSans-Regular.ttf")
+FONT_BOLD = os.path.join(_FONTS_DIR, "LiberationSans-Bold.ttf")
 
 
 # ── Font path resolution ──────────────────────────────────────────

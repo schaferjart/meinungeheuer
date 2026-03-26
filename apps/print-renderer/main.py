@@ -61,7 +61,7 @@ class DictionaryRequest(BaseModel):
     word: str
     definition: str
     citations: list[str] = []
-    template: str = "dictionary"
+    template: str = "helvetica"
     config_override: dict | None = None  # Merged onto template config for previews
     definition_id: str | None = None  # UUID for QR code linking to archive page
 
@@ -223,7 +223,7 @@ def render_portrait_preview(
 
 class MarkdownRequest(BaseModel):
     text: str
-    style: str = "dictionary"
+    style: str = "helvetica"
     show_date: bool = True
 
 
@@ -421,7 +421,7 @@ def render_slice(
         if label:
             draw = ImageDraw.Draw(labeled)
             try:
-                font = ImageFont.truetype("fonts/DejaVuSans.ttf", 16)
+                font = ImageFont.truetype("fonts/LiberationSans-Regular.ttf", 16)
             except Exception:
                 font = ImageFont.load_default()
             bbox = draw.textbbox((0, 0), label, font=font)
