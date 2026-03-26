@@ -8,7 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
     <div style="
       display:flex;align-items:center;justify-content:center;
       height:100vh;background:#000000;color:#e05b5b;
-      font-family:system-ui,sans-serif;font-size:15px;text-align:center;
+      font-family:Helvetica,'Helvetica Neue',Arial,sans-serif;font-size:15px;text-align:center;
       flex-direction:column;gap:12px;
     ">
       <strong>Configuration error</strong>

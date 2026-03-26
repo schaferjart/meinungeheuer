@@ -1,3 +1,4 @@
+import { FONT_FAMILY } from '@meinungeheuer/shared';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface ConsentScreenProps {
@@ -42,7 +43,7 @@ export function ConsentScreen({ dispatch }: ConsentScreenProps) {
         {/* Main statement */}
         <p
           style={{
-            fontFamily: "Georgia, 'Times New Roman', serif",
+            fontFamily: FONT_FAMILY,
             fontSize: 'clamp(1.3rem, 3vw, 2rem)',
             fontWeight: 400,
             color: '#ffffff',
@@ -70,7 +71,7 @@ export function ConsentScreen({ dispatch }: ConsentScreenProps) {
           <button
             onClick={handleAccept}
             style={{
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: FONT_FAMILY,
               fontSize: 'clamp(0.85rem, 1.8vw, 1rem)',
               fontWeight: 400,
               color: '#ffffff',
@@ -95,7 +96,7 @@ export function ConsentScreen({ dispatch }: ConsentScreenProps) {
           <button
             onClick={handleDecline}
             style={{
-              fontFamily: 'system-ui, sans-serif',
+              fontFamily: FONT_FAMILY,
               fontSize: 'clamp(0.85rem, 1.8vw, 1rem)',
               fontWeight: 400,
               color: 'rgba(255,255,255,0.35)',

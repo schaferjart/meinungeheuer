@@ -12,7 +12,7 @@
 .kr-root {
   --kr-bg: #000000;
   --kr-color: #ffffff;
-  --kr-font-family: Georgia, 'Times New Roman', serif;
+  --kr-font-family: Helvetica, 'Helvetica Neue', Arial, sans-serif;
   --kr-font-size: clamp(1.2rem, 3vw, 1.8rem);
   --kr-line-height: 1.8;
   --kr-letter-spacing: 0.02em;
