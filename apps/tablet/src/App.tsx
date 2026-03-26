@@ -99,6 +99,9 @@ function InstallationApp() {
   const portraitBlobRef = useRef<Blob | null>(null);
   const portraitCapturedRef = useRef(false);
 
+  // Track when the conversation screen was entered to calculate duration for zoom_index
+  const conversationStartTimeRef = useRef<number | null>(null);
+
   // Voice chain: blurred portrait blob captured during conversation
   const blurredPortraitBlobRef = useRef<Blob | null>(null);
 
@@ -242,8 +245,15 @@ function InstallationApp() {
       // Portrait prints via POS pipeline (slow, 30-180s style transfer).
       // Natural timing ensures definition card prints first.
       if (portraitBlobRef.current && programRef.current.stages.portrait) {
+        // Calculate zoom from conversation duration
+        const durationMs = conversationStartTimeRef.current
+          ? Date.now() - conversationStartTimeRef.current
+          : 0;
+        const durationMin = durationMs / 60_000;
+        const zoomIndex = durationMin < 2 ? 0 : durationMin < 5 ? 1 : durationMin < 10 ? 2 : 3;
+        console.log(`[App] Conversation duration: ${durationMin.toFixed(1)}min → zoom_index ${zoomIndex}`);
         console.log('[App] Uploading portrait to POS server:', portraitBlobRef.current.size, 'bytes');
-        void uploadPortrait(portraitBlobRef.current);
+        void uploadPortrait(portraitBlobRef.current, zoomIndex);
         portraitBlobRef.current = null;
       } else {
         console.log('[App] No portrait to upload — blob:', !!portraitBlobRef.current, 'stages.portrait:', programRef.current.stages.portrait);
@@ -344,6 +354,7 @@ function InstallationApp() {
   useEffect(() => {
     if (screen === 'conversation' && !conversationStartedRef.current) {
       conversationStartedRef.current = true;
+      conversationStartTimeRef.current = Date.now();
       console.log('[App] Starting ElevenLabs conversation...');
       startConversation()
         .then((elevenLabsConversationId) => {
@@ -372,6 +383,7 @@ function InstallationApp() {
     // Reset the flag when we leave the conversation screen
     if (screen !== 'conversation') {
       conversationStartedRef.current = false;
+      conversationStartTimeRef.current = null;
     }
   }, [screen, startConversation]);
 
