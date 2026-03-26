@@ -32,7 +32,7 @@ export interface UsePortraitCaptureReturn {
   /** Capture a single JPEG frame from the video. Returns null if video is not ready. */
   captureFrame: () => Promise<Blob | null>;
   /** Upload a previously captured blob to the POS server. Fire-and-forget. */
-  uploadPortrait: (blob: Blob) => Promise<void>;
+  uploadPortrait: (blob: Blob, zoomIndex?: number) => Promise<void>;
   /** Convenience: capture a frame then upload it. Never throws. */
   captureAndUpload: () => Promise<void>;
   /** True while an upload is in progress. */
@@ -97,7 +97,7 @@ export function usePortraitCapture({
   // uploadPortrait — POST blob to cloud print-renderer /process/portrait
   // -----------------------------------------------------------------------
   const uploadPortrait = useCallback(
-    async (blob: Blob): Promise<void> => {
+    async (blob: Blob, zoomIndex?: number): Promise<void> => {
       if (!printRendererUrl) {
         console.warn('[Portrait] No print renderer URL configured, skipping upload');
         return;
@@ -112,6 +112,9 @@ export function usePortraitCapture({
         formData.append('skip_selection', 'true');
         if (sessionId) {
           formData.append('session_id', sessionId);
+        }
+        if (zoomIndex !== undefined) {
+          formData.append('zoom_index', String(zoomIndex));
         }
 
         const url = `${printRendererUrl.replace(/\/+$/, '')}/process/portrait`;

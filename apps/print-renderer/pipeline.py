@@ -367,6 +367,7 @@ def _fallback_strip(image: Image.Image) -> tuple:
 def process_portrait(
     image_bytes: bytes,
     config: dict,
+    zoom_index: int | None = None,
 ) -> list[tuple[str, Image.Image]]:
     """
     Full pipeline: face detection → zoom crops → dither.
@@ -388,6 +389,9 @@ def process_portrait(
             zooms.append({"name": f"zoom_{i}", "box": (left, 0, right, h)})
     else:
         zooms = compute_zoom_crops(image, landmarks, config)
+
+    if zoom_index is not None:
+        zooms = [z for z in zooms if z["name"] == f"zoom_{zoom_index}"]
 
     paper_px = config.get("paper_px", 576)
     contrast = config.get("contrast", 1.3)
