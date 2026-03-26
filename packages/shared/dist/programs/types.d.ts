@@ -16,7 +16,7 @@ export interface StageConfig {
     consentRequired?: boolean;
 }
 /** Which print template the POS server uses for the thermal card. */
-export type PrintLayout = 'dictionary' | 'dictionary_portrait' | 'portrait_only' | 'message';
+export type PrintLayout = 'dictionary' | 'helvetica' | 'dictionary_portrait' | 'portrait_only' | 'message';
 /** How the conversation result is displayed on the tablet screen. */
 export type ResultDisplay = 'aphorism' | 'definition' | 'raw_transcript';
 /** Generic parameters all programs receive for prompt building. */

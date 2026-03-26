@@ -54,7 +54,7 @@ export const voiceChainProgram: ConversationProgram = {
     printing: true,
     consentRequired: true,
   },
-  printLayout: 'dictionary',
+  printLayout: 'helvetica',
   resultDisplay: 'aphorism',
   sessionMode: 'chain',
 
