@@ -5,6 +5,7 @@ import { webhookRoutes } from './routes/webhook.js';
 import { sessionRoutes } from './routes/session.js';
 import { configRoutes } from './routes/config.js';
 import { voiceChainRoutes } from './routes/voiceChain.js';
+import { cleanupRoutes } from './routes/cleanup.js';
 
 export const app = new Hono();
 
@@ -50,6 +51,9 @@ app.route('/api', configRoutes);
 
 // Voice chain processing and state
 app.route('/api/voice-chain', voiceChainRoutes);
+
+// Data retention cleanup (triggered by pg_cron)
+app.route('/api/cleanup', cleanupRoutes);
 
 // ---------------------------------------------------------------------------
 // 404 fallback
