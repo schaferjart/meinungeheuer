@@ -39,6 +39,33 @@ export async function persistDefinition(definition: {
 }
 
 /**
+ * Advance the chain state after a definition is saved.
+ * Called in chain mode to make the new definition the active chain link.
+ * Fire-and-forget — errors are logged, never block the UI.
+ */
+export async function advanceChain(
+  backendUrl: string,
+  definitionId: string,
+): Promise<void> {
+  try {
+    const res = await fetch(`${backendUrl}/api/chain/advance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ definition_id: definitionId }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      console.warn('[Persist] Chain advance failed:', res.status, text);
+    } else {
+      console.log('[Persist] Chain advanced for definition:', definitionId);
+    }
+  } catch (err) {
+    console.warn('[Persist] Chain advance error:', err);
+  }
+}
+
+/**
  * Enqueue a print job in Supabase print_queue.
  * Fire-and-forget — errors are logged, never block the UI.
  */

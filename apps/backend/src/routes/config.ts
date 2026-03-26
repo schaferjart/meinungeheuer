@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { ModeSchema, type Database } from '@meinungeheuer/shared';
 import { supabase } from '../services/supabase.js';
-import { getActiveChainContext, getChainHistory } from '../services/chain.js';
+import { getActiveChainContext, getChainHistory, advanceChain } from '../services/chain.js';
 
 type InstallationConfigRow = Database['public']['Tables']['installation_config']['Row'];
 
@@ -338,4 +338,57 @@ configRoutes.get('/definitions', async (c) => {
 configRoutes.get('/chain', async (c) => {
   const history = await getChainHistory();
   return c.json({ chain: history }, 200);
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/chain/advance
+// Called by the tablet after save_definition to advance the chain state.
+// This is the primary chain advancement path — the webhook is a backup.
+// ---------------------------------------------------------------------------
+
+const ChainAdvanceSchema = z.object({
+  definition_id: z.string().uuid(),
+});
+
+configRoutes.post('/chain/advance', async (c) => {
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  const parsed = ChainAdvanceSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid request body', details: parsed.error.flatten() }, 400);
+  }
+
+  const { definition_id } = parsed.data;
+
+  try {
+    // Set chain_depth on the definition
+    const { count } = await supabase
+      .from('definitions')
+      .select('*', { count: 'exact', head: true })
+      .not('chain_depth', 'is', null);
+    const chainDepth = (count ?? 0) + 1;
+
+    const { error: updateError } = await supabase
+      .from('definitions')
+      .update({ chain_depth: chainDepth })
+      .eq('id', definition_id);
+
+    if (updateError) {
+      console.error('[chain/advance] Definition update error:', updateError);
+    }
+
+    // Advance the chain state
+    await advanceChain(definition_id);
+
+    console.log(`[chain/advance] Chain advanced to depth ${chainDepth}, definition ${definition_id}`);
+    return c.json({ success: true, chain_depth: chainDepth }, 200);
+  } catch (err) {
+    console.error('[chain/advance] Error:', err);
+    return c.json({ error: 'Failed to advance chain' }, 500);
+  }
 });

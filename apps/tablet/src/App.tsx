@@ -33,7 +33,7 @@ import { fetchConfig, startSession, submitVoiceChainData } from './lib/api';
 import type { ConfigResponse } from './lib/api';
 import { RuntimeConfigContext, DEFAULT_RUNTIME_CONFIG } from './lib/configContext';
 import type { RuntimeConfig } from './lib/configContext';
-import { persistDefinition, persistPrintJob, persistTranscript, uploadBlurredPortrait } from './lib/persist';
+import { persistDefinition, persistPrintJob, persistTranscript, uploadBlurredPortrait, advanceChain } from './lib/persist';
 import { captureBlurredPortrait } from './lib/portraitBlur';
 import { ScreenTransition } from './components/ScreenTransition';
 import { CameraDetector } from './components/CameraDetector';
@@ -222,6 +222,11 @@ function InstallationApp() {
       const def = makeClientDefinition(result, sessionIdRef.current);
       dispatch({ type: 'DEFINITION_RECEIVED', definition: def });
       void persistDefinition(def);
+
+      // Chain mode: advance the chain so the next visitor gets this definition
+      if (mode === 'chain') {
+        void advanceChain(BACKEND_URL, def.id);
+      }
 
       // Fire-and-forget portrait upload to POS server (only if program uses portraits).
       // Definition card prints via Supabase print_queue (fast, ~2s).
