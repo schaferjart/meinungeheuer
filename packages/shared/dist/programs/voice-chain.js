@@ -46,7 +46,7 @@ export const voiceChainProgram = {
         printing: true,
         consentRequired: true,
     },
-    printLayout: 'dictionary',
+    printLayout: 'helvetica',
     resultDisplay: 'aphorism',
     sessionMode: 'chain',
     buildSystemPrompt(params) {

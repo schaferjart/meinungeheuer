@@ -28,6 +28,7 @@ export interface StageConfig {
 /** Which print template the POS server uses for the thermal card. */
 export type PrintLayout =
   | 'dictionary'
+  | 'helvetica'
   | 'dictionary_portrait'
   | 'portrait_only'
   | 'message';
