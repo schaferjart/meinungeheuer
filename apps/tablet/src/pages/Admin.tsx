@@ -309,14 +309,16 @@ export function Admin() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 font-sans">
+    // fixed + overflow-y-auto overrides the global `html, body, #root { overflow: hidden }`
+    // set in index.css for the kiosk installation — without this, admin cannot scroll on mobile.
+    <div className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-white text-gray-900 font-sans">
       {/* Header */}
-      <header className="border-b border-gray-300 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-wide">MeinUngeheuer — Admin</h1>
-        <span className="text-sm text-gray-500">{BACKEND_URL}</span>
+      <header className="border-b border-gray-300 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
+        <h1 className="text-base sm:text-xl font-bold tracking-wide shrink-0">MeinUngeheuer — Admin</h1>
+        <span className="text-[10px] sm:text-sm text-gray-500 truncate font-mono">{BACKEND_URL}</span>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-8 sm:space-y-10">
         {/* ---------------------------------------------------------------- */}
         {/* Current Status                                                    */}
         {/* ---------------------------------------------------------------- */}
@@ -331,18 +333,18 @@ export function Admin() {
           )}
 
           {config && !configLoading && (
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-              <div>
+            <dl className="grid grid-cols-2 gap-x-4 sm:gap-x-8 gap-y-3 text-sm">
+              <div className="min-w-0">
                 <dt className="font-medium text-gray-500 uppercase text-xs tracking-wider">Mode</dt>
-                <dd className="mt-0.5 font-mono text-base">{config.mode}</dd>
+                <dd className="mt-0.5 font-mono text-base truncate">{config.mode}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="font-medium text-gray-500 uppercase text-xs tracking-wider">Term</dt>
-                <dd className="mt-0.5 font-mono text-base">{config.term ?? '—'}</dd>
+                <dd className="mt-0.5 font-mono text-base truncate">{config.term ?? '—'}</dd>
               </div>
               {config.chain_context && (
                 <>
-                  <div>
+                  <div className="min-w-0">
                     <dt className="font-medium text-gray-500 uppercase text-xs tracking-wider">
                       Chain Depth
                     </dt>
@@ -350,11 +352,11 @@ export function Admin() {
                       {config.chain_context.chain_depth ?? 0}
                     </dd>
                   </div>
-                  <div className="col-span-2">
+                  <div className="col-span-2 min-w-0">
                     <dt className="font-medium text-gray-500 uppercase text-xs tracking-wider">
                       Current Chain Context
                     </dt>
-                    <dd className="mt-0.5 text-sm text-gray-700 bg-gray-50 rounded p-2">
+                    <dd className="mt-0.5 text-sm text-gray-700 bg-gray-50 rounded p-2 break-words">
                       <span className="font-semibold">{config.chain_context.term}:</span>{' '}
                       {config.chain_context.definition_text}
                     </dd>
@@ -373,16 +375,16 @@ export function Admin() {
             Mode Switch
           </h2>
 
-          <div className="flex flex-wrap gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2 sm:gap-3 mb-4">
             {(['text_term', 'term_only', 'chain'] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setDraftMode(m)}
-                className={`px-4 py-2 rounded border text-sm font-mono transition-colors ${
+                className={`px-4 py-3 sm:py-2 rounded border text-sm font-mono transition-colors text-left sm:text-center ${
                   draftMode === m
                     ? 'bg-black text-white border-black'
-                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+                    : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500 active:bg-gray-100'
                 }`}
               >
                 {m === 'text_term' ? 'Mode A: Text + Term' : m === 'term_only' ? 'Mode B: Term Only' : 'Mode C: Chain'}
@@ -390,34 +392,35 @@ export function Admin() {
             ))}
           </div>
 
-          <div className="flex gap-3 mb-4">
-            <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
-                Term (leave blank to keep current)
-              </label>
-              <input
-                type="text"
-                value={draftTerm}
-                onChange={(e) => setDraftTerm(e.target.value)}
-                placeholder="e.g. BIRD"
-                className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-black"
-              />
-            </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+              Term (leave blank to keep current)
+            </label>
+            <input
+              type="text"
+              value={draftTerm}
+              onChange={(e) => setDraftTerm(e.target.value)}
+              placeholder="e.g. BIRD"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              className="w-full border border-gray-300 rounded px-3 py-3 sm:py-2 text-base sm:text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-black"
+            />
           </div>
 
-          <div className="flex gap-3 items-center">
+          <div className="flex flex-wrap gap-3 items-center">
             <button
               type="button"
               onClick={handleApply}
               disabled={applyLoading}
-              className="px-5 py-2 bg-black text-white text-sm rounded hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="px-5 py-3 sm:py-2 bg-black text-white text-sm rounded hover:bg-gray-800 active:bg-gray-700 disabled:opacity-50 transition-colors min-w-[96px]"
             >
               {applyLoading ? 'Applying...' : 'Apply'}
             </button>
 
             {applyMsg && (
               <span
-                className={`text-sm ${
+                className={`text-sm break-words min-w-0 flex-1 ${
                   applyMsg.startsWith('Error') ? 'text-red-600' : 'text-green-600'
                 }`}
               >
@@ -435,8 +438,8 @@ export function Admin() {
             Chain Controls
           </h2>
 
-          <div className="flex items-center gap-4">
-            <div className="text-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="text-sm w-full sm:w-auto">
               <span className="text-gray-500 uppercase text-xs font-medium tracking-wider">
                 Chain depth:{' '}
               </span>
@@ -449,7 +452,7 @@ export function Admin() {
               type="button"
               onClick={handleResetChain}
               disabled={applyLoading}
-              className="px-4 py-2 border border-red-400 text-red-600 text-sm rounded hover:bg-red-50 disabled:opacity-50 transition-colors"
+              className="px-4 py-3 sm:py-2 border border-red-400 text-red-600 text-sm rounded hover:bg-red-50 active:bg-red-100 disabled:opacity-50 transition-colors flex-1 sm:flex-initial"
             >
               Reset Chain
             </button>
@@ -458,38 +461,38 @@ export function Admin() {
               type="button"
               onClick={loadChain}
               disabled={chainLoading}
-              className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              className="px-4 py-3 sm:py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 active:bg-gray-100 disabled:opacity-50 transition-colors flex-1 sm:flex-initial"
             >
               {chainLoading ? 'Loading...' : 'Refresh Chain'}
             </button>
           </div>
 
           {chainError && (
-            <p className="mt-2 text-sm text-red-600 bg-red-50 rounded p-2">{chainError}</p>
+            <p className="mt-2 text-sm text-red-600 bg-red-50 rounded p-2 break-words">{chainError}</p>
           )}
 
           {chain.length > 0 && (
-            <div className="mt-4 overflow-auto max-h-48 border border-gray-200 rounded">
-              <table className="w-full text-xs font-mono">
+            <div className="mt-4 overflow-auto max-h-64 sm:max-h-48 border border-gray-200 rounded -mx-4 sm:mx-0">
+              <table className="min-w-full text-xs font-mono">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium">#</th>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium">Term</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium">Lang</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium hidden sm:table-cell">Lang</th>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium">Definition (excerpt)</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium">Created</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium hidden sm:table-cell">Created</th>
                   </tr>
                 </thead>
                 <tbody>
                   {chain.map((node, i) => (
                     <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
                       <td className="px-3 py-1.5 text-gray-400">{node.depth}</td>
-                      <td className="px-3 py-1.5 font-semibold">{node.term}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{node.language}</td>
-                      <td className="px-3 py-1.5 text-gray-700 max-w-xs truncate">
+                      <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{node.term}</td>
+                      <td className="px-3 py-1.5 text-gray-500 hidden sm:table-cell">{node.language}</td>
+                      <td className="px-3 py-1.5 text-gray-700 max-w-[14rem] sm:max-w-xs truncate">
                         {node.definition_text}
                       </td>
-                      <td className="px-3 py-1.5 text-gray-400">
+                      <td className="px-3 py-1.5 text-gray-400 hidden sm:table-cell whitespace-nowrap">
                         {new Date(node.created_at).toLocaleString('de-DE', {
                           dateStyle: 'short',
                           timeStyle: 'short',
@@ -511,58 +514,61 @@ export function Admin() {
             Definition Browser
           </h2>
 
-          <div className="flex gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
             <input
               type="text"
               value={termFilter}
               onChange={(e) => setTermFilter(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleDefSearch(); }}
               placeholder="Filter by term (e.g. BIRD)"
-              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-black"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              className="flex-1 min-w-0 border border-gray-300 rounded px-3 py-3 sm:py-2 text-base sm:text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-black"
             />
             <button
               type="button"
               onClick={handleDefSearch}
               disabled={defLoading}
-              className="px-4 py-2 bg-black text-white text-sm rounded hover:bg-gray-800 disabled:opacity-50 transition-colors"
+              className="px-4 py-3 sm:py-2 bg-black text-white text-sm rounded hover:bg-gray-800 active:bg-gray-700 disabled:opacity-50 transition-colors"
             >
               {defLoading ? 'Searching...' : 'Search'}
             </button>
           </div>
 
           {defError && (
-            <p className="text-sm text-red-600 bg-red-50 rounded p-2 mb-3">{defError}</p>
+            <p className="text-sm text-red-600 bg-red-50 rounded p-2 mb-3 break-words">{defError}</p>
           )}
 
           <p className="text-xs text-gray-500 mb-2">
             Showing {definitions.length} of {defTotal} definitions
           </p>
 
-          <div className="overflow-auto max-h-80 border border-gray-200 rounded">
+          <div className="overflow-auto max-h-[60vh] sm:max-h-80 border border-gray-200 rounded -mx-4 sm:mx-0">
             {definitions.length === 0 && !defLoading && (
               <p className="text-sm text-gray-400 p-4 text-center">No definitions found.</p>
             )}
             {definitions.length > 0 && (
-              <table className="w-full text-xs font-mono">
+              <table className="min-w-full text-xs font-mono">
                 <thead className="bg-gray-50 sticky top-0">
                   <tr>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium">Term</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium">Lang</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium">Depth</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium hidden sm:table-cell">Lang</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium hidden sm:table-cell">Depth</th>
                     <th className="text-left px-3 py-2 text-gray-500 font-medium">Definition</th>
-                    <th className="text-left px-3 py-2 text-gray-500 font-medium">Created</th>
+                    <th className="text-left px-3 py-2 text-gray-500 font-medium hidden sm:table-cell">Created</th>
                   </tr>
                 </thead>
                 <tbody>
                   {definitions.map((def) => (
-                    <tr key={def.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <tr key={def.id} className="border-t border-gray-100 hover:bg-gray-50 align-top">
                       <td className="px-3 py-1.5 font-semibold whitespace-nowrap">{def.term}</td>
-                      <td className="px-3 py-1.5 text-gray-500">{def.language}</td>
-                      <td className="px-3 py-1.5 text-gray-400">{def.chain_depth ?? 0}</td>
-                      <td className="px-3 py-1.5 text-gray-700 max-w-xs">
+                      <td className="px-3 py-1.5 text-gray-500 hidden sm:table-cell">{def.language}</td>
+                      <td className="px-3 py-1.5 text-gray-400 hidden sm:table-cell">{def.chain_depth ?? 0}</td>
+                      <td className="px-3 py-1.5 text-gray-700 max-w-[14rem] sm:max-w-xs">
                         <ExpandableText text={def.definition_text} />
                       </td>
-                      <td className="px-3 py-1.5 text-gray-400 whitespace-nowrap">
+                      <td className="px-3 py-1.5 text-gray-400 whitespace-nowrap hidden sm:table-cell">
                         {new Date(def.created_at).toLocaleString('de-DE', {
                           dateStyle: 'short',
                           timeStyle: 'short',
@@ -582,11 +588,11 @@ export function Admin() {
                 type="button"
                 onClick={() => loadDefinitions(termFilter, Math.max(0, defOffset - DEF_LIMIT))}
                 disabled={defOffset === 0 || defLoading}
-                className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 active:bg-gray-100 disabled:opacity-40"
               >
                 Previous
               </button>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500 text-center shrink-0">
                 Page {Math.floor(defOffset / DEF_LIMIT) + 1} of{' '}
                 {Math.ceil(defTotal / DEF_LIMIT)}
               </span>
@@ -594,7 +600,7 @@ export function Admin() {
                 type="button"
                 onClick={() => loadDefinitions(termFilter, defOffset + DEF_LIMIT)}
                 disabled={defOffset + DEF_LIMIT >= defTotal || defLoading}
-                className="px-3 py-1 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 disabled:opacity-40"
+                className="px-4 py-2 border border-gray-300 text-gray-700 text-sm rounded hover:bg-gray-50 active:bg-gray-100 disabled:opacity-40"
               >
                 Next
               </button>
@@ -614,18 +620,18 @@ export function Admin() {
             Inserts a test job into the print queue. The printer bridge will pick it up within seconds if connected.
           </p>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handlePrintTest}
-              className="px-5 py-2 border border-gray-400 text-gray-700 text-sm rounded hover:bg-gray-50 transition-colors"
+              className="px-5 py-3 sm:py-2 border border-gray-400 text-gray-700 text-sm rounded hover:bg-gray-50 active:bg-gray-100 transition-colors"
             >
               Send Print Test
             </button>
 
             {printMsg && (
               <span
-                className={`text-sm ${
+                className={`text-sm break-words min-w-0 flex-1 ${
                   printMsg.startsWith('Error') ? 'text-red-600' : 'text-green-600'
                 }`}
               >
