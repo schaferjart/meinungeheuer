@@ -24,6 +24,10 @@ import { DefinitionSchema } from '@meinungeheuer/shared';
 
 const BACKEND_URL = import.meta.env['VITE_BACKEND_URL'] ?? 'http://localhost:3001';
 
+// Stable empty handler — enables :active CSS on iOS Safari when attached
+// to an ancestor via onTouchStart. Arrow fn at module scope avoids re-creation.
+const noop = () => {};
+
 // ---------------------------------------------------------------------------
 // API response schemas
 // ---------------------------------------------------------------------------
@@ -311,7 +315,12 @@ export function Admin() {
   return (
     // fixed + overflow-y-auto overrides the global `html, body, #root { overflow: hidden }`
     // set in index.css for the kiosk installation — without this, admin cannot scroll on mobile.
-    <div className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-white text-gray-900 font-sans">
+    // onTouchStart: empty handler enables :active CSS pseudo-class on iOS Safari.
+    // Without it, all active: Tailwind classes silently fail on touch devices.
+    <div
+      className="fixed inset-0 overflow-y-auto overflow-x-hidden bg-white text-gray-900 font-sans"
+      onTouchStart={noop}
+    >
       {/* Header */}
       <header className="border-b border-gray-300 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
         <h1 className="text-base sm:text-xl font-bold tracking-wide shrink-0">MeinUngeheuer — Admin</h1>
@@ -383,7 +392,7 @@ export function Admin() {
                 onClick={() => setDraftMode(m)}
                 className={`px-4 py-3 sm:py-2 rounded border text-sm font-mono transition-colors text-left sm:text-center ${
                   draftMode === m
-                    ? 'bg-black text-white border-black'
+                    ? 'bg-black text-white border-black active:bg-gray-700'
                     : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500 active:bg-gray-100'
                 }`}
               >
@@ -668,7 +677,7 @@ function ExpandableText({ text }: { text: string }) {
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="text-blue-500 underline ml-1"
+        className="text-blue-500 underline ml-1 py-2 -my-2 px-1 active:text-blue-700"
       >
         {expanded ? 'less' : 'more'}
       </button>
