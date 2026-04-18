@@ -1043,6 +1043,8 @@ function buildSliceSection(body: HTMLElement): void {
   let brightness = 1.0;
   let sharpness = 1.2;
   let blur = 0;
+  let outputMode = 'separate';
+  let gap = 40;
   let previewUrls: string[] = [];
 
   body.appendChild(makeFileField('Image', 'image/*', (f) => { uploadedFile = f; }));
@@ -1074,6 +1076,19 @@ function buildSliceSection(body: HTMLElement): void {
   body.appendChild(createSlider('Brightness', 0.5, 2.0, 0.05, brightness, (v) => { brightness = v; }));
   body.appendChild(createSlider('Sharpness', 0.5, 2.0, 0.05, sharpness, (v) => { sharpness = v; }));
   body.appendChild(createSlider('Blur', 0, 50, 1, blur, (v) => { blur = v; }));
+
+  body.appendChild(
+    createRadioGroup(
+      'Output',
+      [
+        { value: 'separate', label: 'separate cuts' },
+        { value: 'single', label: 'single print (horizontal only)' },
+      ],
+      outputMode,
+      (v) => { outputMode = v; }
+    )
+  );
+  body.appendChild(createSlider('Gap (px)', 0, 500, 1, gap, (v) => { gap = v; }));
 
   const previewGrid = document.createElement('div');
   previewGrid.className = 'wb-preview-grid';
@@ -1160,52 +1175,111 @@ function buildSliceSection(body: HTMLElement): void {
     previewBtn.disabled = false;
   }
 
+  async function compositeSlicesVertically(urls: string[], gapPx: number): Promise<Blob> {
+    const images = await Promise.all(urls.map((url) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image load failed'));
+      img.src = url;
+    })));
+    const width = Math.max(...images.map((i) => i.width));
+    const totalHeight = images.reduce((s, i) => s + i.height, 0) + gapPx * Math.max(0, images.length - 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = totalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas context unavailable');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, totalHeight);
+    let y = 0;
+    for (const img of images) {
+      ctx.drawImage(img, 0, y);
+      y += img.height + gapPx;
+    }
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');
+    });
+  }
+
   async function handlePrint(): Promise<void> {
     if (previewUrls.length === 0) {
       setStatus(statusEl, 'Preview slices first, then print.', '#cc4444');
       return;
     }
+    if (outputMode === 'single' && direction !== 'horizontal') {
+      setStatus(statusEl, 'Single print mode is horizontal only.', '#cc4444');
+      return;
+    }
     printBtn.disabled = true;
-    setStatus(statusEl, 'Uploading slices and queuing print...', '#777777');
 
     try {
-      // Upload each slice preview to Supabase Storage
-      const imageUrlEntries: { name: string; url: string }[] = [];
-      for (let i = 0; i < previewUrls.length; i++) {
-        const imgRes = await fetch(previewUrls[i]!);
-        const blob = await imgRes.blob();
-        const fileName = `workbench/slice-${Date.now()}-${i}.png`;
+      if (outputMode === 'single') {
+        setStatus(statusEl, 'Compositing slices...', '#777777');
+        const composite = await compositeSlicesVertically(previewUrls, gap);
+        const fileName = `workbench/slice-combined-${Date.now()}.png`;
         const { error: upErr } = await supabase.storage
           .from('prints')
-          .upload(fileName, blob, { contentType: 'image/png' });
+          .upload(fileName, composite, { contentType: 'image/png' });
         if (upErr) {
-          setStatus(statusEl, `Upload failed for slice ${i}: ` + upErr.message, '#cc4444');
+          setStatus(statusEl, 'Upload failed: ' + upErr.message, '#cc4444');
           printBtn.disabled = false;
           return;
         }
         const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
-        imageUrlEntries.push({ name: `slice_${i}`, url: urlData.publicUrl });
-      }
-
-      // Insert each slice as a separate portrait job (one cut per slice)
-      let insertErrors = 0;
-      for (const entry of imageUrlEntries) {
         const { error } = await supabase.from('print_queue').insert({
           payload: {
             type: 'portrait',
-            image_urls: [entry],
-            job_id: `workbench-slice-${Date.now()}-${entry.name}`,
+            image_urls: [{ name: 'combined', url: urlData.publicUrl }],
+            job_id: `workbench-slice-combined-${Date.now()}`,
             timestamp: new Date().toISOString(),
           },
           status: 'pending',
         });
-        if (error) insertErrors++;
-      }
-
-      if (insertErrors > 0) {
-        setStatus(statusEl, `${insertErrors} slice(s) failed to queue.`, '#cc4444');
+        if (error) {
+          setStatus(statusEl, 'Failed to queue print job.', '#cc4444');
+        } else {
+          setStatus(statusEl, `Combined print queued (${previewUrls.length} slices, ${gap}px gap, 1 cut).`, '#66aa66');
+        }
       } else {
-        setStatus(statusEl, `${imageUrlEntries.length} slices queued (separate cuts).`, '#66aa66');
+        setStatus(statusEl, 'Uploading slices and queuing print...', '#777777');
+        // Upload each slice preview to Supabase Storage
+        const imageUrlEntries: { name: string; url: string }[] = [];
+        for (let i = 0; i < previewUrls.length; i++) {
+          const imgRes = await fetch(previewUrls[i]!);
+          const blob = await imgRes.blob();
+          const fileName = `workbench/slice-${Date.now()}-${i}.png`;
+          const { error: upErr } = await supabase.storage
+            .from('prints')
+            .upload(fileName, blob, { contentType: 'image/png' });
+          if (upErr) {
+            setStatus(statusEl, `Upload failed for slice ${i}: ` + upErr.message, '#cc4444');
+            printBtn.disabled = false;
+            return;
+          }
+          const { data: urlData } = supabase.storage.from('prints').getPublicUrl(fileName);
+          imageUrlEntries.push({ name: `slice_${i}`, url: urlData.publicUrl });
+        }
+
+        // Insert each slice as a separate portrait job (one cut per slice)
+        let insertErrors = 0;
+        for (const entry of imageUrlEntries) {
+          const { error } = await supabase.from('print_queue').insert({
+            payload: {
+              type: 'portrait',
+              image_urls: [entry],
+              job_id: `workbench-slice-${Date.now()}-${entry.name}`,
+              timestamp: new Date().toISOString(),
+            },
+            status: 'pending',
+          });
+          if (error) insertErrors++;
+        }
+
+        if (insertErrors > 0) {
+          setStatus(statusEl, `${insertErrors} slice(s) failed to queue.`, '#cc4444');
+        } else {
+          setStatus(statusEl, `${imageUrlEntries.length} slices queued (separate cuts).`, '#66aa66');
+        }
       }
     } catch {
       setStatus(statusEl, 'Failed to queue print job.', '#cc4444');
