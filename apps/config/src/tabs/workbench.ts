@@ -1102,8 +1102,12 @@ function buildSliceSection(body: HTMLElement): void {
   const printBtn = makeButton('Send to Printer', 'primary');
   printBtn.addEventListener('click', () => { void handlePrint(); });
 
+  const downloadBtn = makeButton('Download (all)');
+  downloadBtn.addEventListener('click', () => { void handleDownload(); });
+
   btnRow.appendChild(previewBtn);
   btnRow.appendChild(printBtn);
+  btnRow.appendChild(downloadBtn);
   body.appendChild(btnRow);
   body.appendChild(previewGrid);
   body.appendChild(statusEl);
@@ -1173,6 +1177,49 @@ function buildSliceSection(body: HTMLElement): void {
     }
 
     previewBtn.disabled = false;
+  }
+
+  function triggerDownload(url: string, filename: string): void {
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  async function handleDownload(): Promise<void> {
+    if (previewUrls.length === 0) {
+      setStatus(statusEl, 'Preview slices first, then download.', '#cc4444');
+      return;
+    }
+    if (outputMode === 'single' && direction !== 'horizontal') {
+      setStatus(statusEl, 'Single output mode is horizontal only.', '#cc4444');
+      return;
+    }
+    downloadBtn.disabled = true;
+    try {
+      if (outputMode === 'single') {
+        setStatus(statusEl, 'Compositing slices...', '#777777');
+        const blob = await compositeSlicesVertically(previewUrls, gap);
+        const url = URL.createObjectURL(blob);
+        triggerDownload(url, `slice-combined-${Date.now()}.png`);
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        setStatus(statusEl, 'Combined slice downloaded.', '#66aa66');
+      } else {
+        setStatus(statusEl, 'Downloading slices...', '#777777');
+        const ts = Date.now();
+        for (let i = 0; i < previewUrls.length; i++) {
+          triggerDownload(previewUrls[i]!, `slice-${ts}-${String(i).padStart(2, '0')}.png`);
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        setStatus(statusEl, `${previewUrls.length} slices downloaded.`, '#66aa66');
+      }
+    } catch {
+      setStatus(statusEl, 'Download failed.', '#cc4444');
+    }
+    downloadBtn.disabled = false;
   }
 
   async function compositeSlicesVertically(urls: string[], gapPx: number): Promise<Blob> {
