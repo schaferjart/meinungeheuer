@@ -1057,7 +1057,7 @@ function buildSliceSection(body: HTMLElement): void {
         { value: 'horizontal', label: 'horizontal' },
       ],
       direction,
-      (v) => { direction = v; }
+      (v) => { direction = v; void updatePreview(); }
     )
   );
   body.appendChild(
@@ -1085,10 +1085,10 @@ function buildSliceSection(body: HTMLElement): void {
         { value: 'single', label: 'single print (horizontal only)' },
       ],
       outputMode,
-      (v) => { outputMode = v; }
+      (v) => { outputMode = v; void updatePreview(); }
     )
   );
-  body.appendChild(createSlider('Gap (px)', 0, 500, 1, gap, (v) => { gap = v; }));
+  body.appendChild(createSlider('Gap (px)', 0, 500, 1, gap, (v) => { gap = v; if (outputMode === 'single') void updatePreview(); }));
 
   const previewGrid = document.createElement('div');
   previewGrid.className = 'wb-preview-grid';
@@ -1112,13 +1112,62 @@ function buildSliceSection(body: HTMLElement): void {
   body.appendChild(previewGrid);
   body.appendChild(statusEl);
 
-  function renderPreviewGrid(urls: string[]): void {
-    previewGrid.innerHTML = '';
-    for (const url of urls) {
-      const img = document.createElement('img');
+  let cachedImages: HTMLImageElement[] | null = null;
+
+  async function loadSliceImages(urls: string[]): Promise<HTMLImageElement[]> {
+    return Promise.all(urls.map((url) => new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image load failed'));
       img.src = url;
-      img.alt = 'slice';
-      previewGrid.appendChild(img);
+    })));
+  }
+
+  function drawCompositeCanvas(images: HTMLImageElement[], gapPx: number): HTMLCanvasElement {
+    const width = Math.max(...images.map((i) => i.width));
+    const totalHeight = images.reduce((s, i) => s + i.height, 0) + gapPx * Math.max(0, images.length - 1);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = totalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas context unavailable');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, width, totalHeight);
+    let y = 0;
+    for (const img of images) {
+      ctx.drawImage(img, 0, y);
+      y += img.height + gapPx;
+    }
+    return canvas;
+  }
+
+  async function updatePreview(): Promise<void> {
+    previewGrid.innerHTML = '';
+    if (previewUrls.length === 0) {
+      previewGrid.style.display = '';
+      return;
+    }
+    const single = outputMode === 'single' && direction === 'horizontal';
+    if (single) {
+      if (!cachedImages || cachedImages.length !== previewUrls.length) {
+        cachedImages = await loadSliceImages(previewUrls);
+      }
+      const canvas = drawCompositeCanvas(cachedImages, gap);
+      canvas.style.maxWidth = '100%';
+      canvas.style.height = 'auto';
+      canvas.style.border = '1px solid #2a2a2a';
+      canvas.style.borderRadius = '4px';
+      canvas.style.display = 'block';
+      previewGrid.style.display = 'block';
+      previewGrid.appendChild(canvas);
+    } else {
+      previewGrid.style.display = '';
+      for (const url of previewUrls) {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'slice';
+        previewGrid.appendChild(img);
+      }
     }
   }
 
@@ -1170,7 +1219,8 @@ function buildSliceSection(body: HTMLElement): void {
         return URL.createObjectURL(blob);
       });
 
-      renderPreviewGrid(previewUrls);
+      cachedImages = null;
+      await updatePreview();
       setStatus(statusEl, `${previewUrls.length} slices rendered.`, '#66aa66');
     } catch {
       setStatus(statusEl, 'Preview unavailable — renderer not reachable.', '#cc4444');
@@ -1223,26 +1273,10 @@ function buildSliceSection(body: HTMLElement): void {
   }
 
   async function compositeSlicesVertically(urls: string[], gapPx: number): Promise<Blob> {
-    const images = await Promise.all(urls.map((url) => new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('image load failed'));
-      img.src = url;
-    })));
-    const width = Math.max(...images.map((i) => i.width));
-    const totalHeight = images.reduce((s, i) => s + i.height, 0) + gapPx * Math.max(0, images.length - 1);
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = totalHeight;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('canvas context unavailable');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, totalHeight);
-    let y = 0;
-    for (const img of images) {
-      ctx.drawImage(img, 0, y);
-      y += img.height + gapPx;
+    if (!cachedImages || cachedImages.length !== urls.length) {
+      cachedImages = await loadSliceImages(urls);
     }
+    const canvas = drawCompositeCanvas(cachedImages, gapPx);
     return new Promise<Blob>((resolve, reject) => {
       canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');
     });
