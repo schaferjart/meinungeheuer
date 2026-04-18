@@ -379,7 +379,7 @@ function buildBlockConfigForm(
         )
       );
       container.appendChild(
-        createSlider('Blur', 0, 30, 1, n(cfg['blur'], 10), (v) => { cfg['blur'] = v; })
+        createSlider('Blur', 0, 50, 1, n(cfg['blur'], 10), (v) => { cfg['blur'] = v; })
       );
       addSubLabel(container, 'Zoom 0 Crop');
       container.appendChild(
@@ -494,7 +494,7 @@ function buildBlockConfigForm(
         createSlider('Sharpness', 0.5, 2.0, 0.05, n(cfg['sharpness'], 1.2), (v) => { cfg['sharpness'] = v; })
       );
       container.appendChild(
-        createSlider('Blur', 0, 30, 1, n(cfg['blur'], 0), (v) => { cfg['blur'] = v; })
+        createSlider('Blur', 0, 50, 1, n(cfg['blur'], 0), (v) => { cfg['blur'] = v; })
       );
       break;
     }
@@ -546,7 +546,7 @@ function buildBlockConfigForm(
         createSlider('Smoothing', 0.01, 0.5, 0.01, n(cfg['smoothing'], 0.1), (v) => { cfg['smoothing'] = v; })
       );
       container.appendChild(
-        createSlider('Blur', 0, 30, 1, n(cfg['blur'], 0), (v) => { cfg['blur'] = v; })
+        createSlider('Blur', 0, 50, 1, n(cfg['blur'], 0), (v) => { cfg['blur'] = v; })
       );
       break;
     }
