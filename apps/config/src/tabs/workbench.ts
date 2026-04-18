@@ -837,7 +837,7 @@ function buildDitherSection(body: HTMLElement): void {
     createSlider('Sharpness', 0.5, 2.0, 0.05, sharpness, (v) => { sharpness = v; })
   );
   body.appendChild(
-    createSlider('Blur', 0, 30, 1, blur, (v) => { blur = v; })
+    createSlider('Blur', 0, 50, 1, blur, (v) => { blur = v; })
   );
 
   const previewImg = document.createElement('img');
@@ -1073,7 +1073,7 @@ function buildSliceSection(body: HTMLElement): void {
   body.appendChild(createSlider('Contrast', 0.5, 2.0, 0.05, contrast, (v) => { contrast = v; }));
   body.appendChild(createSlider('Brightness', 0.5, 2.0, 0.05, brightness, (v) => { brightness = v; }));
   body.appendChild(createSlider('Sharpness', 0.5, 2.0, 0.05, sharpness, (v) => { sharpness = v; }));
-  body.appendChild(createSlider('Blur', 0, 30, 1, blur, (v) => { blur = v; }));
+  body.appendChild(createSlider('Blur', 0, 50, 1, blur, (v) => { blur = v; }));
 
   const previewGrid = document.createElement('div');
   previewGrid.className = 'wb-preview-grid';
@@ -1679,7 +1679,7 @@ function buildPortraitSection(body: HTMLElement): void {
   blurLbl.style.cssText = 'font-size:12px;color:#777777;font-family:Helvetica,"Helvetica Neue",Arial,sans-serif;margin-left:8px;';
   ditherControlRow.appendChild(blurLbl);
   const blurSlider = document.createElement('input');
-  blurSlider.type = 'range'; blurSlider.min = '0'; blurSlider.max = '30'; blurSlider.step = '1'; blurSlider.value = String(blur);
+  blurSlider.type = 'range'; blurSlider.min = '0'; blurSlider.max = '50'; blurSlider.step = '1'; blurSlider.value = String(blur);
   blurSlider.style.cssText = 'width:80px;accent-color:#ffffff;';
   blurSlider.addEventListener('input', () => { blur = Number(blurSlider.value); });
   ditherControlRow.appendChild(blurSlider);
@@ -2383,7 +2383,7 @@ function buildRasterPainterSection(body: HTMLElement): void {
 
   body.appendChild(makeDivider());
   body.appendChild(makeSubLabel('Post-processing'));
-  body.appendChild(createSlider('Blur radius', 0, 30, 1, params.blurRadius, (v) => { params.blurRadius = v; }));
+  body.appendChild(createSlider('Blur radius', 0, 50, 1, params.blurRadius, (v) => { params.blurRadius = v; }));
 
   body.appendChild(makeDivider());
 
