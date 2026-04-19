@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants.js';
 import type { ConversationProgram, PromptParams } from './types.js';
 
 // ============================================================
@@ -58,7 +59,7 @@ export const aphorismProgram: ConversationProgram = {
     const modeBlock = buildModeBlock(params.contextText);
     const fallbackTerm = params.term;
 
-    return `You are an interviewer in an art installation called "MeinUngeheuer."
+    return `You are an interviewer in an art installation called "${APP_NAME}."
 
 ${modeBlock}
 

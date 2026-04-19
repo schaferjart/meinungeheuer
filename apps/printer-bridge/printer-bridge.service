@@ -1,5 +1,5 @@
 [Unit]
-Description=MeinUngeheuer Printer Bridge
+Description=denkfink Printer Bridge
 After=network-online.target
 Wants=network-online.target
 

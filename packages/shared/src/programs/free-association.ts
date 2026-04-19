@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants.js';
 import type { ConversationProgram, PromptParams } from './types.js';
 
 /**
@@ -23,7 +24,7 @@ export const freeAssociationProgram: ConversationProgram = {
   sessionMode: 'term_only',
 
   buildSystemPrompt(_params: PromptParams): string {
-    return `You are an interviewer in an art installation called "MeinUngeheuer."
+    return `You are an interviewer in an art installation called "${APP_NAME}."
 
 A visitor has just sat down in front of you. There is no text to read,
 no predefined topic. This conversation starts from nothing — from whatever

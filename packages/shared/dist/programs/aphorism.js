@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants.js';
 // ============================================================
 // Helper functions (co-located for self-containment)
 // ============================================================
@@ -48,7 +49,7 @@ export const aphorismProgram = {
     buildSystemPrompt(params) {
         const modeBlock = buildModeBlock(params.contextText);
         const fallbackTerm = params.term;
-        return `You are an interviewer in an art installation called "MeinUngeheuer."
+        return `You are an interviewer in an art installation called "${APP_NAME}."
 
 ${modeBlock}
 

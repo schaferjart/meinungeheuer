@@ -14,7 +14,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
-import { ModeSchema } from '@meinungeheuer/shared';
+import { APP_NAME, ModeSchema } from '@meinungeheuer/shared';
 import type { Mode, Definition } from '@meinungeheuer/shared';
 import { DefinitionSchema } from '@meinungeheuer/shared';
 
@@ -323,7 +323,7 @@ export function Admin() {
     >
       {/* Header */}
       <header className="border-b border-gray-300 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
-        <h1 className="text-base sm:text-xl font-bold tracking-wide shrink-0">MeinUngeheuer — Admin</h1>
+        <h1 className="text-base sm:text-xl font-bold tracking-wide shrink-0">{APP_NAME} — Admin</h1>
         <span className="text-[10px] sm:text-sm text-gray-500 truncate font-mono">{BACKEND_URL}</span>
       </header>
 
@@ -654,7 +654,7 @@ export function Admin() {
         {/* Footer                                                             */}
         {/* ---------------------------------------------------------------- */}
         <footer className="border-t border-gray-200 pt-4 text-xs text-gray-400">
-          MeinUngeheuer Admin — {new Date().toLocaleDateString('de-DE')}
+          {APP_NAME} Admin — {new Date().toLocaleDateString('de-DE')}
         </footer>
       </main>
     </div>
