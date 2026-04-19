@@ -1,4 +1,4 @@
-import type { Mode } from '@denkfink/shared';
+import type { Mode } from '@denkfink/installation-core';
 
 /**
  * Build the first message the AI agent speaks to the visitor.

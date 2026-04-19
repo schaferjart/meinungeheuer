@@ -5,7 +5,7 @@ import {
   type DisconnectionDetails,
   type Role as ElevenLabsRole,
 } from '@elevenlabs/react';
-import { APP_NAME, type ConversationProgram, type SpeechProfile } from '@denkfink/shared';
+import { APP_NAME, type ConversationProgram, type SpeechProfile } from '@denkfink/installation-core';
 
 const LOG_PREFIX = `[${APP_NAME}]`;
 

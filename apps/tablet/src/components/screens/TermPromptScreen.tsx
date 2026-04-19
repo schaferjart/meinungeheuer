@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { TIMERS, FONT_FAMILY } from '@denkfink/shared';
+import { TIMERS, FONT_FAMILY } from '@denkfink/installation-core';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface TermPromptScreenProps {

@@ -1,4 +1,4 @@
-import type { Definition } from '@denkfink/shared';
+import type { Definition } from '@denkfink/installation-core';
 import { supabase } from './supabase.js';
 
 // Local minimal type for what we read from chain_state

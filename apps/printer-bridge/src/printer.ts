@@ -6,7 +6,7 @@
  *   2. Portrait payloads (pre-rendered images) → download from Supabase Storage → send to POS server
  */
 
-import type { PrintPayload, PortraitPrintPayload } from '@denkfink/shared';
+import type { PrintPayload, PortraitPrintPayload } from '@denkfink/installation-core';
 
 /**
  * Renders a text payload (dictionary card) via the cloud print-renderer,

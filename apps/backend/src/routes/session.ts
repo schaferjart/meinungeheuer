@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ModeSchema } from '@denkfink/shared';
+import { ModeSchema } from '@denkfink/installation-core';
 import { supabase } from '../services/supabase.js';
 
 export const sessionRoutes = new Hono();

@@ -21,7 +21,7 @@
  */
 
 import type { RefObject } from 'react';
-import { PORTRAIT } from '@denkfink/shared';
+import { PORTRAIT } from '@denkfink/installation-core';
 
 /**
  * Capture a blurred JPEG from the video element referenced by videoRef.

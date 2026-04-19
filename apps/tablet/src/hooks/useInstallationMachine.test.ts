@@ -13,9 +13,9 @@ import type { InstallationState, InstallationAction } from './useInstallationMac
 // This mirrors the exact logic in useInstallationMachine.ts.
 // ---------------------------------------------------------------------------
 
-import type { Mode, Definition } from '@denkfink/shared';
-import type { StageConfig } from '@denkfink/shared';
-import { DEFAULT_MODE, DEFAULT_TERM } from '@denkfink/shared';
+import type { Mode, Definition } from '@denkfink/installation-core';
+import type { StageConfig } from '@denkfink/installation-core';
+import { DEFAULT_MODE, DEFAULT_TERM } from '@denkfink/installation-core';
 
 const initialState: InstallationState = {
   screen: 'sleep',

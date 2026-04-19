@@ -27,7 +27,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build shared package
-        run: pnpm --filter @denkfink/shared build
+        run: pnpm --filter @denkfink/installation-core build
 
       - name: Typecheck
         run: pnpm -r typecheck

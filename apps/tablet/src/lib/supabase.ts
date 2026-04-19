@@ -1,4 +1,4 @@
-import { createSupabaseClient } from '@denkfink/shared';
+import { createSupabaseClient } from '@denkfink/installation-core';
 
 let client: ReturnType<typeof createSupabaseClient> | null = null;
 

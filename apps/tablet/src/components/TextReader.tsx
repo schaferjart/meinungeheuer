@@ -3,7 +3,7 @@ import { KaraokeReader, stripMarkdownForTTS } from 'karaoke-reader';
 import { useElevenLabsTTS } from 'karaoke-reader/elevenlabs';
 import type { TtsStatus } from 'karaoke-reader';
 import 'karaoke-reader/styles.css';
-import { FONT_FAMILY } from '@denkfink/shared';
+import { FONT_FAMILY } from '@denkfink/installation-core';
 import { createSupabaseTTSCache } from '../lib/supabaseCacheAdapter';
 import { useRuntimeConfig } from '../lib/configContext';
 

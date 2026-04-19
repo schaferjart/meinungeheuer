@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { FaceDetector, FilesetResolver } from '@mediapipe/tasks-vision';
-import { FACE_DETECTION } from '@denkfink/shared';
+import { FACE_DETECTION } from '@denkfink/installation-core';
 
 // ---------------------------------------------------------------------------
 // Types

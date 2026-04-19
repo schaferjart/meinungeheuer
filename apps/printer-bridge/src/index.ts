@@ -8,8 +8,8 @@
  *  4. Graceful shutdown on SIGINT / SIGTERM
  */
 
-import { APP_NAME, createSupabaseClient } from '@denkfink/shared';
-import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@denkfink/shared';
+import { APP_NAME, createSupabaseClient } from '@denkfink/installation-core';
+import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@denkfink/installation-core';
 import { loadConfig } from './config.js';
 import { renderAndPrint, printPortrait } from './printer.js';
 

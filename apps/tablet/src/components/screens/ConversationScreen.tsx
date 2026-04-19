@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { FONT_FAMILY } from '@denkfink/shared';
-import type { Role } from '@denkfink/shared';
+import { FONT_FAMILY } from '@denkfink/installation-core';
+import type { Role } from '@denkfink/installation-core';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 export interface TranscriptEntry {

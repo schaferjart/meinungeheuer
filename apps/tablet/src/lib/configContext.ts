@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import { FACE_DETECTION, TIMERS } from '@denkfink/shared';
+import { FACE_DETECTION, TIMERS } from '@denkfink/installation-core';
 
 export interface RuntimeConfig {
   faceDetection: {

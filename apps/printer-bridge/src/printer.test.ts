@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderAndPrint, printPortrait, buildTestPayload } from './printer.js';
-import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@denkfink/shared';
+import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@denkfink/installation-core';
 
 afterEach(() => {
   vi.restoreAllMocks();

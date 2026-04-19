@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { ModeSchema, type Database } from '@denkfink/shared';
+import { ModeSchema, type Database } from '@denkfink/installation-core';
 import { supabase } from '../services/supabase.js';
 import { getActiveChainContext, getChainHistory, advanceChain } from '../services/chain.js';
 

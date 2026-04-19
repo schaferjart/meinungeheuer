@@ -1067,7 +1067,7 @@ function buildSliceSection(body: HTMLElement): void {
     showGap: boolean;
   };
   // Source of truth: packages/shared/src/constants.ts (APP_NAME = 'denkfink').
-  // Config app does not import @denkfink/shared, so the prefix is inlined here.
+  // Config app does not import @denkfink/installation-core, so the prefix is inlined here.
   const CAPTION_STORAGE_KEY = 'denkfink:config:slice:caption';
   const defaultCaption: CaptionConfig = {
     enabled: true,

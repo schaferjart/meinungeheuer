@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@denkfink/shared';
-import type { Definition, ConversationProgram } from '@denkfink/shared';
+import { DEFAULT_MODE, DEFAULT_TERM, getProgram, PORTRAIT } from '@denkfink/installation-core';
+import type { Definition, ConversationProgram } from '@denkfink/installation-core';
 
 /** Build a partial Definition object from conversation results (client-side only). */
 function makeClientDefinition(

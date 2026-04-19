@@ -96,7 +96,7 @@ And locally:
 git clone https://github.com/YOUR_ORG/denkfink.git
 cd denkfink
 pnpm install
-pnpm build       # builds packages/shared (dist/ is consumed by the apps)
+pnpm build       # builds packages/installation-core (dist/ is consumed by the apps)
 ```
 
 ### 2. Supabase
@@ -124,7 +124,7 @@ pnpm build       # builds packages/shared (dist/ is consumed by the apps)
    `https://openrouter.ai/api/v1` with your OpenRouter key and any model
    that supports tool use (we default to `google/gemini-2.0-flash-001`).
 3. Register the `save_definition` **client tool** on the agent (definition
-   lives in [`packages/shared/src/clientTools.ts`](packages/shared/src/clientTools.ts)).
+   lives in [`packages/installation-core/src/clientTools.ts`](packages/installation-core/src/clientTools.ts)).
 4. Copy the agent ID — you'll paste it into `.env` in the next step.
 
 ### 4. Environment variables
@@ -172,10 +172,10 @@ If you have Docker, `docker compose up` will bring up the tablet + backend + pri
 ## Customisation
 
 - **Texts visitors read** — `supabase/migrations/*` seeds a `texts` table, but you can CRUD rows directly in the Supabase UI or through `apps/config`.
-- **System prompts** — the agent's personality and behaviour are described in [`packages/shared/src/programs/`](packages/shared/src/programs/). Each mode has its own prompt builder.
+- **System prompts** — the agent's personality and behaviour are described in [`packages/installation-core/src/programs/`](packages/installation-core/src/programs/). Each mode has its own prompt builder.
 - **Voice** — configure voice ID + model in the ElevenLabs agent's *Voice* tab.
 - **Branding** — the visible name "denkfink" is centralised in
-  [`packages/shared/src/constants.ts`](packages/shared/src/constants.ts) (`APP_NAME`)
+  [`packages/installation-core/src/constants.ts`](packages/installation-core/src/constants.ts) (`APP_NAME`)
   and pulled into system prompts, admin UI, logs, and printed card citations.
   Static HTML titles (`apps/tablet/index.html`, etc.) are updated in place.
   Workspace scopes (`@denkfink/*`) are independent identifiers; rename via

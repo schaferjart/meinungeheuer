@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { TIMERS } from '@denkfink/shared';
-import type { Definition } from '@denkfink/shared';
+import { TIMERS } from '@denkfink/installation-core';
+import type { Definition } from '@denkfink/installation-core';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface FarewellScreenProps {

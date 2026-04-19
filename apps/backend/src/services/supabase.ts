@@ -1,4 +1,4 @@
-import { createSupabaseClient } from '@denkfink/shared';
+import { createSupabaseClient } from '@denkfink/installation-core';
 
 const supabaseUrl = process.env['SUPABASE_URL'];
 const supabaseServiceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];

@@ -1,5 +1,5 @@
 {
-  "name": "@denkfink/shared",
+  "name": "@denkfink/installation-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",

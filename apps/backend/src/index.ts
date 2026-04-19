@@ -1,5 +1,5 @@
 import { serve } from '@hono/node-server';
-import { APP_NAME } from '@denkfink/shared';
+import { APP_NAME } from '@denkfink/installation-core';
 import { app } from './app.js';
 
 const port = parseInt(process.env['PORT'] ?? '3001', 10);

@@ -11,7 +11,7 @@ ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 
 # Copy all package.json files for install (pnpm needs workspace structure)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/shared/package.json packages/shared/
+COPY packages/installation-core/package.json packages/installation-core/
 COPY packages/karaoke-reader/package.json packages/karaoke-reader/
 COPY apps/config/package.json apps/config/
 COPY apps/tablet/package.json apps/tablet/

@@ -1,4 +1,4 @@
-import { FONT_FAMILY } from '@denkfink/shared';
+import { FONT_FAMILY } from '@denkfink/installation-core';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface ConsentScreenProps {

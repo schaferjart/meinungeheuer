@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
-import { TIMERS } from '@denkfink/shared';
+import { TIMERS } from '@denkfink/installation-core';
 import { unlockAudio } from '../../lib/audioUnlock';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 

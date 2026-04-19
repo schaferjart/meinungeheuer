@@ -24,17 +24,17 @@ ENV VITE_RENDER_API_KEY=$VITE_RENDER_API_KEY
 
 # Install dependencies (layer-cached)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/shared/package.json packages/shared/
+COPY packages/installation-core/package.json packages/installation-core/
 COPY packages/karaoke-reader/package.json packages/karaoke-reader/
 COPY apps/tablet/package.json apps/tablet/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and build
-COPY packages/shared/ packages/shared/
+COPY packages/installation-core/ packages/installation-core/
 COPY packages/karaoke-reader/ packages/karaoke-reader/
 COPY apps/tablet/ apps/tablet/
 COPY tsconfig.base.json ./
-RUN pnpm --filter @denkfink/shared build
+RUN pnpm --filter @denkfink/installation-core build
 RUN pnpm --filter karaoke-reader build
 RUN pnpm --filter @denkfink/tablet build
 

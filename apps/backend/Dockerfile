@@ -4,15 +4,15 @@ WORKDIR /app
 
 # Install dependencies (layer-cached)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/shared/package.json packages/shared/
+COPY packages/installation-core/package.json packages/installation-core/
 COPY apps/backend/package.json apps/backend/
 RUN pnpm install --frozen-lockfile --prod=false
 
 # Copy source and build
-COPY packages/shared/ packages/shared/
+COPY packages/installation-core/ packages/installation-core/
 COPY apps/backend/ apps/backend/
 COPY tsconfig.base.json ./
-RUN pnpm --filter @denkfink/shared build
+RUN pnpm --filter @denkfink/installation-core build
 RUN pnpm --filter @denkfink/backend build
 
 # --- Production stage ---
@@ -22,11 +22,11 @@ WORKDIR /app
 
 # Copy workspace config + built artifacts
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/shared/package.json packages/shared/
+COPY packages/installation-core/package.json packages/installation-core/
 COPY apps/backend/package.json apps/backend/
 RUN pnpm install --frozen-lockfile --prod
 
-COPY --from=build /app/packages/shared/dist packages/shared/dist
+COPY --from=build /app/packages/installation-core/dist packages/installation-core/dist
 COPY --from=build /app/apps/backend/dist apps/backend/dist
 
 EXPOSE 3001

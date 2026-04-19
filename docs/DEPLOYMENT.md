@@ -53,7 +53,7 @@ Print-renderer (Python) works the same way — build from `apps/print-renderer/D
 
 ### Monorepo-shared workspaces
 
-Apps that depend on `@denkfink/shared` (tablet, backend, archive) must be built with Docker context set to the **repo root** (not the app folder) so the workspace resolution works. The provided `Dockerfile`s already handle this.
+Apps that depend on `@denkfink/installation-core` (tablet, backend, archive) must be built with Docker context set to the **repo root** (not the app folder) so the workspace resolution works. The provided `Dockerfile`s already handle this.
 
 ### Docker Compose (local dev)
 
@@ -81,7 +81,7 @@ docker compose up
 ### Backend / print-renderer (runtime)
 
 - **Build Pack**: Dockerfile
-- **Base Directory**: `/` (backend depends on `@denkfink/shared`) or `/apps/print-renderer` (self-contained Python)
+- **Base Directory**: `/` (backend depends on `@denkfink/installation-core`) or `/apps/print-renderer` (self-contained Python)
 - **Dockerfile**: `/apps/backend/Dockerfile` / `/apps/print-renderer/Dockerfile`
 - **Inject Build Args**: ❌ disabled (these read env at runtime only)
 - **Environment variables**: set the `SUPABASE_*`, `OPENROUTER_API_KEY`, etc.
@@ -136,4 +136,4 @@ Before opening the installation:
 - **`/api/config` returns error → tablet falls back to defaults (no text).** The AI will have no text context. Check backend logs + `installation_config` row.
 - **`persistPrintJob` / `persistDefinition` look silent but nothing shows in Supabase.** Those writes are fire-and-forget; check Supabase directly rather than trusting the absence of a log. RLS failures are silent from the browser.
 - **Tablet prints but nothing appears on paper.** Is (1) the bridge running? (2) is the POS server up? (3) is there a `pending` row in `print_queue`? If yes + yes + yes, check the bridge logs.
-- **AI quotes something strange back to visitors.** Any prose in the system prompt is quotable. Write instructions as imperatives, never descriptions, in `packages/shared/src/programs/`.
+- **AI quotes something strange back to visitors.** Any prose in the system prompt is quotable. Write instructions as imperatives, never descriptions, in `packages/installation-core/src/programs/`.

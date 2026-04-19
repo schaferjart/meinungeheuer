@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { ModeSchema, SpeechProfileSchema } from '@denkfink/shared';
-import type { Mode } from '@denkfink/shared';
+import { ModeSchema, SpeechProfileSchema } from '@denkfink/installation-core';
+import type { Mode } from '@denkfink/installation-core';
 
 // ============================================================
 // Response schemas

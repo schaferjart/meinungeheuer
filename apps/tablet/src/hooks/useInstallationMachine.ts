@@ -1,7 +1,7 @@
 import { useReducer, useCallback } from 'react';
-import type { Mode, StateName, Definition } from '@denkfink/shared';
-import type { StageConfig } from '@denkfink/shared';
-import { DEFAULT_MODE, DEFAULT_TERM } from '@denkfink/shared';
+import type { Mode, StateName, Definition } from '@denkfink/installation-core';
+import type { StageConfig } from '@denkfink/installation-core';
+import { DEFAULT_MODE, DEFAULT_TERM } from '@denkfink/installation-core';
 
 // ============================================================
 // State

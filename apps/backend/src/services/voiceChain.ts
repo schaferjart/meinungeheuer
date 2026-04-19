@@ -4,8 +4,8 @@ import {
   VOICE_CLONE,
   SPEECH_PROFILE_EXTRACTION,
   ICEBREAKER_GENERATION,
-} from '@denkfink/shared';
-import type { SpeechProfile, VoiceChainState } from '@denkfink/shared';
+} from '@denkfink/installation-core';
+import type { SpeechProfile, VoiceChainState } from '@denkfink/installation-core';
 import { supabase } from './supabase.js';
 
 // ---------------------------------------------------------------------------

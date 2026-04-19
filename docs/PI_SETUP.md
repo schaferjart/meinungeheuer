@@ -25,7 +25,7 @@ git clone https://github.com/YOUR_ORG/denkfink.git
 cd denkfink
 ```
 
-> **RAM note:** the Pi's RAM is limited. `pnpm install` across the whole monorepo can OOM-kill. For the Pi we only need the printer-bridge and its shared package, and we install with `--ignore-scripts`. We also commit `packages/shared/dist/` so the Pi never has to build it.
+> **RAM note:** the Pi's RAM is limited. `pnpm install` across the whole monorepo can OOM-kill. For the Pi we only need the printer-bridge and its shared package, and we install with `--ignore-scripts`. We also commit `packages/installation-core/dist/` so the Pi never has to build it.
 
 ```bash
 # Install only what the printer bridge needs
@@ -146,7 +146,7 @@ git pull origin main
 sudo systemctl restart printer-bridge pos-server
 ```
 
-No build step is needed — `packages/shared/dist/` is committed so the Pi never builds TypeScript.
+No build step is needed — `packages/installation-core/dist/` is committed so the Pi never builds TypeScript.
 
 ## Troubleshooting
 

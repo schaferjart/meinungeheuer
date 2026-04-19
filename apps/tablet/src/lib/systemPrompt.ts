@@ -1,4 +1,4 @@
-import { APP_NAME, addParagraphNumbers, type Mode } from '@denkfink/shared';
+import { APP_NAME, addParagraphNumbers, type Mode } from '@denkfink/installation-core';
 
 /**
  * Build the system prompt for the ElevenLabs Conversational AI agent.

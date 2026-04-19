@@ -7,7 +7,7 @@ Thanks for your interest in denkfink! This is a small art-installation codebase 
 - Bug reports and reproducible issues
 - Documentation improvements (setup friction is the single biggest source of drop-off)
 - New print-card templates and dither modes
-- New "program" modes (the three current modes live in `packages/shared/src/programs/`)
+- New "program" modes (the three current modes live in `packages/installation-core/src/programs/`)
 - Translations of the shipping texts / system prompts
 
 ## Development workflow
@@ -17,7 +17,7 @@ Thanks for your interest in denkfink! This is a small art-installation codebase 
 git clone https://github.com/YOUR_FORK/denkfink.git
 cd denkfink
 pnpm install
-pnpm build           # builds packages/shared
+pnpm build           # builds packages/installation-core
 
 # 2. Set up env vars — see README.md ➜ Quick start ➜ Environment variables
 

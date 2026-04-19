@@ -9,7 +9,7 @@
 
 import { loadConfig } from './config.js';
 import { renderAndPrint, buildTestPayload } from './printer.js';
-import type { PrintPayload } from '@denkfink/shared';
+import type { PrintPayload } from '@denkfink/installation-core';
 
 function parseArgs(argv: string[]): { text?: string; term?: string } {
   const result: { text?: string; term?: string } = {};

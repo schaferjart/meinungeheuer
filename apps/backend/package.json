@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@denkfink/shared": "workspace:*",
+    "@denkfink/installation-core": "workspace:*",
     "@supabase/supabase-js": "^2.49.1",
     "hono": "^4.7.2",
     "@hono/node-server": "^1.14.0",

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import { TIMERS, FONT_FAMILY } from '@denkfink/shared';
-import type { Definition } from '@denkfink/shared';
+import { TIMERS, FONT_FAMILY } from '@denkfink/installation-core';
+import type { Definition } from '@denkfink/installation-core';
 import type { InstallationAction } from '../../hooks/useInstallationMachine';
 
 interface DefinitionScreenProps {

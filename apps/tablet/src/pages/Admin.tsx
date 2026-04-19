@@ -14,9 +14,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { z } from 'zod';
-import { APP_NAME, ModeSchema } from '@denkfink/shared';
-import type { Mode, Definition } from '@denkfink/shared';
-import { DefinitionSchema } from '@denkfink/shared';
+import { APP_NAME, ModeSchema } from '@denkfink/installation-core';
+import type { Mode, Definition } from '@denkfink/installation-core';
+import { DefinitionSchema } from '@denkfink/installation-core';
 
 // ---------------------------------------------------------------------------
 // Constants

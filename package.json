@@ -9,7 +9,7 @@
     "dev:pos": "cd apps/pos-server && ./venv/bin/python print_server.py --dummy",
     "start:pos": "cd apps/pos-server && ./venv/bin/python print_server.py",
     "setup:pos": "cd apps/pos-server && bash setup.sh --deps-only",
-    "build": "pnpm --filter @denkfink/shared build && pnpm -r --filter '!@denkfink/shared' build",
+    "build": "pnpm --filter @denkfink/installation-core build && pnpm -r --filter '!@denkfink/installation-core' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "lint": "pnpm -r lint"
