@@ -248,6 +248,7 @@ configRoutes.post('/update', adminMiddleware, async (c) => {
   }
 
   // Build the update object using the database column names
+  type InstallationConfigUpdate = Database['public']['Tables']['installation_config']['Update'];
   const dbUpdate: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
@@ -268,7 +269,7 @@ configRoutes.post('/update', adminMiddleware, async (c) => {
   if (existing) {
     const { error } = await supabase
       .from('installation_config')
-      .update(dbUpdate)
+      .update(dbUpdate as InstallationConfigUpdate)
       .eq('id', existing.id);
     updateError = error;
   } else {
