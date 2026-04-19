@@ -1,7 +1,7 @@
 # MeinUngeheuer
 
 Art installation: spoken AI dialogue with visitors, producing personalized glossary definitions printed on thermal cards.
-xx
+
 The default mode is **Mode A (text_term)**: visitor reads a text on a tablet with karaoke-style word highlighting synced to TTS audio, the AI picks a concept from the text and challenges the visitor's understanding via voice conversation, then a distilled definition is printed on a thermal card.
 
 ## Architecture
