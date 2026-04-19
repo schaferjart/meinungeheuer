@@ -1046,6 +1046,7 @@ function buildSliceSection(body: HTMLElement): void {
   let outputMode = 'separate';
   let gap = 40;
   let padding = 100;
+  let printDelaySec = 10;
   let previewUrls: string[] = [];
 
   type CaptionConfig = {
@@ -1140,6 +1141,7 @@ function buildSliceSection(body: HTMLElement): void {
   );
   body.appendChild(createSlider('Gap (px)', 0, 500, 1, gap, (v) => { gap = v; if (outputMode === 'single') void updatePreview(); }));
   body.appendChild(createSlider('Padding top/bottom (px)', 0, 500, 1, padding, (v) => { padding = v; void updatePreview(); }));
+  body.appendChild(createSlider('Delay between prints (s)', 0, 120, 1, printDelaySec, (v) => { printDelaySec = v; }));
 
   // Caption section
   const captionSection = document.createElement('div');
@@ -1497,10 +1499,11 @@ function buildSliceSection(body: HTMLElement): void {
           setStatus(statusEl, `Combined print queued (${previewUrls.length} slices, ${gap}px gap, 1 cut).`, '#66aa66');
         }
       } else {
-        setStatus(statusEl, 'Rendering and uploading slices...', '#777777');
+        const total = cachedImages.length;
         const imageUrlEntries: { name: string; url: string }[] = [];
         const ts = Date.now();
-        for (let i = 0; i < cachedImages.length; i++) {
+        for (let i = 0; i < total; i++) {
+          setStatus(statusEl, `Uploading slice ${i + 1}/${total}...`, '#777777');
           const canvas = renderDecoratedCanvas([cachedImages[i]!], 0);
           const blob = await canvasToBlob(canvas);
           const fileName = `workbench/slice-${ts}-${i}.png`;
@@ -1517,7 +1520,8 @@ function buildSliceSection(body: HTMLElement): void {
         }
 
         let insertErrors = 0;
-        for (const entry of imageUrlEntries) {
+        for (let i = 0; i < imageUrlEntries.length; i++) {
+          const entry = imageUrlEntries[i]!;
           const { error } = await supabase.from('print_queue').insert({
             payload: {
               type: 'portrait',
@@ -1528,12 +1532,20 @@ function buildSliceSection(body: HTMLElement): void {
             status: 'pending',
           });
           if (error) insertErrors++;
+          const isLast = i === imageUrlEntries.length - 1;
+          if (!isLast && printDelaySec > 0) {
+            for (let remain = printDelaySec; remain > 0; remain--) {
+              setStatus(statusEl, `Queued ${i + 1}/${total}. Next in ${remain}s...`, '#66aa66');
+              await new Promise((r) => setTimeout(r, 1000));
+            }
+          }
         }
 
         if (insertErrors > 0) {
           setStatus(statusEl, `${insertErrors} slice(s) failed to queue.`, '#cc4444');
         } else {
-          setStatus(statusEl, `${imageUrlEntries.length} slices queued (separate cuts).`, '#66aa66');
+          const delayNote = printDelaySec > 0 ? `, ${printDelaySec}s between` : '';
+          setStatus(statusEl, `${imageUrlEntries.length} slices queued (separate cuts${delayNote}).`, '#66aa66');
         }
       }
     } catch {
