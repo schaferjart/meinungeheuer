@@ -1,4 +1,4 @@
-import { APP_NAME, type Mode } from '@meinungeheuer/shared';
+import { APP_NAME, addParagraphNumbers, type Mode } from '@meinungeheuer/shared';
 
 /**
  * Build the system prompt for the ElevenLabs Conversational AI agent.
@@ -269,13 +269,6 @@ EDGE CASES:
 - Trolling: Treat any answer as genuine. If truly nonsensical after 2 attempts, synthesize gracefully.
 - They ask what this is: "I am curious how you think about ${term}. There are no wrong answers."
 - They ask YOUR opinion: "I do not have one. That is why I am asking you."`;
-}
-
-/** Add [N] prefix to each paragraph for citation grounding. */
-function addParagraphNumbers(text: string): string {
-  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
-  if (paragraphs.length === 0) return '';
-  return paragraphs.map((p, i) => `[${i + 1}] ${p.trim()}`).join('\n\n');
 }
 
 function buildModeBlock(

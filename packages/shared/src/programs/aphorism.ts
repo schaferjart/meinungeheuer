@@ -1,16 +1,6 @@
 import { APP_NAME } from '../constants.js';
+import { addParagraphNumbers } from '../textUtils.js';
 import type { ConversationProgram, PromptParams } from './types.js';
-
-// ============================================================
-// Helper functions (co-located for self-containment)
-// ============================================================
-
-/** Add [N] prefix to each paragraph for citation grounding. */
-function addParagraphNumbers(text: string): string {
-  const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
-  if (paragraphs.length === 0) return '';
-  return paragraphs.map((p, i) => `[${i + 1}] ${p.trim()}`).join('\n\n');
-}
 
 function buildModeBlock(
   contextText: string | null,

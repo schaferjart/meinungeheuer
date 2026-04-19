@@ -12,7 +12,7 @@ import { supabase } from './supabase.js';
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function getElevenLabsApiKey(): string {
+export function getElevenLabsApiKey(): string {
   const key = process.env['ELEVENLABS_API_KEY'];
   if (!key) throw new Error('ELEVENLABS_API_KEY environment variable is not set');
   return key;
