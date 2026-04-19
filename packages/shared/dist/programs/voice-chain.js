@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants.js';
 import { STYLE_INFLUENCE, COLD_START } from '../voiceChainConfig.js';
 // ============================================================
 // Helper: build speech profile injection block
@@ -53,7 +54,7 @@ export const voiceChainProgram = {
         const styleBlock = params.speechProfile
             ? buildStyleInfluenceBlock(params.speechProfile)
             : '';
-        return `You are an interviewer in an art installation called "MeinUngeheuer."
+        return `You are an interviewer in an art installation called "${APP_NAME}."
 
 A visitor has just sat down. You carry the traces of everyone who sat here
 before them. Your voice is not your own — it belongs to the last person

@@ -321,7 +321,8 @@ export function createDefinitionPreview(config: Record<string, unknown>): HTMLEl
     content.appendChild(aphoText);
 
     const citation = document.createElement('div');
-    citation.textContent = '— MeinUngeheuer, 2025';
+    // Keep in sync with APP_NAME in packages/shared/src/constants.ts
+    citation.textContent = '— denkfink, 2025';
     citation.style.cssText = [
       'font-family:Helvetica,"Helvetica Neue",Arial,sans-serif',
       'font-size:10px',
@@ -419,7 +420,8 @@ export function createWelcomePreview(): HTMLElement {
   ].join(';');
 
   const title = document.createElement('div');
-  title.textContent = 'MeinUngeheuer';
+  // Keep in sync with APP_NAME in packages/shared/src/constants.ts
+  title.textContent = 'denkfink';
   title.style.cssText = [
     'font-family:Helvetica,"Helvetica Neue",Arial,sans-serif',
     'font-size:22px',

@@ -369,7 +369,7 @@ function reconstructSystemPrompt(program: string, _voiceChainState: VoiceChainSt
 // ---------------------------------------------------------------------------
 
 async function main() {
-  console.log('=== MeinUngeheuer Conversation Extraction ===\n');
+  console.log('=== denkfink Conversation Extraction ===\n');
 
   // 1. Fetch all conversations from ElevenLabs
   console.log('1. Fetching conversation list from ElevenLabs...');

@@ -1,8 +1,9 @@
 import { serve } from '@hono/node-server';
+import { APP_NAME } from '@meinungeheuer/shared';
 import { app } from './app.js';
 
 const port = parseInt(process.env['PORT'] ?? '3001', 10);
 
 serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`MeinUngeheuer backend running on http://localhost:${info.port}`);
+  console.log(`${APP_NAME} backend running on http://localhost:${info.port}`);
 });

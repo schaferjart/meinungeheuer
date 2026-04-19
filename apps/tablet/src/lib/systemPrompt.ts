@@ -1,4 +1,4 @@
-import type { Mode } from '@meinungeheuer/shared';
+import { APP_NAME, type Mode } from '@meinungeheuer/shared';
 
 /**
  * Build the system prompt for the ElevenLabs Conversational AI agent.
@@ -30,7 +30,7 @@ export function buildSystemPrompt(
 // ============================================================
 
 function buildTextTermPrompt(modeBlock: string, fallbackTerm: string): string {
-  return `You are an interviewer in an art installation called "MeinUngeheuer."
+  return `You are an interviewer in an art installation called "${APP_NAME}."
 
 ${modeBlock}
 
@@ -172,7 +172,7 @@ EDGE CASES:
 // ============================================================
 
 function buildTermPrompt(modeBlock: string, term: string): string {
-  return `You are an interviewer in an art installation called "MeinUngeheuer."
+  return `You are an interviewer in an art installation called "${APP_NAME}."
 
 ${modeBlock}
 

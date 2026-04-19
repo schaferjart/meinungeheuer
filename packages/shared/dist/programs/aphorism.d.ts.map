@@ -1,1 +1,1 @@
-{"version":3,"file":"aphorism.d.ts","sourceRoot":"","sources":["../../src/programs/aphorism.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,mBAAmB,EAAgB,MAAM,YAAY,CAAC;AAkCpE;;;;;;GAMG;AACH,eAAO,MAAM,eAAe,EAAE,mBAkK7B,CAAC"}
+{"version":3,"file":"aphorism.d.ts","sourceRoot":"","sources":["../../src/programs/aphorism.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,mBAAmB,EAAgB,MAAM,YAAY,CAAC;AAkCpE;;;;;;GAMG;AACH,eAAO,MAAM,eAAe,EAAE,mBAkK7B,CAAC"}
