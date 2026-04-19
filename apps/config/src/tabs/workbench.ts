@@ -1045,9 +1045,59 @@ function buildSliceSection(body: HTMLElement): void {
   let blur = 0;
   let outputMode = 'separate';
   let gap = 40;
+  let padding = 100;
   let previewUrls: string[] = [];
 
-  body.appendChild(makeFileField('Image', 'image/*', (f) => { uploadedFile = f; }));
+  type CaptionConfig = {
+    enabled: boolean;
+    description: string;
+    position: 'above' | 'below';
+    fontSize: number;
+    showFilename: boolean;
+    showDither: boolean;
+    showDotSize: boolean;
+    showBlur: boolean;
+    showDate: boolean;
+    showContrast: boolean;
+    showBrightness: boolean;
+    showSharpness: boolean;
+    showDirection: boolean;
+    showCount: boolean;
+    showGap: boolean;
+  };
+  const CAPTION_STORAGE_KEY = 'meinungeheuer:config:slice:caption';
+  const defaultCaption: CaptionConfig = {
+    enabled: true,
+    description: '',
+    position: 'below',
+    fontSize: 14,
+    showFilename: true,
+    showDither: true,
+    showDotSize: true,
+    showBlur: true,
+    showDate: true,
+    showContrast: false,
+    showBrightness: false,
+    showSharpness: false,
+    showDirection: false,
+    showCount: false,
+    showGap: false,
+  };
+  const caption: CaptionConfig = (() => {
+    try {
+      const raw = localStorage.getItem(CAPTION_STORAGE_KEY);
+      if (raw) return { ...defaultCaption, ...(JSON.parse(raw) as Partial<CaptionConfig>) };
+    } catch { /* ignore */ }
+    return { ...defaultCaption };
+  })();
+  function persistCaption(): void {
+    try { localStorage.setItem(CAPTION_STORAGE_KEY, JSON.stringify(caption)); } catch { /* ignore */ }
+  }
+
+  body.appendChild(makeFileField('Image', 'image/*', (f) => {
+    uploadedFile = f;
+    void updatePreview();
+  }));
 
   body.appendChild(
     createRadioGroup(
@@ -1089,6 +1139,65 @@ function buildSliceSection(body: HTMLElement): void {
     )
   );
   body.appendChild(createSlider('Gap (px)', 0, 500, 1, gap, (v) => { gap = v; if (outputMode === 'single') void updatePreview(); }));
+  body.appendChild(createSlider('Padding top/bottom (px)', 0, 500, 1, padding, (v) => { padding = v; void updatePreview(); }));
+
+  // Caption section
+  const captionSection = document.createElement('div');
+  captionSection.style.cssText = 'border-top: 1px solid #2a2a2a; margin-top: 12px; padding-top: 12px;';
+  captionSection.appendChild(createToggle('Include caption', caption.enabled, (v) => {
+    caption.enabled = v;
+    persistCaption();
+    captionFields.style.display = v ? '' : 'none';
+    void updatePreview();
+  }));
+  const captionFields = document.createElement('div');
+  captionFields.style.display = caption.enabled ? '' : 'none';
+  captionFields.appendChild(createTextarea('Description', caption.description, 2, (v) => {
+    caption.description = v;
+    persistCaption();
+    void updatePreview();
+  }));
+  captionFields.appendChild(createRadioGroup(
+    'Caption position',
+    [{ value: 'above', label: 'above' }, { value: 'below', label: 'below' }],
+    caption.position,
+    (v) => { caption.position = v as 'above' | 'below'; persistCaption(); void updatePreview(); }
+  ));
+  captionFields.appendChild(createSlider('Caption font size (px)', 8, 48, 1, caption.fontSize, (v) => {
+    caption.fontSize = v;
+    persistCaption();
+    void updatePreview();
+  }));
+  const fieldsLabel = document.createElement('div');
+  fieldsLabel.className = 'cf-label';
+  fieldsLabel.style.cssText = 'margin-top: 8px; margin-bottom: 4px;';
+  fieldsLabel.textContent = 'Show fields';
+  captionFields.appendChild(fieldsLabel);
+  const fieldGrid = document.createElement('div');
+  fieldGrid.style.cssText = 'display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 16px; margin-bottom: 14px;';
+  const fieldToggles: { key: keyof CaptionConfig; label: string }[] = [
+    { key: 'showFilename', label: 'filename' },
+    { key: 'showDither', label: 'dither mode' },
+    { key: 'showDotSize', label: 'dot size' },
+    { key: 'showBlur', label: 'blur' },
+    { key: 'showDate', label: 'date' },
+    { key: 'showContrast', label: 'contrast' },
+    { key: 'showBrightness', label: 'brightness' },
+    { key: 'showSharpness', label: 'sharpness' },
+    { key: 'showDirection', label: 'direction' },
+    { key: 'showCount', label: 'slice count' },
+    { key: 'showGap', label: 'gap' },
+  ];
+  for (const f of fieldToggles) {
+    fieldGrid.appendChild(createToggle(f.label, caption[f.key] as boolean, (v) => {
+      (caption[f.key] as boolean) = v;
+      persistCaption();
+      void updatePreview();
+    }));
+  }
+  captionFields.appendChild(fieldGrid);
+  captionSection.appendChild(captionFields);
+  body.appendChild(captionSection);
 
   const previewGrid = document.createElement('div');
   previewGrid.className = 'wb-preview-grid';
@@ -1123,9 +1232,40 @@ function buildSliceSection(body: HTMLElement): void {
     })));
   }
 
-  function drawCompositeCanvas(images: HTMLImageElement[], gapPx: number): HTMLCanvasElement {
+  function formatDateShort(d: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function buildCaptionLines(): string[] {
+    if (!caption.enabled) return [];
+    const lines: string[] = [];
+    if (caption.description.trim()) lines.push(caption.description.trim());
+    if (caption.showFilename && uploadedFile) lines.push(`file: ${uploadedFile.name}`);
+    if (caption.showDirection) lines.push(`direction: ${direction}`);
+    if (caption.showCount) lines.push(`slices: ${sliceCount}`);
+    if (caption.showDither) lines.push(`dither: ${ditherMode}`);
+    if (caption.showDotSize) lines.push(`dot size: ${dotSize}px`);
+    if (caption.showContrast) lines.push(`contrast: ${contrast}`);
+    if (caption.showBrightness) lines.push(`brightness: ${brightness}`);
+    if (caption.showSharpness) lines.push(`sharpness: ${sharpness}`);
+    if (caption.showBlur) lines.push(`blur: ${blur}`);
+    if (caption.showGap && outputMode === 'single') lines.push(`gap: ${gap}px`);
+    if (caption.showDate) lines.push(formatDateShort(new Date()));
+    return lines;
+  }
+
+  function renderDecoratedCanvas(images: HTMLImageElement[], gapPx: number): HTMLCanvasElement {
     const width = Math.max(...images.map((i) => i.width));
-    const totalHeight = images.reduce((s, i) => s + i.height, 0) + gapPx * Math.max(0, images.length - 1);
+    const imgBlockHeight = images.reduce((s, i) => s + i.height, 0) + gapPx * Math.max(0, images.length - 1);
+    const lines = buildCaptionLines();
+    const fontSize = caption.fontSize;
+    const lineHeight = Math.round(fontSize * 1.4);
+    const captionInset = 10;
+    const captionHeight = lines.length > 0 ? captionInset * 2 + lines.length * lineHeight : 0;
+    const topSpace = padding + (lines.length > 0 && caption.position === 'above' ? captionHeight : 0);
+    const bottomSpace = padding + (lines.length > 0 && caption.position === 'below' ? captionHeight : 0);
+    const totalHeight = topSpace + imgBlockHeight + bottomSpace;
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = totalHeight;
@@ -1133,12 +1273,42 @@ function buildSliceSection(body: HTMLElement): void {
     if (!ctx) throw new Error('canvas context unavailable');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, totalHeight);
-    let y = 0;
+    if (lines.length > 0 && caption.position === 'above') {
+      drawCaptionText(ctx, lines, padding, width, captionInset, fontSize, lineHeight);
+    }
+    let y = topSpace;
     for (const img of images) {
       ctx.drawImage(img, 0, y);
       y += img.height + gapPx;
     }
+    if (lines.length > 0 && caption.position === 'below') {
+      drawCaptionText(ctx, lines, topSpace + imgBlockHeight, width, captionInset, fontSize, lineHeight);
+    }
     return canvas;
+  }
+
+  function drawCaptionText(
+    ctx: CanvasRenderingContext2D,
+    lines: string[],
+    yOffset: number,
+    width: number,
+    inset: number,
+    fontSize: number,
+    lineHeight: number
+  ): void {
+    ctx.fillStyle = '#000000';
+    ctx.font = `${fontSize}px Helvetica, "Helvetica Neue", Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i]!, width / 2, yOffset + inset + i * lineHeight);
+    }
+  }
+
+  async function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+    return new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');
+    });
   }
 
   async function updatePreview(): Promise<void> {
@@ -1147,12 +1317,12 @@ function buildSliceSection(body: HTMLElement): void {
       previewGrid.style.display = '';
       return;
     }
+    if (!cachedImages || cachedImages.length !== previewUrls.length) {
+      cachedImages = await loadSliceImages(previewUrls);
+    }
     const single = outputMode === 'single' && direction === 'horizontal';
     if (single) {
-      if (!cachedImages || cachedImages.length !== previewUrls.length) {
-        cachedImages = await loadSliceImages(previewUrls);
-      }
-      const canvas = drawCompositeCanvas(cachedImages, gap);
+      const canvas = renderDecoratedCanvas(cachedImages, gap);
       canvas.style.maxWidth = '100%';
       canvas.style.height = 'auto';
       canvas.style.border = '1px solid #2a2a2a';
@@ -1162,11 +1332,14 @@ function buildSliceSection(body: HTMLElement): void {
       previewGrid.appendChild(canvas);
     } else {
       previewGrid.style.display = '';
-      for (const url of previewUrls) {
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = 'slice';
-        previewGrid.appendChild(img);
+      for (const img of cachedImages) {
+        const canvas = renderDecoratedCanvas([img], 0);
+        canvas.style.width = '100%';
+        canvas.style.height = 'auto';
+        canvas.style.border = '1px solid #2a2a2a';
+        canvas.style.borderRadius = '4px';
+        canvas.style.display = 'block';
+        previewGrid.appendChild(canvas);
       }
     }
   }
@@ -1250,9 +1423,13 @@ function buildSliceSection(body: HTMLElement): void {
     }
     downloadBtn.disabled = true;
     try {
+      if (!cachedImages || cachedImages.length !== previewUrls.length) {
+        cachedImages = await loadSliceImages(previewUrls);
+      }
       if (outputMode === 'single') {
         setStatus(statusEl, 'Compositing slices...', '#777777');
-        const blob = await compositeSlicesVertically(previewUrls, gap);
+        const canvas = renderDecoratedCanvas(cachedImages, gap);
+        const blob = await canvasToBlob(canvas);
         const url = URL.createObjectURL(blob);
         triggerDownload(url, `slice-combined-${Date.now()}.png`);
         setTimeout(() => URL.revokeObjectURL(url), 5000);
@@ -1260,26 +1437,20 @@ function buildSliceSection(body: HTMLElement): void {
       } else {
         setStatus(statusEl, 'Downloading slices...', '#777777');
         const ts = Date.now();
-        for (let i = 0; i < previewUrls.length; i++) {
-          triggerDownload(previewUrls[i]!, `slice-${ts}-${String(i).padStart(2, '0')}.png`);
+        for (let i = 0; i < cachedImages.length; i++) {
+          const canvas = renderDecoratedCanvas([cachedImages[i]!], 0);
+          const blob = await canvasToBlob(canvas);
+          const url = URL.createObjectURL(blob);
+          triggerDownload(url, `slice-${ts}-${String(i).padStart(2, '0')}.png`);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
           await new Promise((r) => setTimeout(r, 100));
         }
-        setStatus(statusEl, `${previewUrls.length} slices downloaded.`, '#66aa66');
+        setStatus(statusEl, `${cachedImages.length} slices downloaded.`, '#66aa66');
       }
     } catch {
       setStatus(statusEl, 'Download failed.', '#cc4444');
     }
     downloadBtn.disabled = false;
-  }
-
-  async function compositeSlicesVertically(urls: string[], gapPx: number): Promise<Blob> {
-    if (!cachedImages || cachedImages.length !== urls.length) {
-      cachedImages = await loadSliceImages(urls);
-    }
-    const canvas = drawCompositeCanvas(cachedImages, gapPx);
-    return new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png');
-    });
   }
 
   async function handlePrint(): Promise<void> {
@@ -1294,9 +1465,13 @@ function buildSliceSection(body: HTMLElement): void {
     printBtn.disabled = true;
 
     try {
+      if (!cachedImages || cachedImages.length !== previewUrls.length) {
+        cachedImages = await loadSliceImages(previewUrls);
+      }
       if (outputMode === 'single') {
         setStatus(statusEl, 'Compositing slices...', '#777777');
-        const composite = await compositeSlicesVertically(previewUrls, gap);
+        const canvas = renderDecoratedCanvas(cachedImages, gap);
+        const composite = await canvasToBlob(canvas);
         const fileName = `workbench/slice-combined-${Date.now()}.png`;
         const { error: upErr } = await supabase.storage
           .from('prints')
@@ -1322,13 +1497,13 @@ function buildSliceSection(body: HTMLElement): void {
           setStatus(statusEl, `Combined print queued (${previewUrls.length} slices, ${gap}px gap, 1 cut).`, '#66aa66');
         }
       } else {
-        setStatus(statusEl, 'Uploading slices and queuing print...', '#777777');
-        // Upload each slice preview to Supabase Storage
+        setStatus(statusEl, 'Rendering and uploading slices...', '#777777');
         const imageUrlEntries: { name: string; url: string }[] = [];
-        for (let i = 0; i < previewUrls.length; i++) {
-          const imgRes = await fetch(previewUrls[i]!);
-          const blob = await imgRes.blob();
-          const fileName = `workbench/slice-${Date.now()}-${i}.png`;
+        const ts = Date.now();
+        for (let i = 0; i < cachedImages.length; i++) {
+          const canvas = renderDecoratedCanvas([cachedImages[i]!], 0);
+          const blob = await canvasToBlob(canvas);
+          const fileName = `workbench/slice-${ts}-${i}.png`;
           const { error: upErr } = await supabase.storage
             .from('prints')
             .upload(fileName, blob, { contentType: 'image/png' });
@@ -1341,14 +1516,13 @@ function buildSliceSection(body: HTMLElement): void {
           imageUrlEntries.push({ name: `slice_${i}`, url: urlData.publicUrl });
         }
 
-        // Insert each slice as a separate portrait job (one cut per slice)
         let insertErrors = 0;
         for (const entry of imageUrlEntries) {
           const { error } = await supabase.from('print_queue').insert({
             payload: {
               type: 'portrait',
               image_urls: [entry],
-              job_id: `workbench-slice-${Date.now()}-${entry.name}`,
+              job_id: `workbench-slice-${ts}-${entry.name}`,
               timestamp: new Date().toISOString(),
             },
             status: 'pending',
