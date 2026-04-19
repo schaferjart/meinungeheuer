@@ -1,13 +1,5 @@
 # denkfink
 
-**An art installation that turns spoken dialogue with an AI into a printed thermal card.**
-
-A visitor reads a text on a tablet, has a short voice conversation with an AI that picks a concept from the text and challenges their understanding of it, and walks away with a personalised, printed definition on a receipt-style card.
-
-> denkfink is what the installation calls itself to visitors. The same codebase can be adapted to other interactive-glossary use cases — see [Customisation](#customisation).
-
----
-
 ## Three modes
 
 The tablet app supports three modes, configured at runtime via a Supabase-backed config:
@@ -43,7 +35,7 @@ The tablet app supports three modes, configured at runtime via a Supabase-backed
           │
           ▼                            ┌───────────────────────┐
    ┌──────────────────┐   Realtime     │  Printer bridge       │
-   │   Supabase       │───────────────▶│  (Node, local LAN)    │
+   │   DB             │───────────────▶│  (Node, local LAN)    │
    │  - postgres      │                │  - ESC/POS layout     │
    │  - pgvector      │                │  - Prints via         │
    │  - realtime      │                │    print-renderer →   │
@@ -80,15 +72,13 @@ scripts/            One-off ops scripts (conversation export, import)
 
 ## Prerequisites
 
-You'll need accounts / keys on the following services. **Free tiers are sufficient for development** on all of them.
-
-| Service         | Used for                                        | Required |
-| --------------- | ----------------------------------------------- | -------- |
-| Supabase        | Postgres + pgvector + Realtime + Storage + Auth | ✅       |
-| ElevenLabs      | Conversational AI agent (STT + TTS + LLM glue) | ✅       |
-| OpenRouter      | LLM the ElevenLabs agent calls                  | ✅       |
-| OpenAI          | Embeddings (only)                               | ✅       |
-| ESC/POS printer | Actual thermal receipt printer on a LAN         | only for print |
+| Service         | Used for                                        |
+| --------------- | ----------------------------------------------- |
+| Supabase        | Postgres + pgvector + Realtime + Storage + Auth |
+| ElevenLabs      | Conversational AI agent (STT + TTS + LLM glue) |
+| OpenRouter      | LLM the ElevenLabs agent calls                  |
+| OpenAI          | Embeddings (only)                               |
+| ESC/POS printer | Actual thermal receipt printer on a LAN         |
 
 And locally:
 
@@ -148,8 +138,6 @@ cp apps/printer-bridge/.env.example apps/printer-bridge/.env
 cp apps/print-renderer/.env.example apps/print-renderer/.env   # if present
 ```
 
-The keys you'll need everywhere:
-
 | Key                           | Where             | Notes                                    |
 | ----------------------------- | ----------------- | ---------------------------------------- |
 | `VITE_SUPABASE_URL`           | tablet, archive, config | from Supabase dashboard           |
@@ -182,8 +170,6 @@ If you have Docker, `docker compose up` will bring up the tablet + backend + pri
 ---
 
 ## Customisation
-
-This is an art installation first, a template second — but it is a template. The most likely things you'll change:
 
 - **Texts visitors read** — `supabase/migrations/*` seeds a `texts` table, but you can CRUD rows directly in the Supabase UI or through `apps/config`.
 - **System prompts** — the agent's personality and behaviour are described in [`packages/shared/src/programs/`](packages/shared/src/programs/). Each mode has its own prompt builder.
@@ -218,4 +204,4 @@ Contributions welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
-[MIT](LICENSE). Do whatever you want; credit appreciated.
+[MIT](LICENSE). 
