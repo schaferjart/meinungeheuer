@@ -1,13 +1,4 @@
-// ============================================================
-// Helper functions (co-located for self-containment)
-// ============================================================
-/** Add [N] prefix to each paragraph for citation grounding. */
-function addParagraphNumbers(text) {
-    const paragraphs = text.split(/\n\n+/).filter(p => p.trim().length > 0);
-    if (paragraphs.length === 0)
-        return '';
-    return paragraphs.map((p, i) => `[${i + 1}] ${p.trim()}`).join('\n\n');
-}
+import { addParagraphNumbers } from '../textUtils.js';
 function buildModeBlock(contextText) {
     return `A visitor has just finished reading the following text.
 Each paragraph is numbered for reference:
