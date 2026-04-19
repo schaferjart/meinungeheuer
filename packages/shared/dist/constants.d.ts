@@ -1,4 +1,13 @@
-export declare const APP_NAME = "MeinUngeheuer";
+/**
+ * The user-facing brand/installation name. Single source of truth.
+ * Change this one value to rename the installation across every app
+ * (system prompts, admin UI, console logs, print-card citation).
+ *
+ * Note: HTML <title> and manifest.json are baked at build time and
+ * hold the name as a static string — update those files too when
+ * rebranding (they cannot import this constant).
+ */
+export declare const APP_NAME = "denkfink";
 /**
  * Single font family used across all apps (tablet, archive, config, etc.).
  * Change this one value to update the font everywhere.

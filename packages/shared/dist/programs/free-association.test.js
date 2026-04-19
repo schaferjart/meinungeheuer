@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { APP_NAME } from '../constants.js';
 import { freeAssociationProgram } from './free-association.js';
 describe('free_association program', () => {
     it('has id "free_association"', () => {
@@ -12,13 +13,13 @@ describe('free_association program', () => {
             printing: true,
         });
     });
-    it('builds system prompt mentioning MeinUngeheuer', () => {
+    it('builds system prompt mentioning the installation brand name', () => {
         const prompt = freeAssociationProgram.buildSystemPrompt({
             term: 'test',
             contextText: null,
             language: 'de',
         });
-        expect(prompt).toContain('MeinUngeheuer');
+        expect(prompt).toContain(APP_NAME);
     });
     it('builds German first message for language "de"', () => {
         const msg = freeAssociationProgram.buildFirstMessage({

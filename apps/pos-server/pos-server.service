@@ -1,5 +1,5 @@
 [Unit]
-Description=MeinUngeheuer POS Thermal Printer Server
+Description=denkfink POS Thermal Printer Server
 After=network-online.target
 Wants=network-online.target
 

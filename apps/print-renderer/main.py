@@ -29,7 +29,7 @@ from dithering import _prepare, _apply_blur, dither_image
 
 _CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.yaml")
 
-app = FastAPI(title="MeinUngeheuer Print Renderer")
+app = FastAPI(title="denkfink Print Renderer")
 
 app.add_middleware(
     CORSMiddleware,
