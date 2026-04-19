@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
+import type { Database } from '@meinungeheuer/shared';
 import { supabase } from '../services/supabase.js';
 import { advanceChain } from '../services/chain.js';
 import { generateEmbedding } from '../services/embeddings.js';
@@ -330,6 +331,7 @@ webhookRoutes.post('/conversation-data', async (c) => {
   // 3. Update session with duration and turn count
   // -------------------------------------------------------------------------
 
+  type SessionUpdate = Database['public']['Tables']['sessions']['Update'];
   const updatePayload: Record<string, unknown> = {
     turn_count: transcript.length,
     ended_at: new Date().toISOString(),
@@ -341,7 +343,7 @@ webhookRoutes.post('/conversation-data', async (c) => {
 
   const { error: sessionUpdateError } = await supabase
     .from('sessions')
-    .update(updatePayload)
+    .update(updatePayload as SessionUpdate)
     .eq('id', sessionId);
 
   if (sessionUpdateError) {
