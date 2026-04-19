@@ -5,7 +5,9 @@ import {
   type DisconnectionDetails,
   type Role as ElevenLabsRole,
 } from '@elevenlabs/react';
-import type { ConversationProgram, SpeechProfile } from '@meinungeheuer/shared';
+import { APP_NAME, type ConversationProgram, type SpeechProfile } from '@meinungeheuer/shared';
+
+const LOG_PREFIX = `[${APP_NAME}]`;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -125,7 +127,7 @@ export function useConversation(
   const conversation = useElevenLabsConversation({
     onConnect: ({ conversationId }: { conversationId: string }) => {
       console.log(
-        '[MeinUngeheuer] Connected to ElevenLabs, conversationId:',
+        `${LOG_PREFIX} Connected to ElevenLabs, conversationId:`,
         conversationId,
       );
     },
@@ -144,24 +146,24 @@ export function useConversation(
     onDisconnect: (details: DisconnectionDetails) => {
       if (details.reason === 'agent') {
         console.warn(
-          '[MeinUngeheuer] Agent-initiated disconnect.',
+          `${LOG_PREFIX} Agent-initiated disconnect.`,
           'closeCode:', details.closeCode,
           'closeReason:', details.closeReason,
         );
       } else if (details.reason === 'error') {
         console.error(
-          '[MeinUngeheuer] Error disconnect:',
+          `${LOG_PREFIX} Error disconnect:`,
           details.message,
           'closeCode:', details.closeCode,
           'closeReason:', details.closeReason,
         );
       } else {
-        console.log('[MeinUngeheuer] User-initiated disconnect');
+        console.log(`${LOG_PREFIX} User-initiated disconnect`);
       }
       // Restore default agent voice if we applied a clone (prevents stale PATCH)
       if (voiceIdRef.current) {
         const defaultVoiceId = 'DLsHlh26Ugcm6ELvS0qi';
-        console.log('[MeinUngeheuer] Restoring default agent voice');
+        console.log(`${LOG_PREFIX} Restoring default agent voice`);
         void fetch(`${backendUrlRef.current}/api/voice-chain/apply-voice`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -172,7 +174,7 @@ export function useConversation(
     },
 
     onError: (message: string, context?: unknown) => {
-      console.error('[MeinUngeheuer] ElevenLabs error:', message, context);
+      console.error(`${LOG_PREFIX} ElevenLabs error:`, message, context);
     },
 
     // ------------------------------------------------------------------
@@ -199,7 +201,7 @@ export function useConversation(
         };
 
         console.log(
-          '[MeinUngeheuer] save_definition called:',
+          `${LOG_PREFIX} save_definition called:`,
           result,
         );
         onDefinitionReceivedRef.current?.(result);
@@ -246,7 +248,7 @@ export function useConversation(
     // ElevenLabs Conversational AI does NOT support tts.voiceId session overrides
     // for instant voice clones — we must update the agent config instead.
     if (voiceIdRef.current) {
-      console.log('[MeinUngeheuer] Applying voice clone to agent:', voiceIdRef.current);
+      console.log(`${LOG_PREFIX} Applying voice clone to agent:`, voiceIdRef.current);
       try {
         const resp = await fetch(`${backendUrlRef.current}/api/voice-chain/apply-voice`, {
           method: 'POST',
@@ -254,15 +256,15 @@ export function useConversation(
           body: JSON.stringify({ voice_id: voiceIdRef.current, agent_id: agentId }),
         });
         if (resp.ok) {
-          console.log('[MeinUngeheuer] Agent voice updated successfully');
+          console.log(`${LOG_PREFIX} Agent voice updated successfully`);
         } else {
-          console.warn('[MeinUngeheuer] Failed to apply voice clone, using default');
+          console.warn(`${LOG_PREFIX} Failed to apply voice clone, using default`);
         }
       } catch {
-        console.warn('[MeinUngeheuer] Failed to reach backend for voice apply');
+        console.warn(`${LOG_PREFIX} Failed to reach backend for voice apply`);
       }
     } else {
-      console.log('[MeinUngeheuer] No voice override — using agent default voice');
+      console.log(`${LOG_PREFIX} No voice override — using agent default voice`);
     }
 
     const conversationId = await conversation.startSession({

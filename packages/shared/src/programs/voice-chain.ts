@@ -1,5 +1,6 @@
 import type { ConversationProgram, PromptParams } from './types.js';
 import type { SpeechProfile } from '../types.js';
+import { APP_NAME } from '../constants.js';
 import { STYLE_INFLUENCE, COLD_START } from '../voiceChainConfig.js';
 
 // ============================================================
@@ -63,7 +64,7 @@ export const voiceChainProgram: ConversationProgram = {
       ? buildStyleInfluenceBlock(params.speechProfile)
       : '';
 
-    return `You are an interviewer in an art installation called "MeinUngeheuer."
+    return `You are an interviewer in an art installation called "${APP_NAME}."
 
 A visitor has just sat down. You carry the traces of everyone who sat here
 before them. Your voice is not your own — it belongs to the last person

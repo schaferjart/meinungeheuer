@@ -1066,7 +1066,9 @@ function buildSliceSection(body: HTMLElement): void {
     showCount: boolean;
     showGap: boolean;
   };
-  const CAPTION_STORAGE_KEY = 'meinungeheuer:config:slice:caption';
+  // Source of truth: packages/shared/src/constants.ts (APP_NAME = 'denkfink').
+  // Config app does not import @meinungeheuer/shared, so the prefix is inlined here.
+  const CAPTION_STORAGE_KEY = 'denkfink:config:slice:caption';
   const defaultCaption: CaptionConfig = {
     enabled: true,
     description: '',

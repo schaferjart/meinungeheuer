@@ -1,5 +1,5 @@
 /**
- * MeinUngeheuer Printer Bridge — main entry point.
+ * denkfink Printer Bridge — main entry point.
  *
  * Lifecycle:
  *  1. Load config
@@ -8,7 +8,7 @@
  *  4. Graceful shutdown on SIGINT / SIGTERM
  */
 
-import { createSupabaseClient } from '@meinungeheuer/shared';
+import { APP_NAME, createSupabaseClient } from '@meinungeheuer/shared';
 import { PrintPayloadSchema, PortraitPrintPayloadSchema } from '@meinungeheuer/shared';
 import { loadConfig } from './config.js';
 import { renderAndPrint, printPortrait } from './printer.js';
@@ -17,7 +17,7 @@ import { renderAndPrint, printPortrait } from './printer.js';
 
 const config = loadConfig();
 
-console.log('[bridge] MeinUngeheuer Printer Bridge starting…');
+console.log(`[bridge] ${APP_NAME} Printer Bridge starting…`);
 console.log(`[bridge] POS server: ${config.posServerUrl || '(console mode)'}`);
 console.log(`[bridge] Print renderer: ${config.printRendererUrl}`);
 

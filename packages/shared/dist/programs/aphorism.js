@@ -1,3 +1,4 @@
+import { APP_NAME } from '../constants.js';
 import { addParagraphNumbers } from '../textUtils.js';
 function buildModeBlock(contextText) {
     return `A visitor has just finished reading the following text.
@@ -39,7 +40,7 @@ export const aphorismProgram = {
     buildSystemPrompt(params) {
         const modeBlock = buildModeBlock(params.contextText);
         const fallbackTerm = params.term;
-        return `You are an interviewer in an art installation called "MeinUngeheuer."
+        return `You are an interviewer in an art installation called "${APP_NAME}."
 
 ${modeBlock}
 
